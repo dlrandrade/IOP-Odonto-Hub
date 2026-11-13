@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+/*
+ * Design system — IOP Business.
+ * Tokens extraídos da peça de referência (azul-marinho profundo, amarelo-sol, creme, tipografia geométrica arredondada).
+ * Para ajustar a marca, altere SOMENTE este bloco.
+ */
+@theme {
+  --color-navy-950: #081a27;
+  --color-navy-900: #0f2a3d;
+  --color-navy-800: #17384f;
+  --color-navy-700: #234a66;
+  --color-navy-500: #4f7088;
+  --color-navy-300: #9fb3c2;
+  --color-navy-100: #dfe7ec;
+  --color-sun-500: #ffd42a;
+  --color-sun-400: #ffdd55;
+  --color-sun-200: #fff0a8;
+  --color-sun-100: #fff8d6;
+  --color-cream-50: #fbf8f2;
+  --color-cream-100: #f4efe6;
+  --color-cream-200: #e9e1d2;
+  --color-cream-300: #d8cdb8;
+  --color-ok: #1f7a55;
+  --color-ok-soft: #dff3e9;
+  --color-warn: #a05a00;
+  --color-warn-soft: #ffeccc;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fde4e1;
+  --font-sans: "Lexend", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --radius-card: 1.5rem;
+  --shadow-card: 0 1px 2px rgb(15 42 61 / 0.04), 0 8px 24px -12px rgb(15 42 61 / 0.12);
+}
+
+html { background: var(--color-cream-100); color: var(--color-navy-900); }
+body { font-family: var(--font-sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+
+:focus-visible { outline: 3px solid var(--color-sun-500); outline-offset: 2px; border-radius: 6px; }
+
+.marker { background: var(--color-sun-500); padding: 0 0.35em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+
+dialog::backdrop { background: rgb(8 26 39 / 0.45); backdrop-filter: blur(2px); }
+dialog { margin: auto; }
+
+.scroll-thin { scrollbar-width: thin; scrollbar-color: var(--color-cream-300) transparent; }
+
+/* Itens de grid não podem alargar a página no celular (tabelas e campos rolam dentro do cartão). */
+.grid > * { min-width: 0; }

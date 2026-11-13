@@ -84,7 +84,7 @@ export function formatShort(date: Date, tz: string): string {
 
 export function formatDay(dateStr: string): string {
   const [y, m, d] = dateStr.split("-").map(Number) as [number, number, number];
-  return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC", weekday: "short", day: "2-digit", month: "short" }).format(new Date(Date.UTC(y, m - 1, d)));
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC", weekday: "long", day: "2-digit", month: "short" }).format(new Date(Date.UTC(y, m - 1, d)));
 }
 
 export type BusinessHours = Partial<Record<(typeof WEEKDAY_KEYS)[number], [string, string][]>>;

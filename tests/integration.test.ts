@@ -154,6 +154,33 @@ describe("S2 — agenda", () => {
     }
   });
 
+  it("recepção agenda, cancela e assume conversa com a própria sessão (RLS), sem conexão de sistema", async () => {
+    const c = await makeClinic();
+    const reception = await makeUser();
+    await sql`insert into app_users (clinic_id, auth_user_id, email, name, role) values (${c.clinicId}, ${reception}, 'rec@t.dev', 'Recepção', 'recepcao')`;
+    const patientId = await makePatient(c.clinicId, "Paciente");
+    const booked = await asUser(reception, (tx) => bookAppointment(tx, { clinicId: c.clinicId, patientId, serviceId: c.evaluationId, professionalId: c.professionalIds[0]!, startsAt: at("10:00", 7), createdByType: "user", now: NOW }));
+    expect(booked.ok).toBe(true);
+    if (!booked.ok) return;
+    expect(await sql`select 1 from scheduled_jobs where appointment_id = ${booked.appointmentId} and status = 'pending'`).toHaveLength(2);
+    const moved = await asUser(reception, (tx) => rescheduleAppointment(tx, { clinicId: c.clinicId, appointmentId: booked.appointmentId, professionalId: c.professionalIds[0]!, startsAt: at("11:00", 7), createdByType: "user", now: NOW }));
+    expect(moved.ok).toBe(true);
+    if (moved.ok) expect((await asUser(reception, (tx) => cancelAppointment(tx, c.clinicId, moved.appointmentId, "teste"))).ok).toBe(true);
+    expect(await sql`select 1 from scheduled_jobs where clinic_id = ${c.clinicId} and status = 'pending'`).toHaveLength(0);
+    await ingestInbound(sql, c.clinicId, "whatsapp", inbound("oi", "+5511900001234"), NOW);
+    const conv = await conversationOf(c.clinicId, "+5511900001234");
+    await asUser(reception, async (tx) => {
+      await takeOver(tx, c.clinicId, conv.id, { id: null, name: "Recepção" });
+      const sent = await sendOutbound(tx, { clinicId: c.clinicId, conversationId: conv.id, senderType: "human", body: "Olá!", now: NOW });
+      expect(sent.status).toBe("sent");
+      await handBack(tx, c.clinicId, conv.id, { id: null, name: "Recepção" }, null);
+    });
+    // Dentista não altera a agenda nem pela API do banco.
+    const dentist = await makeUser();
+    await sql`insert into app_users (clinic_id, auth_user_id, email, name, role) values (${c.clinicId}, ${dentist}, 'den@t.dev', 'Dentista', 'dentista')`;
+    await expect(asUser(dentist, (tx) => bookAppointment(tx, { clinicId: c.clinicId, patientId, serviceId: c.evaluationId, professionalId: c.professionalIds[0]!, startsAt: at("14:00", 7), createdByType: "user", now: NOW }))).rejects.toThrow(/row-level security/);
+  });
+
   it("status de presença só por registro humano", async () => {
     const c = await makeClinic();
     const patientId = await makePatient(c.clinicId, "Paciente");

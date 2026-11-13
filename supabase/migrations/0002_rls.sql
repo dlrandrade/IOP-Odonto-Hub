@@ -85,13 +85,17 @@ select app.restrict_writes(t, '{admin,gestor,recepcao,comercial}') from unnest(a
 -- Pacientes: dentista só lê.
 select app.restrict_writes(t, '{admin,gestor,recepcao,comercial,financeiro}') from unnest(array['patients','contacts','contact_patient_links']) t;
 -- Auditoria e operação: leitura para admin/gestor; ninguém altera pelo cliente.
-select app.restrict_reads(t, '{admin,gestor}') from unnest(array['audit_events','webhook_events','scheduled_jobs','ai_runs']) t;
+select app.restrict_reads(t, '{admin,gestor}') from unnest(array['audit_events','webhook_events','ai_runs']) t;
+select app.restrict_writes('scheduled_jobs', '{admin,gestor,recepcao,dentista,comercial}');
+drop policy tenant_delete on scheduled_jobs;
 drop policy tenant_update on audit_events;
 drop policy tenant_delete on audit_events;
 do $$
 declare t text;
 begin
-  foreach t in array array['webhook_events','scheduled_jobs','ai_runs','slot_offers'] loop
+  -- scheduled_jobs mantém escrita por clínica: agendar/cancelar consulta e assumir conversa criam e cancelam jobs
+  -- na transação do próprio usuário. Os demais são escritos só pelo servidor (webhook, worker, agente).
+  foreach t in array array['webhook_events','ai_runs','slot_offers'] loop
     execute format('drop policy tenant_insert on %I', t);
     execute format('drop policy tenant_update on %I', t);
     execute format('drop policy tenant_delete on %I', t);
