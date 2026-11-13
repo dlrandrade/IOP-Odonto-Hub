@@ -8,7 +8,7 @@ export function Logo({ light, className }: { light?: boolean; className?: string
         <path d="M8.5 14.5c0 6 3.3 10 7.5 10s7.5-4 7.5-10" fill="none" stroke="#0f2a3d" strokeWidth="3" strokeLinecap="round" />
         <circle cx="11" cy="10" r="1.8" fill="#0f2a3d" /><circle cx="21" cy="10" r="1.8" fill="#0f2a3d" />
       </svg>
-      Odonto<span className={light ? "text-sun-500" : "text-navy-500"}>Central</span>
+      IOP <span className={light ? "text-sun-500" : "text-navy-500"}>Odonto Hub</span>
     </span>
   );
 }

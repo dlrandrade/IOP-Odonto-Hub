@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "OdontoCentral", template: "%s · OdontoCentral" },
+  title: { default: "IOP Odonto Hub", template: "%s · IOP Odonto Hub" },
   description: "Central odontológica com IA: WhatsApp, agenda, CRM e pacientes em um só lugar.",
 };
 export const viewport: Viewport = { themeColor: "#0f2a3d", width: "device-width", initialScale: 1 };

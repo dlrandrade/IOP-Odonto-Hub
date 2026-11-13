@@ -59,7 +59,7 @@ npm run db:seed
 ```sql
 create extension if not exists pg_cron;
 create extension if not exists pg_net;
-select cron.schedule('odontocentral-worker', '* * * * *', $$
+select cron.schedule('iop-odonto-hub-worker', '* * * * *', $$
   select net.http_post(
     url := 'https://SEU-DOMINIO/api/jobs/run',
     headers := '{"Authorization": "Bearer SEU_CRON_SECRET"}'::jsonb

@@ -1,4 +1,4 @@
-# OdontoCentral
+# IOP Odonto Hub
 
 Central odontológica com IA para vender como SaaS: WhatsApp oficial, assistente virtual com guardrails, inbox com assumir/devolver, agenda por dentista e cadeira, CRM, pacientes e responsáveis, automações e indicadores — multiclínica, com isolamento por RLS.
 

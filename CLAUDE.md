@@ -1,4 +1,4 @@
-# OdontoCentral
+# IOP Odonto Hub
 
 Central web para clínicas odontológicas (SaaS multiclínica): WhatsApp, atendimento por IA, recepção humana, CRM, agenda, pacientes, automações e indicadores.
 Especificação completa: [docs/PRD.md](docs/PRD.md). Decisões e desvios: [docs/DECISIONS.md](docs/DECISIONS.md). Instalação: [docs/SETUP.md](docs/SETUP.md).
