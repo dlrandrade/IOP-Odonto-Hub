@@ -40,7 +40,7 @@ export function BookingForm({ services, professionals, patients, defaultDate, re
       <input type="hidden" name="serviceId" value={serviceId} />
       <input type="hidden" name="slot" value={picked} />
       {reschedule ? (
-        <p className="rounded-xl bg-cream-50 px-3 py-2 text-sm">Reagendando <strong>{reschedule.patientName}</strong>. O horário atual só é liberado quando o novo for gravado.</p>
+        <p className="rounded-xl bg-surface-2 px-3 py-2 text-sm">Reagendando <strong>{reschedule.patientName}</strong>. O horário atual só é liberado quando o novo for gravado.</p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Paciente">
@@ -61,14 +61,14 @@ export function BookingForm({ services, professionals, patients, defaultDate, re
         <Field label="Dia"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Field>
       </div>
       <div>
-        <p className="mb-1.5 text-xs font-semibold text-navy-700">Horários livres {loading && <span className="font-normal text-navy-500">· carregando…</span>}</p>
-        {slots && slots.length === 0 && !loading && <p className="rounded-xl border border-dashed border-cream-300 px-3 py-4 text-center text-sm text-navy-500">Sem horários livres neste dia para esse serviço. Confira o expediente do dentista, bloqueios e cadeiras.</p>}
+        <p className="mb-1.5 text-xs font-semibold text-bone-dim">Horários livres {loading && <span className="font-normal text-bone-mute">· carregando…</span>}</p>
+        {slots && slots.length === 0 && !loading && <p className="rounded-xl border border-dashed border-line px-3 py-4 text-center text-sm text-bone-mute">Sem horários livres neste dia para esse serviço. Confira o expediente do dentista, bloqueios e cadeiras.</p>}
         <div role="radiogroup" aria-label="Horários livres" className="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
           {(slots ?? []).map((s) => {
             const value = `${s.startsAt}|${s.professionalId}`;
             return (
               <button key={value} type="button" role="radio" aria-checked={picked === value} onClick={() => setPicked(value)}
-                className={cn("rounded-full border px-3 py-1.5 text-xs font-medium", picked === value ? "border-navy-900 bg-navy-900 text-white" : "border-cream-300 bg-white hover:bg-cream-50")}>
+                className={cn("rounded-full border px-3 py-1.5 text-xs font-medium", picked === value ? "border-bone bg-gold text-ink" : "border-line bg-surface hover:bg-surface-2")}>
                 {s.time}{!professionalId && <span className="opacity-70"> · {s.professional.split(" ").slice(0, 2).join(" ")}</span>}
               </button>
             );

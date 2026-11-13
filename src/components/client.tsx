@@ -54,11 +54,11 @@ export function Modal({ trigger, title, children, triggerClass, wide }: { trigge
   return (
     <>
       <button type="button" className={triggerClass ?? buttonClass("primary")} onClick={() => ref.current?.showModal()}>{trigger}</button>
-      <dialog ref={ref} className={cn("w-[calc(100vw-2rem)] rounded-[var(--radius-card)] bg-white p-0 text-navy-900 shadow-2xl", wide ? "max-w-2xl" : "max-w-lg")}
+      <dialog ref={ref} className={cn("w-[calc(100vw-2rem)] rounded-[var(--radius-card)] bg-surface p-0 text-bone shadow-2xl", wide ? "max-w-2xl" : "max-w-lg")}
         onClick={(e) => { if (e.target === ref.current) ref.current?.close(); }}>
-        <div className="flex items-center justify-between border-b border-cream-200 px-5 py-4">
+        <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="text-base font-semibold">{title}</h2>
-          <button type="button" aria-label="Fechar" className="rounded-full p-1.5 hover:bg-cream-100" onClick={() => ref.current?.close()}><X size={18} /></button>
+          <button type="button" aria-label="Fechar" className="rounded-full p-1.5 hover:bg-surface-2" onClick={() => ref.current?.close()}><X size={18} /></button>
         </div>
         <div className="max-h-[75vh] overflow-y-auto p-5">{children}</div>
       </dialog>

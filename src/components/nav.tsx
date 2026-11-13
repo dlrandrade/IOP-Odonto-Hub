@@ -25,10 +25,10 @@ export function TopNav({ items }: { items: NavItem[] }) {
         return (
           <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
             className={cn("flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium transition",
-              active ? "bg-navy-900 text-white shadow" : "text-navy-700 hover:bg-white")}>
+              active ? "bg-gold text-ink shadow" : "text-bone-dim hover:bg-surface")}>
             <Icon size={15} aria-hidden />
             {item.label}
-            {!!item.badge && <span className={cn("rounded-full px-1.5 text-[10px] font-bold", active ? "bg-sun-500 text-navy-900" : "bg-navy-900 text-white")}>{item.badge}</span>}
+            {!!item.badge && <span className={cn("rounded-full px-1.5 text-[10px] font-bold", active ? "bg-gold text-ink" : "bg-gold text-ink")}>{item.badge}</span>}
           </Link>
         );
       })}

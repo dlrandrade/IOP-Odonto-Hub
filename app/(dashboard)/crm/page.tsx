@@ -60,30 +60,30 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         <div className="flex gap-3" style={{ minWidth: OPPORTUNITY_STAGES.length * 276 }}>
           {OPPORTUNITY_STAGES.map((stage) => {
             const list = data.opps.filter((o) => o.stage === stage);
-            const tone = stage === "accepted" ? "bg-ok-soft" : stage === "lost" ? "bg-cream-200" : "bg-white/70";
+            const tone = stage === "accepted" ? "bg-ok-soft" : stage === "lost" ? "bg-line" : "bg-surface/70";
             return (
               <section key={stage} aria-label={OPPORTUNITY_STAGE_LABELS[stage]} className={cn("w-[264px] shrink-0 rounded-[var(--radius-card)] p-2.5", tone)}>
-                <h2 className="flex items-center justify-between px-2 py-1.5 text-sm font-semibold">{OPPORTUNITY_STAGE_LABELS[stage]}<span className="rounded-full bg-navy-900 px-2 text-[11px] text-white">{list.length}</span></h2>
+                <h2 className="flex items-center justify-between px-2 py-1.5 text-sm font-semibold">{OPPORTUNITY_STAGE_LABELS[stage]}<span className="rounded-full bg-surface-2 px-2 text-[11px] text-white">{list.length}</span></h2>
                 <ul className="mt-1 space-y-2">
-                  {list.length === 0 && <li className="rounded-2xl border border-dashed border-cream-300 px-3 py-5 text-center text-xs text-navy-500">Vazio</li>}
+                  {list.length === 0 && <li className="rounded-2xl border border-dashed border-line px-3 py-5 text-center text-xs text-bone-mute">Vazio</li>}
                   {list.map((o) => {
                     const overdue = o.next_step_due && o.next_step_due < new Date() && !["accepted", "lost"].includes(o.stage);
                     return (
-                      <li key={o.id} className="rounded-2xl bg-white p-3 shadow-[var(--shadow-card)]">
+                      <li key={o.id} className="rounded-2xl bg-surface p-3 border border-line">
                         <p className="truncate text-sm font-semibold">{o.patient ?? o.wa_profile_name ?? formatPhone(o.phone_e164)}</p>
-                        <p className="truncate text-xs text-navy-500">{o.service_interest}</p>
+                        <p className="truncate text-xs text-bone-mute">{o.service_interest}</p>
                         <div className="mt-2 flex flex-wrap gap-1">
                           {o.intent && <Badge>{INTENT[o.intent]}</Badge>}
                           {o.last_actor === "ai" && <Badge tone="ok"><Bot size={10} aria-hidden /> movido pela IA</Badge>}
                           {o.owner && <Badge><UserRound size={10} aria-hidden /> {o.owner.split(" ")[0]}</Badge>}
                         </div>
                         {(o.next_step || o.next_step_due) && (
-                          <p className={cn("mt-2 flex items-center gap-1 text-[11px]", overdue ? "font-semibold text-danger" : "text-navy-700")}>
+                          <p className={cn("mt-2 flex items-center gap-1 text-[11px]", overdue ? "font-semibold text-danger" : "text-bone-dim")}>
                             <CalendarClock size={11} aria-hidden /> {o.next_step ?? "Próximo passo"}{o.next_step_due ? ` · ${formatShort(o.next_step_due, ctx.tz).slice(0, 5)}${overdue ? " (atrasado)" : ""}` : ""}
                           </p>
                         )}
-                        {o.lost_reason && <p className="mt-2 text-[11px] text-navy-500">Motivo: {o.lost_reason}</p>}
-                        <div className="mt-2 flex items-center justify-between border-t border-cream-100 pt-2">
+                        {o.lost_reason && <p className="mt-2 text-[11px] text-bone-mute">Motivo: {o.lost_reason}</p>}
+                        <div className="mt-2 flex items-center justify-between border-t border-line pt-2">
                           {o.conversation_id && can(ctx.role, "conversations.view") ? <Link href={`/conversas?c=${o.conversation_id}`} className="text-[11px] font-semibold underline">Conversa</Link> : <span />}
                           {canWrite && (
                             <Modal trigger="Mover / editar" title={`${o.service_interest} — ${OPPORTUNITY_STAGE_LABELS[o.stage]}`} triggerClass="text-[11px] font-semibold underline">
@@ -94,7 +94,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
                                 <Field label="Motivo da perda" hint="Obrigatório para “Perdido”."><Input name="lostReason" /></Field>
                                 <Button type="submit">Mover</Button>
                               </ActionForm>
-                              <hr className="my-5 border-cream-200" />
+                              <hr className="my-5 border-line" />
                               <ActionForm action={updateOpportunityAction} className="space-y-3">
                                 <input type="hidden" name="opportunityId" value={o.id} />
                                 <Field label="Responsável"><Select name="ownerId" defaultValue={o.owner_id ?? ""}><option value="">Sem responsável</option>{data.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select></Field>

@@ -52,14 +52,14 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
           <Field label="Intervalo (min)"><Input type="number" name="buffer" min={0} defaultValue={s?.buffer_min ?? 0} /></Field>
         </div>
       </div>
-      <fieldset className="rounded-2xl border border-cream-200 p-3">
+      <fieldset className="rounded-2xl border border-line p-3">
         <legend className="px-1 text-xs font-semibold">Preço que a assistente pode informar</legend>
         <div className="grid gap-3 sm:grid-cols-3">
           <Field label="Modo"><Select name="priceMode" defaultValue={s?.price_mode ?? "on_evaluation"}><option value="on_evaluation">Sob avaliação</option><option value="fixed">Valor fixo</option><option value="range">Faixa</option></Select></Field>
           <Field label="Valor / mínimo (R$)"><Input name="priceMin" inputMode="decimal" defaultValue={money(s?.price_min_cents ?? null)} placeholder="0,00" /></Field>
           <Field label="Máximo (R$)"><Input name="priceMax" inputMode="decimal" defaultValue={money(s?.price_max_cents ?? null)} placeholder="só para faixa" /></Field>
         </div>
-        <p className="mt-2 text-[11px] text-navy-500">Sem preço cadastrado, a assistente diz que depende de avaliação. Ela nunca inventa valor nem oferece desconto.</p>
+        <p className="mt-2 text-[11px] text-bone-mute">Sem preço cadastrado, a assistente diz que depende de avaliação. Ela nunca inventa valor nem oferece desconto.</p>
       </fieldset>
       <div className="grid gap-3 sm:grid-cols-2">
         <Checkbox name="bookable" defaultChecked={s?.bookable_directly ?? false} label="Agenda direto pela assistente" hint="Indicado para avaliação, limpeza e retorno." />
@@ -68,10 +68,10 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
       <Field label="Descrição para o paciente (texto aprovado)" hint="É o único texto que a assistente usa para explicar o serviço. Não prometa resultado nem ausência de dor."><Textarea name="description" defaultValue={s?.patient_description ?? ""} /></Field>
       <Field label="Preparo / orientações administrativas"><Textarea name="preparation" defaultValue={s?.preparation ?? ""} className="min-h-16" /></Field>
       <fieldset>
-        <legend className="mb-1 text-xs font-semibold text-navy-700">Dentistas habilitados</legend>
+        <legend className="mb-1 text-xs font-semibold text-bone-dim">Dentistas habilitados</legend>
         <div className="grid gap-1.5 sm:grid-cols-2">
           {data.professionals.map((p) => <Checkbox key={p.id} name="professionals" value={p.id} label={p.name} defaultChecked={s ? s.professional_ids.includes(p.id) : true} />)}
-          {data.professionals.length === 0 && <p className="text-xs text-navy-500">Cadastre dentistas em Configurações → Agenda.</p>}
+          {data.professionals.length === 0 && <p className="text-xs text-bone-mute">Cadastre dentistas em Configurações → Agenda.</p>}
         </div>
       </fieldset>
       <Field label="Situação" hint="Publicado vale já na próxima resposta da assistente, sem retreinar."><Select name="status" defaultValue={s?.status ?? "draft"}><option value="draft">Rascunho</option><option value="published">Publicado</option></Select></Field>
@@ -95,9 +95,9 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
           </Modal>
         )}
       </PageHeader>
-      <div className="mb-3 inline-flex rounded-full bg-white p-1 shadow-[var(--shadow-card)]">
+      <div className="mb-3 inline-flex rounded-full bg-surface p-1 border border-line">
         {[["servicos", "Serviços"], ["conhecimento", "Base de conhecimento"]].map(([k, label]) => (
-          <Link key={k} href={k === "servicos" ? "/servicos" : "/servicos?aba=conhecimento"} className={cn("rounded-full px-4 py-1.5 text-sm font-medium", tab === k ? "bg-navy-900 text-white" : "text-navy-700")}>{label}</Link>
+          <Link key={k} href={k === "servicos" ? "/servicos" : "/servicos?aba=conhecimento"} className={cn("rounded-full px-4 py-1.5 text-sm font-medium", tab === k ? "bg-gold text-ink" : "text-bone-dim")}>{label}</Link>
         ))}
       </div>
       {ctx.clinic.is_demo && <div className="mb-3"><Notice tone="sun">Clínica de demonstração: preços e textos são <strong>fictícios</strong>.</Notice></div>}
@@ -108,12 +108,12 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
             <Table head={["Serviço", "Tipo", "Duração", "Preço informável", "Agendamento", "Situação", ""]}>
               {data.services.map((s) => (
                 <tr key={s.id}>
-                  <td><p className="font-semibold">{s.name}{s.is_demo && <span className="ml-1 text-[10px] font-normal text-navy-500">(demo)</span>}</p><p className="text-[11px] text-navy-500">{s.specialty ?? "—"} · {s.professional_ids.length} dentista(s)</p></td>
+                  <td><p className="font-semibold">{s.name}{s.is_demo && <span className="ml-1 text-[10px] font-normal text-bone-mute">(demo)</span>}</p><p className="text-[11px] text-bone-mute">{s.specialty ?? "—"} · {s.professional_ids.length} dentista(s)</p></td>
                   <td>{KIND[s.kind]}</td>
                   <td>{s.duration_min} min{s.buffer_min ? ` +${s.buffer_min}` : ""}</td>
                   <td>{price(s)}</td>
                   <td>{s.bookable_directly ? <Badge tone="ok">direto</Badge> : <Badge>via avaliação</Badge>}</td>
-                  <td><Badge tone={s.status === "published" ? "navy" : "warn"}>{s.status === "published" ? "Publicado" : "Rascunho"}</Badge><p className="mt-0.5 text-[10px] text-navy-500">v{s.version}{s.approver ? ` · ${s.approver.split(" ")[0]}` : ""}</p></td>
+                  <td><Badge tone={s.status === "published" ? "navy" : "warn"}>{s.status === "published" ? "Publicado" : "Rascunho"}</Badge><p className="mt-0.5 text-[10px] text-bone-mute">v{s.version}{s.approver ? ` · ${s.approver.split(" ")[0]}` : ""}</p></td>
                   <td className="text-right"><Modal trigger="Editar" title={`Editar: ${s.name}`} wide triggerClass="text-xs font-semibold underline"><ServiceForm s={s} /></Modal></td>
                 </tr>
               ))}
@@ -129,10 +129,10 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
                 <h2 className="font-semibold">{d.title}</h2>
                 <Badge tone={d.status === "published" ? "navy" : "warn"}>{d.status === "published" ? "Publicado" : "Rascunho"}</Badge>
               </div>
-              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm text-navy-700">{d.body || <span className="text-navy-300">Sem conteúdo ainda. A assistente não responde sobre este tema até você publicar.</span>}</p>
-              <div className="mt-3 flex items-center justify-between text-[11px] text-navy-500">
+              <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm text-bone-dim">{d.body || <span className="text-bone-mute">Sem conteúdo ainda. A assistente não responde sobre este tema até você publicar.</span>}</p>
+              <div className="mt-3 flex items-center justify-between text-[11px] text-bone-mute">
                 <span>v{d.version} · {d.versions} versão(ões) no histórico · {formatShort(d.updated_at, ctx.tz)}{d.approver ? ` · aprovado por ${d.approver.split(" ")[0]}` : ""}</span>
-                <Modal trigger="Editar" title={`Editar: ${d.title}`} wide triggerClass="text-xs font-semibold text-navy-900 underline">
+                <Modal trigger="Editar" title={`Editar: ${d.title}`} wide triggerClass="text-xs font-semibold text-bone underline">
                   <ActionForm action={saveDocAction} className="space-y-4" resetOnDone={false}>
                     <input type="hidden" name="docId" value={d.id} />
                     <Field label="Título"><Input name="title" defaultValue={d.title} required /></Field>

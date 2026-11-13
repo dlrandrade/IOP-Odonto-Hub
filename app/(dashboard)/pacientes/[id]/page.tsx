@@ -53,12 +53,12 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
       <div className="grid gap-3 lg:grid-cols-[340px_minmax(0,1fr)]">
         <div className="space-y-3">
           <Card>
-            <div className="flex items-center gap-3"><Avatar name={p.full_name} size={52} /><div><h1 className="text-xl font-bold leading-tight">{p.full_name}</h1><p className="text-xs text-navy-500">Cadastro desde {new Intl.DateTimeFormat("pt-BR").format(p.created_at)}</p></div></div>
+            <div className="flex items-center gap-3"><Avatar name={p.full_name} size={52} /><div><h1 className="text-xl font-bold leading-tight">{p.full_name}</h1><p className="text-xs text-bone-mute">Cadastro desde {new Intl.DateTimeFormat("pt-BR").format(p.created_at)}</p></div></div>
             <dl className="mt-4 space-y-2 text-sm">
-              <div className="flex justify-between"><dt className="text-navy-500">Nascimento</dt><dd>{p.birth_date ? p.birth_date.split("-").reverse().join("/") : "—"}</dd></div>
-              <div className="flex justify-between"><dt className="text-navy-500">CPF</dt><dd>{p.has_cpf ? "cadastrado (criptografado)" : "não informado"}</dd></div>
+              <div className="flex justify-between"><dt className="text-bone-mute">Nascimento</dt><dd>{p.birth_date ? p.birth_date.split("-").reverse().join("/") : "—"}</dd></div>
+              <div className="flex justify-between"><dt className="text-bone-mute">CPF</dt><dd>{p.has_cpf ? "cadastrado (criptografado)" : "não informado"}</dd></div>
             </dl>
-            {p.notes && <p className="mt-3 rounded-xl bg-cream-50 px-3 py-2 text-sm">{p.notes}</p>}
+            {p.notes && <p className="mt-3 rounded-xl bg-surface-2 px-3 py-2 text-sm">{p.notes}</p>}
             {canWrite && (
               <div className="mt-4">
                 <Modal trigger="Editar cadastro" title="Editar cadastro" triggerClass={buttonClass("outline", "sm")}>
@@ -76,18 +76,18 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
           </Card>
           <Card>
             <CardTitle hint="Quem fala por este paciente no WhatsApp">Contatos e responsáveis</CardTitle>
-            {data.links.length === 0 ? <p className="text-sm text-navy-500">Sem telefone vinculado. Vincule pela tela de Conversas.</p> : (
+            {data.links.length === 0 ? <p className="text-sm text-bone-mute">Sem telefone vinculado. Vincule pela tela de Conversas.</p> : (
               <ul className="space-y-3">
                 {data.links.map((l) => (
                   <li key={l.id} className="text-sm">
-                    <p className="font-medium">{fullPhone ? formatPhone(l.phone_e164) : maskPhone(l.phone_e164)} {l.wa_profile_name && <span className="font-normal text-navy-500">· {l.wa_profile_name}</span>}</p>
+                    <p className="font-medium">{fullPhone ? formatPhone(l.phone_e164) : maskPhone(l.phone_e164)} {l.wa_profile_name && <span className="font-normal text-bone-mute">· {l.wa_profile_name}</span>}</p>
                     <div className="mt-1 flex flex-wrap items-center gap-1">
                       <Badge>{l.relationship === "self" ? "o próprio paciente" : `é ${l.relationship} do titular do telefone`}</Badge>
                       {l.is_guardian && <Badge tone="sun">responsável</Badge>}
                       {l.is_payer && <Badge>pagador</Badge>}
                       {l.verified_at && <Badge tone="ok">identidade verificada</Badge>}
                       {l.opted_out_at && <Badge tone="danger">não receber mensagens</Badge>}
-                      {canWrite && <ActionForm action={unlinkContactAction}><input type="hidden" name="linkId" value={l.id} /><button className="text-[11px] text-navy-500 underline">desvincular</button></ActionForm>}
+                      {canWrite && <ActionForm action={unlinkContactAction}><input type="hidden" name="linkId" value={l.id} /><button className="text-[11px] text-bone-mute underline">desvincular</button></ActionForm>}
                     </div>
                   </li>
                 ))}
@@ -116,7 +116,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
                 {data.appointments.map((a) => (
                   <tr key={a.id}><td>{formatFull(a.starts_at, ctx.tz)}</td><td>{a.service}</td><td>{a.professional}</td>
                     <td><Badge tone={a.status === "completed" ? "ok" : a.status === "no_show" ? "danger" : a.status === "cancelled" ? "neutral" : "sun"}>{APPOINTMENT_STATUS_LABELS[a.status]}</Badge></td>
-                    <td className="text-xs text-navy-500">{a.created_by_type === "ai" ? "IA" : "Equipe"}</td></tr>
+                    <td className="text-xs text-bone-mute">{a.created_by_type === "ai" ? "IA" : "Equipe"}</td></tr>
                 ))}
               </Table>
             )}
@@ -125,7 +125,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
             <Card>
               <CardTitle action={<Link href="/crm" className="text-xs font-semibold underline">Abrir CRM</Link>}>Interesses</CardTitle>
               {data.opportunities.length === 0 ? <Empty title="Nenhum interesse registrado" /> : (
-                <ul className="divide-y divide-cream-100">{data.opportunities.map((o) => (
+                <ul className="divide-y divide-line">{data.opportunities.map((o) => (
                   <li key={o.id} className="flex items-center justify-between gap-2 py-2 text-sm"><span>{o.service_interest}</span><Badge>{OPPORTUNITY_STAGE_LABELS[o.stage]}</Badge></li>
                 ))}</ul>
               )}
@@ -136,16 +136,16 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
               <CardTitle hint="Resumos são apoio administrativo, não evolução clínica.">Conversas</CardTitle>
               {data.conversations.length === 0 ? <Empty title="Nenhuma conversa" /> : (
                 <ul className="space-y-3">{data.conversations.map((c) => (
-                  <li key={c.id} className="rounded-2xl border border-cream-200 p-3 text-sm">
-                    <div className="flex items-center justify-between gap-2"><span className="text-xs text-navy-500">{c.last_message_at ? formatShort(c.last_message_at, ctx.tz) : "—"}</span><Link href={`/conversas?c=${c.id}`} className="text-xs font-semibold underline">Abrir conversa</Link></div>
-                    <p className="mt-1">{c.summary ?? <span className="text-navy-500">Sem resumo.</span>}</p>
-                    {c.summary && <p className="mt-1 text-[11px] text-navy-500">{c.summary_by === "ai" ? "Resumo gerado por IA" : "Resumo editado pela equipe"}</p>}
+                  <li key={c.id} className="rounded-2xl border border-line p-3 text-sm">
+                    <div className="flex items-center justify-between gap-2"><span className="text-xs text-bone-mute">{c.last_message_at ? formatShort(c.last_message_at, ctx.tz) : "—"}</span><Link href={`/conversas?c=${c.id}`} className="text-xs font-semibold underline">Abrir conversa</Link></div>
+                    <p className="mt-1">{c.summary ?? <span className="text-bone-mute">Sem resumo.</span>}</p>
+                    {c.summary && <p className="mt-1 text-[11px] text-bone-mute">{c.summary_by === "ai" ? "Resumo gerado por IA" : "Resumo editado pela equipe"}</p>}
                   </li>
                 ))}</ul>
               )}
             </Card>
           )}
-          <Card><CardTitle>Propostas e pagamentos</CardTitle><p className="text-sm text-navy-500">Disponíveis no módulo P1 (propostas versionadas e registro de pagamentos).</p></Card>
+          <Card><CardTitle>Propostas e pagamentos</CardTitle><p className="text-sm text-bone-mute">Disponíveis no módulo P1 (propostas versionadas e registro de pagamentos).</p></Card>
         </div>
       </div>
     </>

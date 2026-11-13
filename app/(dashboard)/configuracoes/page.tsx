@@ -54,9 +54,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </Field>
         <div className="flex items-end pb-2"><Checkbox name="active" defaultChecked={p?.active ?? true} label="Ativo" /></div>
       </div>
-      <fieldset className="rounded-2xl border border-cream-200 p-3">
+      <fieldset className="rounded-2xl border border-line p-3">
         <legend className="px-1 text-xs font-semibold">Expediente do dentista</legend>
-        <p className="mb-2 text-[11px] text-navy-500">Formato 08:00-12:00, 13:00-18:00. Deixe vazio nos dias sem atendimento.</p>
+        <p className="mb-2 text-[11px] text-bone-mute">Formato 08:00-12:00, 13:00-18:00. Deixe vazio nos dias sem atendimento.</p>
         <div className="grid gap-2 sm:grid-cols-2">
           {WEEKDAY_KEYS.map((key, weekday) => {
             const current = p ? data.rules.filter((r) => r.professional_id === p.id && r.weekday === weekday).map((r) => `${r.start_time.slice(0, 5)}-${r.end_time.slice(0, 5)}`).join(", ") : ranges(hours[key]);
@@ -71,9 +71,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader title="Configurações" subtitle="Tudo é ajustável por aqui, sem mexer em código." />
-      <div className="scroll-thin mb-3 flex gap-1 overflow-x-auto rounded-full bg-white p-1 shadow-[var(--shadow-card)] sm:inline-flex">
+      <div className="scroll-thin mb-3 flex gap-1 overflow-x-auto rounded-full bg-surface p-1 border border-line sm:inline-flex">
         {TABS.filter(([k]) => isAdmin || k === "auditoria").map(([k, label]) => (
-          <Link key={k} href={`/configuracoes?aba=${k}`} className={cn("shrink-0 rounded-full px-4 py-1.5 text-sm font-medium", tab === k ? "bg-navy-900 text-white" : "text-navy-700")}>{label}</Link>
+          <Link key={k} href={`/configuracoes?aba=${k}`} className={cn("shrink-0 rounded-full px-4 py-1.5 text-sm font-medium", tab === k ? "bg-gold text-ink" : "text-bone-dim")}>{label}</Link>
         ))}
       </div>
       {!allowed && <Notice tone="danger">Apenas administradores acessam esta seção.</Notice>}
@@ -88,9 +88,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <Field label="Endereço da unidade"><Input name="address" defaultValue={data.unit?.address ?? ""} /></Field>
             </div>
             <Field label="Acessibilidade da unidade"><Input name="accessibility" defaultValue={data.unit?.accessibility_info ?? ""} placeholder="Ex.: rampa, elevador, vaga reservada" /></Field>
-            <fieldset className="rounded-2xl border border-cream-200 p-3">
+            <fieldset className="rounded-2xl border border-line p-3">
               <legend className="px-1 text-xs font-semibold">Horário de atendimento humano</legend>
-              <p className="mb-2 text-[11px] text-navy-500">Formato 08:00-18:00 (use vírgula para dois períodos). Vazio = fechado.</p>
+              <p className="mb-2 text-[11px] text-bone-mute">Formato 08:00-18:00 (use vírgula para dois períodos). Vazio = fechado.</p>
               <div className="grid gap-2 sm:grid-cols-2">
                 {WEEKDAY_KEYS.map((key, i) => <label key={key} className="flex items-center gap-2 text-xs"><span className="w-16 font-medium">{WEEKDAY_LABELS[i]}</span><Input name={`hours_${key}`} defaultValue={ranges(hours[key])} className="h-8 text-xs" placeholder="fechado" /></label>)}
               </div>
@@ -120,7 +120,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <Table head={["Nome", "E-mail", "Papel", "Situação", ""]}>
             {data.users.map((u) => (
               <tr key={u.id} className={cn(!u.active && "opacity-60")}>
-                <td className="font-medium">{u.name}{u.id === ctx.userId && <span className="ml-1 text-[10px] text-navy-500">(você)</span>}</td><td>{u.email}</td>
+                <td className="font-medium">{u.name}{u.id === ctx.userId && <span className="ml-1 text-[10px] text-bone-mute">(você)</span>}</td><td>{u.email}</td>
                 <td><Badge tone={u.role === "admin" ? "navy" : "neutral"}>{ROLE_LABELS[u.role]}</Badge></td>
                 <td>{u.active ? <Badge tone="ok">Ativo</Badge> : <Badge tone="danger">Desativado</Badge>}</td>
                 <td className="text-right">
@@ -146,14 +146,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <CardTitle action={<Modal trigger={<><Plus size={14} aria-hidden /> Novo dentista</>} title="Novo dentista" wide triggerClass={buttonClass("accent", "sm")}><ProfessionalForm /></Modal>}
               hint="A disponibilidade é: expediente do dentista ∩ habilitado para o serviço ∩ recursos livres ∩ sem bloqueio.">Dentistas e expediente</CardTitle>
             {data.professionals.length === 0 ? <Empty title="Nenhum dentista cadastrado">Sem dentistas com expediente, a agenda não oferece horários.</Empty> : (
-              <ul className="divide-y divide-cream-100">
+              <ul className="divide-y divide-line">
                 {data.professionals.map((p) => {
                   const count = data.rules.filter((r) => r.professional_id === p.id).length;
                   return (
                     <li key={p.id} className={cn("flex items-center justify-between gap-3 py-3", !p.active && "opacity-60")}>
                       <div className="flex min-w-0 items-center gap-3">
                         <span className="size-3 shrink-0 rounded-full" style={{ background: p.color }} aria-hidden />
-                        <div className="min-w-0"><p className="truncate font-semibold">{p.name}</p><p className="truncate text-xs text-navy-500">{p.specialty ?? "—"}{p.council_number ? ` · ${p.council_number}` : ""} · {count ? `${count} período(s) por semana` : "sem expediente"}</p></div>
+                        <div className="min-w-0"><p className="truncate font-semibold">{p.name}</p><p className="truncate text-xs text-bone-mute">{p.specialty ?? "—"}{p.council_number ? ` · ${p.council_number}` : ""} · {count ? `${count} período(s) por semana` : "sem expediente"}</p></div>
                       </div>
                       <div className="flex items-center gap-2">{!p.active && <Badge>inativo</Badge>}{count === 0 && p.active && <Badge tone="warn">sem horários</Badge>}
                         <Modal trigger="Editar" title={p.name} wide triggerClass="text-xs font-semibold underline"><ProfessionalForm p={p} /></Modal></div>
@@ -165,7 +165,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </Card>
           <Card>
             <CardTitle hint="Cada consulta ocupa o dentista e os recursos exigidos pelo serviço. Dois agendamentos nunca dividem a mesma cadeira no mesmo horário.">Cadeiras e recursos</CardTitle>
-            <ul className="mb-4 divide-y divide-cream-100">
+            <ul className="mb-4 divide-y divide-line">
               {data.resources.map((r) => (
                 <li key={r.id} className="py-2">
                   <ActionForm action={saveResourceAction} className="flex items-center gap-2" resetOnDone={false}>
@@ -207,17 +207,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Card>
               <CardTitle hint="Cole no painel da Meta: WhatsApp → Configuração → Webhook. Assine o campo “messages”.">Webhook</CardTitle>
               <dl className="space-y-3 text-sm">
-                <div><dt className="text-xs font-semibold text-navy-700">URL de callback</dt><dd><code className="mt-1 block select-all break-all rounded-xl bg-cream-50 px-3 py-2 text-xs">{env.appUrl}/api/webhooks/whatsapp</code></dd></div>
-                <div><dt className="text-xs font-semibold text-navy-700">Token de verificação</dt><dd><code className="mt-1 block select-all break-all rounded-xl bg-cream-50 px-3 py-2 text-xs">{data.wa.wa_verify_token}</code></dd></div>
+                <div><dt className="text-xs font-semibold text-bone-dim">URL de callback</dt><dd><code className="mt-1 block select-all break-all rounded-xl bg-surface-2 px-3 py-2 text-xs">{env.appUrl}/api/webhooks/whatsapp</code></dd></div>
+                <div><dt className="text-xs font-semibold text-bone-dim">Token de verificação</dt><dd><code className="mt-1 block select-all break-all rounded-xl bg-surface-2 px-3 py-2 text-xs">{data.wa.wa_verify_token}</code></dd></div>
               </dl>
             </Card>
             <Card>
               <CardTitle>Situação</CardTitle>
               <dl className="space-y-2 text-sm">
-                <div className="flex justify-between"><dt className="text-navy-500">Credenciais salvas em</dt><dd>{data.wa.wa_connected_at ? formatShort(data.wa.wa_connected_at, ctx.tz) : "—"}</dd></div>
-                <div className="flex justify-between"><dt className="text-navy-500">Último evento recebido</dt><dd>{data.wa.wa_last_inbound_at ? formatShort(data.wa.wa_last_inbound_at, ctx.tz) : "nenhum ainda"}</dd></div>
+                <div className="flex justify-between"><dt className="text-bone-mute">Credenciais salvas em</dt><dd>{data.wa.wa_connected_at ? formatShort(data.wa.wa_connected_at, ctx.tz) : "—"}</dd></div>
+                <div className="flex justify-between"><dt className="text-bone-mute">Último evento recebido</dt><dd>{data.wa.wa_last_inbound_at ? formatShort(data.wa.wa_last_inbound_at, ctx.tz) : "nenhum ainda"}</dd></div>
               </dl>
-              <p className="mt-3 text-xs text-navy-500">Enquanto o número não estiver conectado, use o <Link href="/simulador" className="font-semibold underline">Simulador</Link> para treinar a equipe e validar a assistente.</p>
+              <p className="mt-3 text-xs text-bone-mute">Enquanto o número não estiver conectado, use o <Link href="/simulador" className="font-semibold underline">Simulador</Link> para treinar a equipe e validar a assistente.</p>
             </Card>
           </div>
         </div>
@@ -229,7 +229,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <ActionForm action={saveAiAction} className="space-y-5" resetOnDone={false}>
               <div>
                 <h2 className="text-base font-semibold">Protocolo de sinais de alerta</h2>
-                <p className="mt-0.5 text-xs text-navy-500">Quando o paciente relata um destes sinais, a assistente interrompe qualquer assunto comercial, envia a mensagem abaixo e chama a equipe com urgência. A detecção serve só para encaminhar — nunca para avaliar a condição.</p>
+                <p className="mt-0.5 text-xs text-bone-mute">Quando o paciente relata um destes sinais, a assistente interrompe qualquer assunto comercial, envia a mensagem abaixo e chama a equipe com urgência. A detecção serve só para encaminhar — nunca para avaliar a condição.</p>
               </div>
               {ctx.clinic.alert_approved_at
                 ? <Notice tone="ok">Protocolo aprovado em {formatShort(ctx.clinic.alert_approved_at, ctx.tz)}. Qualquer alteração exige nova aprovação.</Notice>
@@ -238,7 +238,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <Field label="Mensagem de encaminhamento (expediente)" hint="Texto exato enviado ao paciente. Deve ser redigido/aprovado pelo responsável técnico."><Textarea name="alertMessage" defaultValue={ctx.clinic.alert_message ?? ""} className="min-h-20" /></Field>
               <Field label="Mensagem fora do expediente" hint="Inclua a alternativa definida pela clínica para urgências fora do horário."><Textarea name="alertAfterHours" defaultValue={ctx.clinic.alert_after_hours_message ?? ""} className="min-h-20" /></Field>
               <Checkbox name="approve" label="Sou (ou represento) o responsável técnico e aprovo este protocolo" hint="A aprovação fica registrada na auditoria com seu usuário, data e hora." />
-              <hr className="border-cream-200" />
+              <hr className="border-line" />
               <h2 className="text-base font-semibold">Assistente virtual</h2>
               <Checkbox name="aiEnabled" defaultChecked={ctx.clinic.ai_enabled} label="Assistente ativada" hint="Responde conversas em “IA ativa”. Exige protocolo aprovado." />
               <Checkbox name="killSwitch" defaultChecked={ctx.clinic.ai_kill_switch} label="Pausa de emergência (kill switch)" hint="Interrompe todas as respostas automáticas na hora. A inbox humana continua funcionando." />
@@ -257,18 +257,18 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <li className="flex items-center justify-between">Transcrição de áudio<Badge tone={env.transcriptionUrl && env.transcriptionKey ? "ok" : "warn"}>{env.transcriptionUrl && env.transcriptionKey ? "configurada" : "não configurada"}</Badge></li>
                 <li className="flex items-center justify-between">Worker (cron)<Badge tone={env.cronSecret ? "ok" : "warn"}>{env.cronSecret ? "protegido" : "sem CRON_SECRET"}</Badge></li>
               </ul>
-              <p className="mt-3 text-xs text-navy-500">Chaves são definidas pelo operador da plataforma nas variáveis de ambiente. Sem chave de IA, as conversas vão direto para a equipe; sem transcrição, a assistente pede para o paciente escrever.</p>
+              <p className="mt-3 text-xs text-bone-mute">Chaves são definidas pelo operador da plataforma nas variáveis de ambiente. Sem chave de IA, as conversas vão direto para a equipe; sem transcrição, a assistente pede para o paciente escrever.</p>
             </Card>
             <Card>
               <CardTitle hint="Mês corrente">Operação da IA</CardTitle>
               <dl className="space-y-2 text-sm">
-                <div className="flex justify-between"><dt className="text-navy-500">Custo estimado</dt><dd className="font-semibold">US$ {(Number(data.ops?.cost ?? 0) / 100).toFixed(2)}</dd></div>
-                <div className="flex justify-between"><dt className="text-navy-500">Atendimentos</dt><dd>{data.ops?.runs ?? 0}</dd></div>
-                <div className="flex justify-between"><dt className="text-navy-500">Respostas descartadas por handoff</dt><dd>{data.ops?.discarded ?? 0}</dd></div>
-                <div className="flex justify-between"><dt className="text-navy-500">Jobs com falha (7 dias)</dt><dd className={cn(data.ops?.failed ? "font-semibold text-danger" : "")}>{data.ops?.failed ?? 0}</dd></div>
-                {s.aiMonthlyBudgetCents != null && <div className="flex justify-between"><dt className="text-navy-500">Teto mensal</dt><dd>US$ {(s.aiMonthlyBudgetCents / 100).toFixed(2)}</dd></div>}
+                <div className="flex justify-between"><dt className="text-bone-mute">Custo estimado</dt><dd className="font-semibold">US$ {(Number(data.ops?.cost ?? 0) / 100).toFixed(2)}</dd></div>
+                <div className="flex justify-between"><dt className="text-bone-mute">Atendimentos</dt><dd>{data.ops?.runs ?? 0}</dd></div>
+                <div className="flex justify-between"><dt className="text-bone-mute">Respostas descartadas por handoff</dt><dd>{data.ops?.discarded ?? 0}</dd></div>
+                <div className="flex justify-between"><dt className="text-bone-mute">Jobs com falha (7 dias)</dt><dd className={cn(data.ops?.failed ? "font-semibold text-danger" : "")}>{data.ops?.failed ?? 0}</dd></div>
+                {s.aiMonthlyBudgetCents != null && <div className="flex justify-between"><dt className="text-bone-mute">Teto mensal</dt><dd>US$ {(s.aiMonthlyBudgetCents / 100).toFixed(2)}</dd></div>}
               </dl>
-              <p className="mt-3 text-[11px] text-navy-500">Estimativa por tokens (preço de tabela do modelo); a fatura do provedor é a referência. Equivale a cerca de {brl(Math.round(Number(data.ops?.cost ?? 0) * 5.5))} a R$ 5,50/US$ (câmbio ilustrativo).</p>
+              <p className="mt-3 text-[11px] text-bone-mute">Estimativa por tokens (preço de tabela do modelo); a fatura do provedor é a referência. Equivale a cerca de {brl(Math.round(Number(data.ops?.cost ?? 0) * 5.5))} a R$ 5,50/US$ (câmbio ilustrativo).</p>
             </Card>
           </div>
         </div>
@@ -282,9 +282,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               {data.audit.map((a) => (
                 <tr key={a.id} className="align-top">
                   <td className="whitespace-nowrap">{formatShort(a.created_at, ctx.tz)}</td><td>{a.actor_label ?? "Sistema"}</td>
-                  <td><code className="text-xs">{a.action}</code><span className="block text-[10px] text-navy-500">{a.entity}</span></td>
-                  <td className="max-w-56"><pre className="scroll-thin overflow-x-auto whitespace-pre-wrap break-words text-[10px] text-navy-700">{a.before ? JSON.stringify(a.before, null, 1) : "—"}</pre></td>
-                  <td className="max-w-56"><pre className="scroll-thin overflow-x-auto whitespace-pre-wrap break-words text-[10px] text-navy-700">{a.after ? JSON.stringify(a.after, null, 1) : "—"}</pre></td>
+                  <td><code className="text-xs">{a.action}</code><span className="block text-[10px] text-bone-mute">{a.entity}</span></td>
+                  <td className="max-w-56"><pre className="scroll-thin overflow-x-auto whitespace-pre-wrap break-words text-[10px] text-bone-dim">{a.before ? JSON.stringify(a.before, null, 1) : "—"}</pre></td>
+                  <td className="max-w-56"><pre className="scroll-thin overflow-x-auto whitespace-pre-wrap break-words text-[10px] text-bone-dim">{a.after ? JSON.stringify(a.after, null, 1) : "—"}</pre></td>
                 </tr>
               ))}
             </Table>

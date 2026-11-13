@@ -16,7 +16,7 @@ export default async function OnboardingPage() {
   return (
     <AuthFrame title="Conte o básico. O resto" highlight="já vem pronto" subtitle="Criamos a unidade, as cadeiras, a agenda de cada dentista, um catálogo de serviços em rascunho, os modelos de mensagem e o protocolo de urgência para você revisar.">
       <h2 className="text-2xl font-bold">Configurar sua clínica</h2>
-      <p className="mb-6 mt-1 text-sm text-navy-500">Tudo pode ser ajustado depois em Configurações.</p>
+      <p className="mb-6 mt-1 text-sm text-bone-mute">Tudo pode ser ajustado depois em Configurações.</p>
       <ActionForm action={onboardingAction} className="space-y-4" resetOnDone={false}>
         <Field label="Nome da clínica"><Input name="clinicName" required placeholder="Ex.: Clínica Sorriso" /></Field>
         <Field label="Seu nome"><Input name="ownerName" required /></Field>
@@ -27,7 +27,7 @@ export default async function OnboardingPage() {
         <Checkbox name="demo" label="Quero uma clínica de demonstração" hint="Ignora os campos acima (exceto o nome) e cria dados fictícios para explorar: pacientes, consultas e funil." />
         <Button type="submit" variant="accent" className="w-full">Criar minha central</Button>
       </ActionForm>
-      <form action={logoutAction} className="mt-6"><button className="text-sm text-navy-500 underline">Sair ({me.email})</button></form>
+      <form action={logoutAction} className="mt-6"><button className="text-sm text-bone-mute underline">Sair ({me.email})</button></form>
     </AuthFrame>
   );
 }

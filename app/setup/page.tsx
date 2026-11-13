@@ -38,18 +38,18 @@ export default async function SetupPage() {
     <main className="mx-auto max-w-2xl p-6 py-12">
       <Logo />
       <h1 className="mt-8 text-3xl font-bold">Falta pouco para <span className="marker">começar</span></h1>
-      <p className="mt-2 text-navy-500">Siga os passos de <code>docs/SETUP.md</code>. Esta página some quando tudo estiver configurado.</p>
+      <p className="mt-2 text-bone-mute">Siga os passos de <code>docs/SETUP.md</code>. Esta página some quando tudo estiver configurado.</p>
       <div className="mt-6 space-y-3">
         {steps.map((s, i) => (
           <Card key={s.title} className="flex items-start gap-4">
-            <span className={`flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${s.done ? "bg-ok-soft text-ok" : "bg-sun-500"}`}>{s.done ? "✓" : i + 1}</span>
+            <span className={`flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${s.done ? "bg-ok-soft text-ok" : "bg-gold"}`}>{s.done ? "✓" : i + 1}</span>
             <div className="min-w-0">
               <p className="font-semibold">{s.title}</p>
-              <p className="text-sm text-navy-500">{s.detail}</p>
+              <p className="text-sm text-bone-mute">{s.detail}</p>
               {i === 0 && missing.length > 0 && (
                 <ul className="mt-3 space-y-2">
                   {missing.map((m) => (
-                    <li key={m} className="rounded-xl bg-cream-50 px-3 py-2 text-xs"><code className="font-semibold">{m}</code><span className="mt-0.5 block text-navy-500">{HELP[m]}</span></li>
+                    <li key={m} className="rounded-xl bg-surface-2 px-3 py-2 text-xs"><code className="font-semibold">{m}</code><span className="mt-0.5 block text-bone-mute">{HELP[m]}</span></li>
                   ))}
                 </ul>
               )}

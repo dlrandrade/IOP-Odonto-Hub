@@ -37,7 +37,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Pacientes" subtitle="Dados administrativos. Contato (telefone) e paciente são coisas diferentes: um responsável pode agendar para os filhos.">
         <form className="relative" action="/pacientes">
-          <Search size={15} className="absolute left-3 top-3 text-navy-300" aria-hidden />
+          <Search size={15} className="absolute left-3 top-3 text-bone-mute" aria-hidden />
           <Input name="q" defaultValue={search} placeholder="Nome ou telefone" aria-label="Buscar pacientes" className="w-60 pl-9" />
         </form>
         {can(ctx.role, "patients.write") && (
@@ -60,8 +60,8 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
             {rows.slice(0, SIZE).map((p) => (
               <tr key={p.id}>
                 <td><Link href={`/pacientes/${p.id}`} className="flex items-center gap-3"><Avatar name={p.full_name} size={32} /><span><span className="block font-semibold">{p.full_name}</span>{p.guardian_of > 0 && <Badge>tem responsável</Badge>}</span></Link></td>
-                <td className="text-navy-700">{p.phones?.length ? formatPhone(p.phones[0]!) : "—"}{(p.phones?.length ?? 0) > 1 ? ` +${p.phones!.length - 1}` : ""}</td>
-                <td>{p.next_at ? formatShort(p.next_at, ctx.tz) : <span className="text-navy-300">—</span>}</td>
+                <td className="text-bone-dim">{p.phones?.length ? formatPhone(p.phones[0]!) : "—"}{(p.phones?.length ?? 0) > 1 ? ` +${p.phones!.length - 1}` : ""}</td>
+                <td>{p.next_at ? formatShort(p.next_at, ctx.tz) : <span className="text-bone-mute">—</span>}</td>
                 <td>{p.total}</td>
                 <td className="text-right"><Link href={`/pacientes/${p.id}`} className="text-xs font-semibold underline">Abrir ficha</Link></td>
               </tr>

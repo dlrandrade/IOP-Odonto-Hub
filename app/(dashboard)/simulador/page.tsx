@@ -37,7 +37,7 @@ export default async function SimulatorPage({ searchParams }: { searchParams: Pr
       </div>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="flex min-h-[65dvh] flex-col p-0">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-cream-200 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
             <form className="flex items-center gap-2" action="/simulador">
               <label className="text-xs font-semibold" htmlFor="tel">Telefone fictício</label>
               <Input id="tel" name="tel" defaultValue={phone} className="h-8 w-44" />
@@ -49,22 +49,22 @@ export default async function SimulatorPage({ searchParams }: { searchParams: Pr
               <ActionForm action={resetSimulationAction}><input type="hidden" name="phone" value={phone} /><Button size="sm" variant="ghost">Limpar</Button></ActionForm>
             </div>
           </div>
-          <div className="scroll-thin min-h-0 flex-1 space-y-2 overflow-y-auto bg-cream-50 p-4">
+          <div className="scroll-thin min-h-0 flex-1 space-y-2 overflow-y-auto bg-surface-2 p-4">
             {data.messages.length === 0 && <Empty title="Comece a conversa">Experimente: “Oi, quanto custa a limpeza?” ou “Quero marcar uma avaliação”.</Empty>}
             {data.messages.map((m) => m.type === "note" ? (
-              <p key={m.id} className="mx-auto max-w-[85%] rounded-xl bg-sun-100 px-3 py-1.5 text-center text-xs">{m.body}</p>
+              <p key={m.id} className="mx-auto max-w-[85%] rounded-xl bg-gold/10 px-3 py-1.5 text-center text-xs">{m.body}</p>
             ) : (
               <div key={m.id} className={cn("flex", m.direction === "inbound" ? "justify-end" : "justify-start")}>
-                <div className={cn("max-w-[78%] rounded-2xl px-3.5 py-2 text-sm shadow-sm", m.direction === "inbound" ? "bg-sun-200" : "bg-white")}>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-navy-500">{m.direction === "inbound" ? "Você (paciente)" : m.sender_type === "ai" ? `${ctx.clinic.assistant_name} (IA)` : m.sender_type === "human" ? "Equipe" : "Automação"}</p>
+                <div className={cn("max-w-[78%] rounded-2xl px-3.5 py-2 text-sm shadow-sm", m.direction === "inbound" ? "bg-gold/20" : "bg-surface")}>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-bone-mute">{m.direction === "inbound" ? "Você (paciente)" : m.sender_type === "ai" ? `${ctx.clinic.assistant_name} (IA)` : m.sender_type === "human" ? "Equipe" : "Automação"}</p>
                   <p className="whitespace-pre-wrap break-words">{m.type === "image" ? `📷 Imagem${m.body ? `: ${m.body}` : ""}` : m.body}</p>
-                  <p className="mt-0.5 text-right text-[10px] text-navy-500">{localTime(m.created_at, ctx.tz)}</p>
+                  <p className="mt-0.5 text-right text-[10px] text-bone-mute">{localTime(m.created_at, ctx.tz)}</p>
                 </div>
               </div>
             ))}
             <ScrollToEnd dep={data.messages.length} />
           </div>
-          <ActionForm action={simulateAction} className="flex flex-wrap items-center gap-2 border-t border-cream-200 p-3">
+          <ActionForm action={simulateAction} className="flex flex-wrap items-center gap-2 border-t border-line p-3">
             <input type="hidden" name="phone" value={phone} />
             <Input name="text" placeholder="Mensagem do paciente…" aria-label="Mensagem do paciente" className="flex-1 basis-56" autoComplete="off" />
             <Button type="submit" name="kind" value="text" variant="accent">Enviar</Button>
@@ -77,7 +77,7 @@ export default async function SimulatorPage({ searchParams }: { searchParams: Pr
           {data.runs.length === 0 ? <Empty title="Nenhuma execução ainda">As ferramentas chamadas e o desfecho aparecem aqui.</Empty> : (
             <ul className="space-y-3">
               {data.runs.map((r) => (
-                <li key={r.id} className="rounded-2xl border border-cream-200 p-3">
+                <li key={r.id} className="rounded-2xl border border-line p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-1.5 text-xs font-semibold"><Bot size={13} aria-hidden /> {localTime(r.created_at, ctx.tz)}</span>
                     <Badge tone={r.outcome === "replied" ? "ok" : r.outcome === "alert" ? "danger" : "warn"}>{r.outcome}</Badge>
@@ -89,7 +89,7 @@ export default async function SimulatorPage({ searchParams }: { searchParams: Pr
                       ))}
                     </ol>
                   )}
-                  <p className="mt-2 text-[10px] text-navy-500">{r.model ?? "sem modelo"} · {r.latency_ms ?? 0} ms · {r.tokens_in}/{r.tokens_out} tokens</p>
+                  <p className="mt-2 text-[10px] text-bone-mute">{r.model ?? "sem modelo"} · {r.latency_ms ?? 0} ms · {r.tokens_in}/{r.tokens_out} tokens</p>
                 </li>
               ))}
             </ul>

@@ -21,15 +21,15 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   return (
     <AuthFrame title="Sua clínica em uma" highlight="central" subtitle="WhatsApp, agenda, pacientes e CRM no mesmo lugar, com uma assistente virtual que agenda sozinha e sabe a hora de chamar a equipe.">
       <h2 className="text-2xl font-bold">Entrar</h2>
-      <p className="mb-6 mt-1 text-sm text-navy-500">Acesse a central da sua clínica.</p>
+      <p className="mb-6 mt-1 text-sm text-bone-mute">Acesse a central da sua clínica.</p>
       {erro && ERRORS[erro] && <div className="mb-4"><Notice tone="danger">{ERRORS[erro]}</Notice></div>}
       <ActionForm action={loginAction} className="space-y-4" resetOnDone={false}>
         <Field label="E-mail"><Input name="email" type="email" autoComplete="email" required /></Field>
         <Field label="Senha"><Input name="password" type="password" autoComplete="current-password" required /></Field>
         <Button type="submit" className="w-full">Entrar</Button>
       </ActionForm>
-      <p className="mt-6 text-sm text-navy-500">
-        Ainda não tem conta? <Link href="/signup" className="font-semibold text-navy-900 underline">Cadastre sua clínica</Link>
+      <p className="mt-6 text-sm text-bone-mute">
+        Ainda não tem conta? <Link href="/signup" className="font-semibold text-bone underline">Cadastre sua clínica</Link>
       </p>
     </AuthFrame>
   );

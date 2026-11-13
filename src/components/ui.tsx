@@ -5,10 +5,10 @@ import { cn } from "@/lib/format";
 
 type ButtonVariant = "primary" | "accent" | "outline" | "ghost" | "danger";
 const BUTTON: Record<ButtonVariant, string> = {
-  primary: "bg-navy-900 text-white hover:bg-navy-800",
-  accent: "bg-sun-500 text-navy-900 hover:bg-sun-400",
-  outline: "border border-cream-300 bg-white text-navy-900 hover:bg-cream-50",
-  ghost: "text-navy-700 hover:bg-cream-100",
+  primary: "bg-gold text-ink hover:bg-gold-soft",
+  accent: "bg-bone text-ink hover:opacity-90",
+  outline: "border border-line bg-surface text-bone hover:bg-surface-2",
+  ghost: "text-bone-dim hover:bg-surface-2",
   danger: "bg-danger text-white hover:opacity-90",
 };
 
@@ -24,8 +24,8 @@ export function Button({ variant = "primary", size = "md", className, ...props }
 }
 
 export function Card({ className, tone = "white", ...props }: ComponentProps<"div"> & { tone?: "white" | "navy" | "sun" }) {
-  const bg = tone === "navy" ? "bg-navy-900 text-white" : tone === "sun" ? "bg-sun-500" : "bg-white";
-  return <div className={cn("rounded-[var(--radius-card)] p-5 shadow-[var(--shadow-card)]", bg, className)} {...props} />;
+  const bg = tone === "navy" ? "bg-surface-2" : tone === "sun" ? "bg-gold text-ink" : "bg-surface";
+  return <div className={cn("rounded-[var(--radius-card)] border border-line p-5", bg, className)} {...props} />;
 }
 
 export function CardTitle({ children, action, hint }: { children: ReactNode; action?: ReactNode; hint?: string }) {
@@ -33,7 +33,7 @@ export function CardTitle({ children, action, hint }: { children: ReactNode; act
     <div className="mb-4 flex items-start justify-between gap-3">
       <div>
         <h2 className="text-base font-semibold">{children}</h2>
-        {hint && <p className="mt-0.5 text-xs text-navy-500">{hint}</p>}
+        {hint && <p className="mt-0.5 text-xs text-bone-mute">{hint}</p>}
       </div>
       {action}
     </div>
@@ -45,7 +45,7 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
     <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
         <h1 className="text-2xl font-bold tracking-tight md:text-[28px]">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-navy-500">{subtitle}</p>}
+        {subtitle && <p className="mt-1 text-sm text-bone-mute">{subtitle}</p>}
       </div>
       <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{children}</div>
     </div>
@@ -54,7 +54,7 @@ export function PageHeader({ title, subtitle, children }: { title: string; subti
 
 type Tone = "neutral" | "navy" | "sun" | "ok" | "warn" | "danger";
 const TONES: Record<Tone, string> = {
-  neutral: "bg-cream-100 text-navy-700", navy: "bg-navy-900 text-white", sun: "bg-sun-500 text-navy-900",
+  neutral: "bg-surface-2 text-bone-dim", navy: "bg-bone text-ink", sun: "bg-gold text-ink",
   ok: "bg-ok-soft text-ok", warn: "bg-warn-soft text-warn", danger: "bg-danger-soft text-danger",
 };
 
@@ -65,7 +65,7 @@ export function Badge({ tone = "neutral", className, ...props }: ComponentProps<
 /** Largura total por padrão; passe uma classe w-* para sobrescrever sem conflito de utilitários. */
 const width = (className?: string) => (className && /(^|\s)w-/.test(className) ? "" : "w-full");
 const height = (className: string | undefined, fallback: string, prefix: RegExp) => (className && prefix.test(className) ? "" : fallback);
-const FIELD = "rounded-xl border border-cream-300 bg-white px-3 text-sm text-navy-900 placeholder:text-navy-300 focus:border-navy-700 focus:outline-none";
+const FIELD = "rounded-xl border border-line bg-surface px-3 text-sm text-bone placeholder:text-bone-mute focus:border-line focus:outline-none";
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
   return <input className={cn(FIELD, width(className), height(className, "h-10", /(^|\s)h-/), className)} {...props} />;
@@ -80,9 +80,9 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
 export function Field({ label, hint, children, className }: { label: string; hint?: string; children: ReactNode; className?: string }) {
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1 block text-xs font-semibold text-navy-700">{label}</span>
+      <span className="mb-1 block text-xs font-semibold text-bone-dim">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-[11px] leading-snug text-navy-500">{hint}</span>}
+      {hint && <span className="mt-1 block text-[11px] leading-snug text-bone-mute">{hint}</span>}
     </label>
   );
 }
@@ -90,17 +90,17 @@ export function Field({ label, hint, children, className }: { label: string; hin
 export function Checkbox({ label, hint, ...props }: ComponentProps<"input"> & { label: string; hint?: string }) {
   return (
     <label className="flex items-start gap-2.5 text-sm">
-      <input type="checkbox" className="mt-0.5 size-4 accent-navy-900" {...props} />
-      <span><span className="font-medium">{label}</span>{hint && <span className="block text-[11px] text-navy-500">{hint}</span>}</span>
+      <input type="checkbox" className="mt-0.5 size-4 accent-gold" {...props} />
+      <span><span className="font-medium">{label}</span>{hint && <span className="block text-[11px] text-bone-mute">{hint}</span>}</span>
     </label>
   );
 }
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-cream-300 px-4 py-8 text-center">
+    <div className="rounded-2xl border border-dashed border-line px-4 py-8 text-center">
       <p className="font-semibold">{title}</p>
-      {children && <div className="mt-1 text-sm text-navy-500">{children}</div>}
+      {children && <div className="mt-1 text-sm text-bone-mute">{children}</div>}
     </div>
   );
 }
@@ -109,7 +109,7 @@ export function Avatar({ name, color, size = 36 }: { name: string; color?: strin
   const letters = name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
   return (
     <span aria-hidden className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white"
-      style={{ width: size, height: size, fontSize: size * 0.36, background: color ?? "var(--color-navy-700)" }}>
+      style={{ width: size, height: size, fontSize: size * 0.36, background: color ?? "var(--color-line)" }}>
       {letters || "?"}
     </span>
   );
@@ -120,17 +120,17 @@ export function Table({ head, children }: { head: string[]; children: ReactNode 
     <div className="scroll-thin overflow-x-auto">
       <table className="w-full min-w-[520px] text-left text-sm">
         <thead>
-          <tr className="border-b border-cream-200 text-[11px] uppercase tracking-wider text-navy-500">
+          <tr className="border-b border-line text-[11px] uppercase tracking-wider text-bone-mute">
             {head.map((h) => <th key={h} className="px-2 py-2 font-semibold">{h}</th>)}
           </tr>
         </thead>
-        <tbody className="[&_td]:px-2 [&_td]:py-2.5 [&_tr]:border-b [&_tr]:border-cream-100 [&_tr:last-child]:border-0">{children}</tbody>
+        <tbody className="[&_td]:px-2 [&_td]:py-2.5 [&_tr]:border-b [&_tr]:border-line [&_tr:last-child]:border-0">{children}</tbody>
       </table>
     </div>
   );
 }
 
 export function Notice({ tone = "sun", children }: { tone?: "sun" | "danger" | "ok" | "neutral"; children: ReactNode }) {
-  const map = { sun: "bg-sun-100 border-sun-500", danger: "bg-danger-soft border-danger", ok: "bg-ok-soft border-ok", neutral: "bg-cream-50 border-cream-300" };
+  const map = { sun: "bg-gold/10 border-gold", danger: "bg-danger-soft border-danger", ok: "bg-ok-soft border-ok", neutral: "bg-surface-2 border-line" };
   return <div className={cn("rounded-2xl border-l-4 px-4 py-3 text-sm", map[tone])}>{children}</div>;
 }

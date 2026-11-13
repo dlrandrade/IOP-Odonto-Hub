@@ -1,49 +1,48 @@
 @import "tailwindcss";
 
 /*
- * Design system — IOP Business.
- * Tokens extraídos da peça de referência (azul-marinho profundo, amarelo-sol, creme, tipografia geométrica arredondada).
- * Para ajustar a marca, altere SOMENTE este bloco.
+ * Design system — IOP Business (tema único escuro; não existe modo claro).
+ * Fonte da verdade dos tokens: este bloco. Superfícies e texto vêm do documento oficial do design system.
+ * PROVISÓRIO até conferir com o documento completo: --color-gold (ouro), --color-up/--color-down (verde/coral)
+ * e os acentos por página.
  */
 @theme {
-  --color-navy-950: #081a27;
-  --color-navy-900: #0f2a3d;
-  --color-navy-800: #17384f;
-  --color-navy-700: #234a66;
-  --color-navy-500: #4f7088;
-  --color-navy-300: #9fb3c2;
-  --color-navy-100: #dfe7ec;
-  --color-sun-500: #ffd42a;
-  --color-sun-400: #ffdd55;
-  --color-sun-200: #fff0a8;
-  --color-sun-100: #fff8d6;
-  --color-cream-50: #fbf8f2;
-  --color-cream-100: #f4efe6;
-  --color-cream-200: #e9e1d2;
-  --color-cream-300: #d8cdb8;
-  --color-ok: #1f7a55;
-  --color-ok-soft: #dff3e9;
-  --color-warn: #a05a00;
-  --color-warn-soft: #ffeccc;
-  --color-danger: #b3261e;
-  --color-danger-soft: #fde4e1;
+  /* Superfícies e linhas */
+  --color-ink: #0a0e13;
+  --color-surface: #141a21;
+  --color-surface-2: #1b232c;
+  --color-line: #232d38;
+  /* Texto */
+  --color-bone: #f2efe9;
+  --color-bone-dim: #a8b0b9;
+  --color-bone-mute: #8a939d;
+  /* Marca: ouro é dinheiro, CTA e marca. Nunca decoração solta. */
+  --color-gold: #c8a24a;
+  --color-gold-soft: #d9b866;
+  /* Semântica de dados (indicadores, variações, estados) */
+  --color-ok: #5fd39a;
+  --color-ok-soft: #10261c;
+  --color-warn: #e6b24c;
+  --color-warn-soft: #2a2112;
+  --color-danger: #e5645b;
+  --color-danger-soft: #2e1517;
   --font-sans: "Lexend", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --radius-card: 1.5rem;
-  --shadow-card: 0 1px 2px rgb(15 42 61 / 0.04), 0 8px 24px -12px rgb(15 42 61 / 0.12);
 }
 
-html { background: var(--color-cream-100); color: var(--color-navy-900); }
+:root { color-scheme: dark; }
+html { background: var(--color-ink); color: var(--color-bone); }
 body { font-family: var(--font-sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
 
-:focus-visible { outline: 3px solid var(--color-sun-500); outline-offset: 2px; border-radius: 6px; }
+:focus-visible { outline: 3px solid var(--color-gold); outline-offset: 2px; border-radius: 6px; }
 
-.marker { background: var(--color-sun-500); padding: 0 0.35em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.marker { background: var(--color-gold); padding: 0 0.35em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
 
-dialog::backdrop { background: rgb(8 26 39 / 0.45); backdrop-filter: blur(2px); }
-dialog { margin: auto; }
+dialog::backdrop { background: rgb(0 0 0 / 0.6); backdrop-filter: blur(2px); }
+dialog { margin: auto; color: var(--color-bone); }
 
-.scroll-thin { scrollbar-width: thin; scrollbar-color: var(--color-cream-300) transparent; }
+.scroll-thin { scrollbar-width: thin; scrollbar-color: var(--color-line) transparent; }
 
 /* Itens de grid não podem alargar a página no celular (tabelas e campos rolam dentro do cartão). */
 .grid > * { min-width: 0; }

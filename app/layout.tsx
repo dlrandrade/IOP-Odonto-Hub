@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   title: { default: "IOP Odonto Hub", template: "%s · IOP Odonto Hub" },
   description: "Central odontológica com IA: WhatsApp, agenda, CRM e pacientes em um só lugar.",
 };
-export const viewport: Viewport = { themeColor: "#0f2a3d", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: "#0A0E13", width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

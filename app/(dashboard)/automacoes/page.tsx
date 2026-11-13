@@ -46,11 +46,11 @@ export default async function AutomationsPage() {
           <Card key={r.name}>
             <CardTitle action={<Badge tone={r.on ? "ok" : "warn"}>{r.on ? "Ativa" : "Pausada"}</Badge>}>{r.name}</CardTitle>
             <dl className="space-y-1.5 text-sm">
-              <div><dt className="inline font-semibold">Finalidade: </dt><dd className="inline text-navy-700">{r.purpose}</dd></div>
-              <div><dt className="inline font-semibold">Gatilho: </dt><dd className="inline text-navy-700">{r.trigger}</dd></div>
-              <div><dt className="inline font-semibold">Elegibilidade: </dt><dd className="inline text-navy-700">sem resposta nova, sem descadastro, conversa não assumida por humano, dentro de {s.quietStartHour}h–{s.quietEndHour}h, até {s.maxAutomatedPerDay} envio(s) automático(s) por dia.</dd></div>
-              <div><dt className="inline font-semibold">Mensagem: </dt><dd className="inline text-navy-700">{r.msg}</dd></div>
-              <div><dt className="inline font-semibold">Fora da janela de 24 h: </dt><dd className="inline text-navy-700">só template aprovado; sem template, vira tarefa humana.</dd></div>
+              <div><dt className="inline font-semibold">Finalidade: </dt><dd className="inline text-bone-dim">{r.purpose}</dd></div>
+              <div><dt className="inline font-semibold">Gatilho: </dt><dd className="inline text-bone-dim">{r.trigger}</dd></div>
+              <div><dt className="inline font-semibold">Elegibilidade: </dt><dd className="inline text-bone-dim">sem resposta nova, sem descadastro, conversa não assumida por humano, dentro de {s.quietStartHour}h–{s.quietEndHour}h, até {s.maxAutomatedPerDay} envio(s) automático(s) por dia.</dd></div>
+              <div><dt className="inline font-semibold">Mensagem: </dt><dd className="inline text-bone-dim">{r.msg}</dd></div>
+              <div><dt className="inline font-semibold">Fora da janela de 24 h: </dt><dd className="inline text-bone-dim">só template aprovado; sem template, vira tarefa humana.</dd></div>
             </dl>
           </Card>
         ))}
@@ -80,10 +80,10 @@ export default async function AutomationsPage() {
           <CardTitle hint="Fora da janela de 24 h o WhatsApp só aceita templates aprovados pela Meta. Crie o template com o mesmo nome no WhatsApp Manager e, quando aprovado, marque aqui.">Templates do WhatsApp</CardTitle>
           <ul className="space-y-3">
             {data.templates.map((t) => (
-              <li key={t.id} className="rounded-2xl border border-cream-200 p-3">
+              <li key={t.id} className="rounded-2xl border border-line p-3">
                 <div className="flex items-center justify-between gap-2"><code className="text-sm font-semibold">{t.name}</code><Badge tone={t.wa_template_status === "approved" ? "ok" : t.wa_template_status === "rejected" ? "danger" : "warn"}>{TEMPLATE_STATUS[t.wa_template_status]}</Badge></div>
-                <p className="mt-1 text-xs text-navy-500">{TEMPLATE_USE[t.name] ?? ""}</p>
-                <p className="mt-2 rounded-xl bg-cream-50 px-3 py-2 text-sm">{t.body}</p>
+                <p className="mt-1 text-xs text-bone-mute">{TEMPLATE_USE[t.name] ?? ""}</p>
+                <p className="mt-2 rounded-xl bg-surface-2 px-3 py-2 text-sm">{t.body}</p>
                 <div className="mt-2 text-right">
                   <Modal trigger="Editar / atualizar situação" title={`Template ${t.name}`} triggerClass="text-xs font-semibold underline">
                     <ActionForm action={saveTemplateAction} className="space-y-4" resetOnDone={false}>
@@ -104,10 +104,10 @@ export default async function AutomationsPage() {
         <Card>
           <CardTitle hint="Quando a automação não pode agir sozinha, ela pede uma pessoa.">Tarefas para a equipe ({data.tasks.length})</CardTitle>
           {data.tasks.length === 0 ? <Empty title="Nada pendente" /> : (
-            <ul className="divide-y divide-cream-100">
+            <ul className="divide-y divide-line">
               {data.tasks.map((t) => (
                 <li key={t.id} className="flex items-start justify-between gap-3 py-2.5">
-                  <div className="min-w-0"><p className="font-medium">{t.title}</p><p className="text-xs text-navy-500">{t.detail} · {formatShort(t.created_at, ctx.tz)}</p></div>
+                  <div className="min-w-0"><p className="font-medium">{t.title}</p><p className="text-xs text-bone-mute">{t.detail} · {formatShort(t.created_at, ctx.tz)}</p></div>
                   <div className="flex shrink-0 items-center gap-2">
                     {t.conversation_id && <Link href={`/conversas?c=${t.conversation_id}`} className="text-xs font-semibold underline">Conversa</Link>}
                     <ActionForm action={completeTaskAction}><input type="hidden" name="taskId" value={t.id} /><Button size="sm" variant="outline">Concluir</Button></ActionForm>
@@ -125,7 +125,7 @@ export default async function AutomationsPage() {
                 <tr key={j.id}>
                   <td>{JOB_LABEL[j.type] ?? j.type}</td><td className="whitespace-nowrap">{formatShort(j.run_at, ctx.tz)}</td>
                   <td><Badge tone={j.status === "done" ? "ok" : j.status === "failed" ? "danger" : j.status === "cancelled" ? "neutral" : "warn"}>{{ pending: "na fila", running: "rodando", done: "feito", failed: "falhou", cancelled: "cancelado" }[j.status] ?? j.status}</Badge></td>
-                  <td className="max-w-48 truncate text-xs text-navy-500" title={j.last_error ?? j.result ?? ""}>{j.last_error ?? j.result ?? "—"}{j.attempts > 1 ? ` (${j.attempts} tent.)` : ""}</td>
+                  <td className="max-w-48 truncate text-xs text-bone-mute" title={j.last_error ?? j.result ?? ""}>{j.last_error ?? j.result ?? "—"}{j.attempts > 1 ? ` (${j.attempts} tent.)` : ""}</td>
                 </tr>
               ))}
             </Table>

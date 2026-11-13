@@ -36,14 +36,14 @@ export default async function PlatformPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <Logo />
         <div className="flex items-center gap-2">
-          <span className="hidden text-xs text-navy-500 sm:inline">{me.email}</span>
+          <span className="hidden text-xs text-bone-mute sm:inline">{me.email}</span>
           {acting && <form action={leaveClinicAction}><Button size="sm" variant="outline">Sair de “{acting.name}”</Button></form>}
           <form action={logoutAction}><Button size="sm" variant="ghost">Sair</Button></form>
         </div>
       </div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="eyebrow text-navy-500">Operador da plataforma</p>
+          <p className="eyebrow text-bone-mute">Operador da plataforma</p>
           <h1 className="text-3xl font-bold">Suas <span className="marker">clínicas</span></h1>
         </div>
         <Modal trigger="Nova clínica cliente" title="Nova clínica cliente" triggerClass={buttonClass("accent")}>
@@ -71,7 +71,7 @@ export default async function PlatformPage() {
           <Table head={["Clínica", "Situação", "Usuários", "Conversas 30d", "Consultas 30d", "WhatsApp", "IA", ""]}>
             {clinics.map((c) => (
               <tr key={c.id}>
-                <td><p className="font-semibold">{c.name}</p><p className="text-[11px] text-navy-500">desde {new Intl.DateTimeFormat("pt-BR").format(c.created_at)}{c.is_demo ? " · demo" : ""}</p></td>
+                <td><p className="font-semibold">{c.name}</p><p className="text-[11px] text-bone-mute">desde {new Intl.DateTimeFormat("pt-BR").format(c.created_at)}{c.is_demo ? " · demo" : ""}</p></td>
                 <td>
                   <ActionForm action={clinicStatusAction} className="flex items-center gap-1">
                     <input type="hidden" name="clinicId" value={c.id} />

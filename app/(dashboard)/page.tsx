@@ -75,16 +75,16 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
         <Card tone="navy" className="mb-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <p className="eyebrow text-sun-500">Primeiros passos</p>
+              <p className="eyebrow text-gold">Primeiros passos</p>
               <h2 className="mt-1 text-xl font-bold">Faltam {pending.length} de {steps.length} para a central rodar sozinha</h2>
             </div>
-            <div className="h-2 w-40 overflow-hidden rounded-full bg-navy-700"><div className="h-full rounded-full bg-sun-500" style={{ width: `${((steps.length - pending.length) / steps.length) * 100}%` }} /></div>
+            <div className="h-2 w-40 overflow-hidden rounded-full bg-bone-mute"><div className="h-full rounded-full bg-gold" style={{ width: `${((steps.length - pending.length) / steps.length) * 100}%` }} /></div>
           </div>
           <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {steps.map((s) => (
               <li key={s.label}>
-                <Link href={s.href} className={`flex items-center gap-2 rounded-2xl px-3 py-2.5 text-sm ${s.done ? "bg-navy-800 text-navy-300 line-through" : "bg-white font-semibold text-navy-900 hover:bg-sun-100"}`}>
-                  <span className={`flex size-5 shrink-0 items-center justify-center rounded-full ${s.done ? "bg-ok text-white" : "border-2 border-navy-300"}`}>{s.done && <Check size={12} />}</span>
+                <Link href={s.href} className={`flex items-center gap-2 rounded-2xl px-3 py-2.5 text-sm ${s.done ? "bg-surface-2 text-bone-mute line-through" : "bg-surface font-semibold text-bone hover:bg-gold/10"}`}>
+                  <span className={`flex size-5 shrink-0 items-center justify-center rounded-full ${s.done ? "bg-ok text-white" : "border-2 border-line"}`}>{s.done && <Check size={12} />}</span>
                   <span className="flex-1">{s.label}</span>
                   {!s.done && <ChevronRight size={14} aria-hidden />}
                 </Link>
@@ -129,7 +129,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                   ))}
                 </Table>
               )}
-              <p className="mt-3 text-xs text-navy-500">
+              <p className="mt-3 text-xs text-bone-mute">
                 Desfechos no período: {d.attendance.attended} compareceram · {d.attendance.noShow} faltaram · {d.attendance.cancelled} canceladas · {d.attendance.pending} passadas sem desfecho registrado.
               </p>
             </Card>
@@ -138,10 +138,10 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                 <CardTitle hint="Mediana da primeira resposta em conversas novas">Tempo de primeira resposta</CardTitle>
                 <dl className="space-y-2 text-sm">
                   {[["Assistente virtual", d.firstResponse.ai], ["Equipe", d.firstResponse.human], ["Fora do expediente", d.firstResponse.afterHours]].map(([k, v]) => (
-                    <div key={String(k)} className="flex items-center justify-between"><dt className="text-navy-500">{k}</dt><dd className="font-semibold">{duration(v as number | null)}</dd></div>
+                    <div key={String(k)} className="flex items-center justify-between"><dt className="text-bone-mute">{k}</dt><dd className="font-semibold">{duration(v as number | null)}</dd></div>
                   ))}
                 </dl>
-                <p className="mt-2 text-[11px] text-navy-500">{d.firstResponse.samples} conversa(s) respondida(s) no período.</p>
+                <p className="mt-2 text-[11px] text-bone-mute">{d.firstResponse.samples} conversa(s) respondida(s) no período.</p>
               </Card>
               <Card>
                 <CardTitle action={<Link href="/conversas?f=nao-atribuidas" className="text-xs font-semibold underline">Abrir fila</Link>}>Fila humana agora</CardTitle>
@@ -151,7 +151,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
                   <Badge>{d.queue.humanActive} com a equipe</Badge>
                   <Badge>{d.queue.aiActive} com a IA</Badge>
                 </div>
-                {can(ctx.role, "audit.view") && <p className="mt-3 text-xs text-navy-500">Custo estimado de IA no período: {brl(Math.round(d.aiCostCents))} (referência em USD convertida 1:1; ver Configurações).</p>}
+                {can(ctx.role, "audit.view") && <p className="mt-3 text-xs text-bone-mute">Custo estimado de IA no período: {brl(Math.round(d.aiCostCents))} (referência em USD convertida 1:1; ver Configurações).</p>}
               </Card>
             </div>
           </div>
@@ -160,10 +160,10 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
             <Card>
               <CardTitle hint="Geradas por automações que precisam de uma pessoa">Tarefas abertas ({d.queue.openTasks})</CardTitle>
               {data.tasks.length === 0 ? <Empty title="Nenhuma tarefa pendente" /> : (
-                <ul className="divide-y divide-cream-100">
+                <ul className="divide-y divide-line">
                   {data.tasks.map((t) => (
                     <li key={t.id} className="flex items-start justify-between gap-3 py-2.5">
-                      <div className="min-w-0"><p className="truncate font-medium">{t.title}</p><p className="truncate text-xs text-navy-500">{t.detail}</p></div>
+                      <div className="min-w-0"><p className="truncate font-medium">{t.title}</p><p className="truncate text-xs text-bone-mute">{t.detail}</p></div>
                       {t.conversation_id ? <Link className="shrink-0 text-xs font-semibold underline" href={`/conversas?c=${t.conversation_id}`}>Abrir</Link>
                         : <Link className="shrink-0 text-xs font-semibold underline" href="/automacoes">Ver</Link>}
                     </li>
@@ -173,7 +173,7 @@ export default async function OverviewPage({ searchParams }: { searchParams: Pro
             </Card>
             <Card>
               <CardTitle>Como cada número é calculado</CardTitle>
-              <dl className="space-y-2 text-xs text-navy-700">
+              <dl className="space-y-2 text-xs text-bone-dim">
                 <div><dt className="font-semibold">Novo contato</dt><dd>Telefone visto pela primeira vez na clínica no período. Não mede pacientes únicos. Exclui testes, simulador e contatos marcados como spam/fornecedor.</dd></div>
                 <div><dt className="font-semibold">Conversão</dt><dd>Contatos novos da coorte com ao menos uma avaliação agendada em até 30 dias ÷ contatos novos elegíveis. Coortes com menos de 30 dias aparecem como parciais.</dd></div>
                 <div><dt className="font-semibold">Consultas marcadas</dt><dd>Consultas criadas no período; a nova consulta de um reagendamento não é contada de novo.</dd></div>

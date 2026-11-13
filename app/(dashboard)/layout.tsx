@@ -35,7 +35,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-[1500px] flex-col overflow-x-clip px-3 pb-8 sm:px-5">
-      <header className="sticky top-0 z-30 -mx-3 bg-cream-100/90 px-3 pb-2 pt-3 backdrop-blur sm:-mx-5 sm:px-5">
+      <header className="sticky top-0 z-30 -mx-3 bg-ink/90 px-3 pb-2 pt-3 backdrop-blur sm:-mx-5 sm:px-5">
         <div className="flex items-center justify-between gap-3">
           <Link href="/" aria-label="Início"><Logo /></Link>
           <div className="flex min-w-0 items-center justify-end gap-2">
@@ -47,17 +47,17 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             <Badge tone={aiOn ? "ok" : "warn"} className="hidden sm:inline-flex"><Bot size={12} aria-hidden /> IA {ctx.clinic.ai_kill_switch ? "pausada" : aiOn ? "ativa" : "desligada"}</Badge>
             {ctx.clinic.is_demo && <Badge tone="sun" className="hidden sm:inline-flex">Demonstração</Badge>}
             {ctx.isPlatformAdmin && (
-              <Link href="/admin" className="flex items-center gap-1 rounded-full border border-cream-300 bg-white px-3 py-1.5 text-xs font-semibold"><ShieldCheck size={14} aria-hidden /> <span className="hidden sm:inline">Plataforma</span><span className="sr-only sm:hidden">Plataforma</span></Link>
+              <Link href="/admin" className="flex items-center gap-1 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-semibold"><ShieldCheck size={14} aria-hidden /> <span className="hidden sm:inline">Plataforma</span><span className="sr-only sm:hidden">Plataforma</span></Link>
             )}
-            <div className="hidden items-center gap-2 rounded-full bg-white py-1 pl-1 pr-3 shadow-[var(--shadow-card)] md:flex">
+            <div className="hidden items-center gap-2 rounded-full bg-surface py-1 pl-1 pr-3 border border-line md:flex">
               <Avatar name={ctx.name} size={30} />
               <span className="leading-tight">
                 <span className="block max-w-36 truncate text-xs font-semibold">{ctx.name}</span>
-                <span className="block max-w-36 truncate text-[10px] text-navy-500">{ROLE_LABELS[ctx.role]} · {ctx.clinic.name}</span>
+                <span className="block max-w-36 truncate text-[10px] text-bone-mute">{ROLE_LABELS[ctx.role]} · {ctx.clinic.name}</span>
               </span>
             </div>
             <form action={logoutAction}>
-              <button aria-label="Sair" title="Sair" className="flex size-9 items-center justify-center rounded-full bg-white shadow-[var(--shadow-card)] hover:bg-cream-50"><LogOut size={15} /></button>
+              <button aria-label="Sair" title="Sair" className="flex size-9 items-center justify-center rounded-full bg-surface border border-line hover:bg-surface-2"><LogOut size={15} /></button>
             </form>
           </div>
         </div>
