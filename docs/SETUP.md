@@ -54,7 +54,7 @@ npm run db:seed
 
 1. **Add New → Project** → importe o repositório. Framework: Next.js (detectado).
 2. Cadastre as variáveis do passo 2 e faça o deploy.
-3. **Worker:** `vercel.json` agenda `/api/jobs/run` a cada minuto (plano Pro). No plano Hobby, remova o cron do `vercel.json` e agende pelo Supabase (SQL Editor), trocando a URL e o segredo:
+3. **Worker:** `vercel.json` agenda `/api/jobs/run` uma vez por dia (limite do plano Hobby); no plano Pro você pode trocar por `* * * * *`. Para rodar a cada minuto em qualquer plano, agende pelo Supabase (SQL Editor), trocando a URL e o segredo:
 
 ```sql
 create extension if not exists pg_cron;
