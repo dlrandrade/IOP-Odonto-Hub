@@ -12,7 +12,7 @@ export type LlmRequest = {
 export type LlmResponse = {
   blocks: LlmBlock[];
   /** Conteúdo bruto do turno do assistente, devolvido intacto na próxima chamada. */
-  assistantContent: Anthropic.Beta.BetaMessageParam["content"];
+  assistantContent: Anthropic.Beta.BetaContentBlockParam[];
   stopReason: string | null;
   usage: { input: number; output: number };
   model: string;

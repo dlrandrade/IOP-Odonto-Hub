@@ -1,7 +1,7 @@
 import type { Sql } from "@/db/client";
 
 export type JobType =
-  | "process_conversation" | "transcribe" | "send_message"
+  | "process_conversation" | "transcribe" | "fetch_media" | "send_message"
   | "followup_1" | "followup_2" | "reminder" | "confirmation_request";
 
 export type EnqueueInput = {

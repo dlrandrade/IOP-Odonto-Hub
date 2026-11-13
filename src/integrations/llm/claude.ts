@@ -44,7 +44,7 @@ export class ClaudeProvider implements LlmProvider {
       }
       return {
         blocks,
-        assistantContent: res.content as Anthropic.Beta.BetaMessageParam["content"],
+        assistantContent: res.content as Anthropic.Beta.BetaContentBlockParam[],
         stopReason: res.stop_reason,
         usage: {
           input: res.usage.input_tokens + (res.usage.cache_read_input_tokens ?? 0) + (res.usage.cache_creation_input_tokens ?? 0),

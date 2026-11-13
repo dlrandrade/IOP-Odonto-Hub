@@ -118,18 +118,21 @@ async function insertAppointment(tx: Sql, i: BookInput, rescheduledFromId: strin
 }
 
 async function guarded(sql: Sql, fn: (tx: Sql) => Promise<BookResult>): Promise<BookResult> {
-  try {
-    let result: BookResult = { ok: false, reason: "invalid", message: "Falha ao gravar." };
-    await inTx(sql, async (tx) => {
-      result = await fn(tx);
-      if (!result.ok) throw new RollbackSignal();
-    }).catch((e) => { if (!(e instanceof RollbackSignal)) throw e; });
-    return result;
-  } catch (e) {
-    // A constraint EXCLUDE é quem decide a corrida: quem perde recebe "conflict".
-    if (pgErrorCode(e) === PG_EXCLUSION_VIOLATION) return { ok: false, reason: "conflict", message: "Esse horário acabou de ser ocupado." };
-    throw e;
+  // A constraint EXCLUDE é quem decide a corrida. Quem perde tenta de novo (pode haver outra cadeira livre);
+  // se o horário realmente acabou, a revalidação devolve "unavailable".
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      let result: BookResult = { ok: false, reason: "invalid", message: "Falha ao gravar." };
+      await inTx(sql, async (tx) => {
+        result = await fn(tx);
+        if (!result.ok) throw new RollbackSignal();
+      }).catch((e) => { if (!(e instanceof RollbackSignal)) throw e; });
+      return result;
+    } catch (e) {
+      if (pgErrorCode(e) !== PG_EXCLUSION_VIOLATION) throw e;
+    }
   }
+  return { ok: false, reason: "conflict", message: "Esse horário acabou de ser ocupado." };
 }
 class RollbackSignal extends Error {}
 

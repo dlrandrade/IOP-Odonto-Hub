@@ -284,6 +284,8 @@ create table conversations (
   handoff_reason text,
   handoff_priority text check (handoff_priority in ('normal','urgente')),
   verified_patient_ids uuid[] not null default '{}',
+  awaiting_confirmation_appointment_id uuid,
+  after_hours_notified_at timestamptz,
   closed_at timestamptz,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
