@@ -68,7 +68,7 @@ export function BookingForm({ services, professionals, patients, defaultDate, re
             const value = `${s.startsAt}|${s.professionalId}`;
             return (
               <button key={value} type="button" role="radio" aria-checked={picked === value} onClick={() => setPicked(value)}
-                className={cn("rounded-full border px-3 py-1.5 text-xs font-medium", picked === value ? "border-bone bg-gold text-ink" : "border-line bg-surface hover:bg-surface-2")}>
+                className={cn("rounded-full border px-3 py-1.5 text-xs font-medium", picked === value ? "border-bone bg-acento text-ink" : "border-line bg-surface hover:bg-surface-2")}>
                 {s.time}{!professionalId && <span className="opacity-70"> · {s.professional.split(" ").slice(0, 2).join(" ")}</span>}
               </button>
             );

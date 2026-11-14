@@ -14,8 +14,8 @@ export default async function OnboardingPage() {
   if (!me) redirect("/login");
   if (me.appUser) redirect("/");
   return (
-    <AuthFrame title="Conte o básico. O resto" highlight="já vem pronto" subtitle="Criamos a unidade, as cadeiras, a agenda de cada dentista, um catálogo de serviços em rascunho, os modelos de mensagem e o protocolo de urgência para você revisar.">
-      <h2 className="text-2xl font-bold">Configurar sua clínica</h2>
+    <AuthFrame title="Conte o básico. O resto já vem pronto." subtitle="Criamos a unidade, as cadeiras, a agenda de cada dentista, um catálogo de serviços em rascunho, os modelos de mensagem e o protocolo de urgência para você revisar.">
+      <h2 className="display text-[30px] leading-tight">Configurar sua clínica</h2>
       <p className="mb-6 mt-1 text-sm text-bone-mute">Tudo pode ser ajustado depois em Configurações.</p>
       <ActionForm action={onboardingAction} className="space-y-4" resetOnDone={false}>
         <Field label="Nome da clínica"><Input name="clinicName" required placeholder="Ex.: Clínica Sorriso" /></Field>

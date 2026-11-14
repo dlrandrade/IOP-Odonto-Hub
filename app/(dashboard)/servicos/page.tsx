@@ -97,7 +97,7 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
       </PageHeader>
       <div className="mb-3 inline-flex rounded-full bg-surface p-1 border border-line">
         {[["servicos", "Serviços"], ["conhecimento", "Base de conhecimento"]].map(([k, label]) => (
-          <Link key={k} href={k === "servicos" ? "/servicos" : "/servicos?aba=conhecimento"} className={cn("rounded-full px-4 py-1.5 text-sm font-medium", tab === k ? "bg-gold text-ink" : "text-bone-dim")}>{label}</Link>
+          <Link key={k} href={k === "servicos" ? "/servicos" : "/servicos?aba=conhecimento"} className={cn("rounded-full px-4 py-1.5 text-sm font-medium", tab === k ? "bg-acento text-ink" : "text-bone-dim")}>{label}</Link>
         ))}
       </div>
       {ctx.clinic.is_demo && <div className="mb-3"><Notice tone="sun">Clínica de demonstração: preços e textos são <strong>fictícios</strong>.</Notice></div>}

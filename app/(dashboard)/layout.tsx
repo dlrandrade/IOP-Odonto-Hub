@@ -34,36 +34,38 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const aiOn = ctx.clinic.ai_enabled && !ctx.clinic.ai_kill_switch;
 
   return (
-    <div className="mx-auto flex min-h-dvh w-full max-w-[1500px] flex-col overflow-x-clip px-3 pb-8 sm:px-5">
-      <header className="sticky top-0 z-30 -mx-3 bg-ink/90 px-3 pb-2 pt-3 backdrop-blur sm:-mx-5 sm:px-5">
-        <div className="flex items-center justify-between gap-3">
-          <Link href="/" aria-label="Início"><Logo /></Link>
-          <div className="flex min-w-0 items-center justify-end gap-2">
-            {!!counts?.urgent && (
-              <Link href="/conversas?f=urgentes" className="flex items-center gap-1.5 rounded-full bg-danger px-3 py-1.5 text-xs font-bold text-white">
-                <TriangleAlert size={14} aria-hidden /> {counts.urgent} urgente{counts.urgent > 1 ? "s" : ""}
-              </Link>
-            )}
-            <Badge tone={aiOn ? "ok" : "warn"} className="hidden sm:inline-flex"><Bot size={12} aria-hidden /> IA {ctx.clinic.ai_kill_switch ? "pausada" : aiOn ? "ativa" : "desligada"}</Badge>
-            {ctx.clinic.is_demo && <Badge tone="sun" className="hidden sm:inline-flex">Demonstração</Badge>}
-            {ctx.isPlatformAdmin && (
-              <Link href="/admin" className="flex items-center gap-1 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-semibold"><ShieldCheck size={14} aria-hidden /> <span className="hidden sm:inline">Plataforma</span><span className="sr-only sm:hidden">Plataforma</span></Link>
-            )}
-            <div className="hidden items-center gap-2 rounded-full bg-surface py-1 pl-1 pr-3 border border-line md:flex">
-              <Avatar name={ctx.name} size={30} />
-              <span className="leading-tight">
-                <span className="block max-w-36 truncate text-xs font-semibold">{ctx.name}</span>
-                <span className="block max-w-36 truncate text-[10px] text-bone-mute">{ROLE_LABELS[ctx.role]} · {ctx.clinic.name}</span>
-              </span>
+    <div className="flex min-h-dvh flex-col">
+      <header className="sticky top-0 z-30 border-b border-line bg-ink/85 backdrop-blur">
+        <div className="mx-auto w-full max-w-[1500px] px-3 sm:px-5">
+          <div className="flex h-14 items-center justify-between gap-3">
+            <Link href="/" aria-label="Início"><Logo /></Link>
+            <div className="flex min-w-0 items-center justify-end gap-2">
+              {!!counts?.urgent && (
+                <Link href="/conversas?f=urgentes" className="flex items-center gap-1.5 rounded-sm bg-danger px-3 py-1.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.1em] text-ink">
+                  <TriangleAlert size={13} aria-hidden /> {counts.urgent} urgente{counts.urgent > 1 ? "s" : ""}
+                </Link>
+              )}
+              <Badge tone={aiOn ? "ok" : "warn"} className="hidden sm:inline-flex"><Bot size={11} aria-hidden /> IA {ctx.clinic.ai_kill_switch ? "pausada" : aiOn ? "ativa" : "desligada"}</Badge>
+              {ctx.clinic.is_demo && <Badge tone="sun" className="hidden sm:inline-flex">Demonstração</Badge>}
+              {ctx.isPlatformAdmin && (
+                <Link href="/admin" className="flex items-center gap-1.5 rounded-sm border border-line px-3 py-1.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.1em] text-bone-dim transition-colors hover:border-gold hover:text-gold"><ShieldCheck size={13} aria-hidden /> <span className="hidden sm:inline">Plataforma</span><span className="sr-only sm:hidden">Plataforma</span></Link>
+              )}
+              <div className="hidden items-center gap-2.5 border-l border-line pl-3 md:flex">
+                <Avatar name={ctx.name} size={28} />
+                <span className="leading-tight">
+                  <span className="block max-w-36 truncate text-xs font-medium">{ctx.name}</span>
+                  <span className="block max-w-36 truncate text-[10.5px] text-bone-mute">{ROLE_LABELS[ctx.role]} · {ctx.clinic.name}</span>
+                </span>
+              </div>
+              <form action={logoutAction}>
+                <button aria-label="Sair" title="Sair" className="flex size-8 items-center justify-center rounded-sm border border-line text-bone-dim transition-colors hover:border-bone-dim hover:text-bone"><LogOut size={14} /></button>
+              </form>
             </div>
-            <form action={logoutAction}>
-              <button aria-label="Sair" title="Sair" className="flex size-9 items-center justify-center rounded-full bg-surface border border-line hover:bg-surface-2"><LogOut size={15} /></button>
-            </form>
           </div>
+          <TopNav items={items} />
         </div>
-        <div className="mt-2"><TopNav items={items} /></div>
       </header>
-      <main className="mt-3 min-w-0 flex-1">{children}</main>
+      <main className="mx-auto mt-6 w-full min-w-0 max-w-[1500px] flex-1 px-3 pb-12 sm:px-5">{children}</main>
     </div>
   );
 }

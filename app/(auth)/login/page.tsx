@@ -19,8 +19,8 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
   const { erro } = await searchParams;
   if (!erro && (await getIdentity())) redirect("/");
   return (
-    <AuthFrame title="Sua clínica em uma" highlight="central" subtitle="WhatsApp, agenda, pacientes e CRM no mesmo lugar, com uma assistente virtual que agenda sozinha e sabe a hora de chamar a equipe.">
-      <h2 className="text-2xl font-bold">Entrar</h2>
+    <AuthFrame title="Sua clínica em uma central só." subtitle="WhatsApp, agenda, pacientes e CRM no mesmo lugar, com uma assistente virtual que agenda sozinha e sabe a hora de chamar a equipe.">
+      <h2 className="display text-[30px] leading-tight">Entrar</h2>
       <p className="mb-6 mt-1 text-sm text-bone-mute">Acesse a central da sua clínica.</p>
       {erro && ERRORS[erro] && <div className="mb-4"><Notice tone="danger">{ERRORS[erro]}</Notice></div>}
       <ActionForm action={loginAction} className="space-y-4" resetOnDone={false}>

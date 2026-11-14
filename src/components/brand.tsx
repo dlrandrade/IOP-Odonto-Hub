@@ -1,40 +1,45 @@
 import { cn } from "@/lib/format";
 
-export function Logo({ light, className }: { light?: boolean; className?: string }) {
+/** Marca só em texto, como no iopbusiness: o nome da escola ao lado do nome do produto. */
+export function Logo({ className }: { light?: boolean; className?: string }) {
   return (
-    <span className={cn("inline-flex items-center gap-2 text-lg font-extrabold tracking-tight", light ? "text-white" : "text-bone", className)}>
-      <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden>
-        <rect width="32" height="32" rx="10" fill="#c8a24a" />
-        <path d="M8.5 14.5c0 6 3.3 10 7.5 10s7.5-4 7.5-10" fill="none" stroke="#0a0e13" strokeWidth="3" strokeLinecap="round" />
-        <circle cx="11" cy="10" r="1.8" fill="#0a0e13" /><circle cx="21" cy="10" r="1.8" fill="#0A0E13" />
-      </svg>
-      IOP <span className={light ? "text-gold" : "text-bone-mute"}>Odonto Hub</span>
+    <span className={cn("inline-flex items-center gap-3", className)}>
+      <span className="eyebrow hidden text-bone-mute sm:inline">IOP</span>
+      <span aria-hidden className="hidden h-3 w-px bg-line sm:block" />
+      <span className="display text-[16px] uppercase tracking-[-0.01em] text-bone">Odonto Hub</span>
     </span>
   );
 }
 
-/** Moldura das telas de entrada: painel marinho com a marca + cartão claro. */
-export function AuthFrame({ title, highlight, subtitle, children }: { title: string; highlight?: string; subtitle: string; children: React.ReactNode }) {
+const FATOS = [
+  ["WhatsApp oficial", "Cada clínica conecta o próprio número, sem API não oficial."],
+  ["Agenda sem conflito", "O banco recusa dois pacientes na mesma cadeira e no mesmo horário."],
+  ["Assistente com limites", "Nunca diagnostica, não inventa preço e chama a equipe quando precisa."],
+];
+
+/** Moldura das telas de entrada: painel escuro com a proposta + formulário. */
+export function AuthFrame({ title, subtitle, children }: { title: string; highlight?: string; subtitle: string; children: React.ReactNode }) {
   return (
-    <main className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
-      <section className="relative hidden flex-col justify-between overflow-hidden border-r border-line bg-surface p-12 text-bone lg:flex">
-        <Logo light />
-        <div>
-          <h1 className="text-5xl font-extrabold leading-[1.1] tracking-tight">
-            {title} {highlight && <span className="marker text-ink">{highlight}</span>}
-          </h1>
-          <p className="mt-5 max-w-md text-lg text-bone-dim">{subtitle}</p>
+    <main className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
+      <section className="relative hidden flex-col justify-between overflow-hidden border-r border-line bg-surface p-12 lg:flex">
+        <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(60% 45% at 20% 0%, rgb(var(--acento-rgb) / 0.14), transparent 70%)" }} />
+        <Logo className="relative" />
+        <div className="relative max-w-xl">
+          <h1 className="display text-[56px] leading-[1.02]">{title}</h1>
+          <p className="mt-5 max-w-md text-[17px] leading-relaxed text-bone-dim">{subtitle}</p>
         </div>
-        <ul className="grid max-w-md grid-cols-2 gap-3 text-sm text-bone-dim">
-          {["WhatsApp oficial", "Agenda sem conflito", "IA com guardrails", "CRM e indicadores"].map((t) => (
-            <li key={t} className="rounded-2xl border border-line px-4 py-3">{t}</li>
+        <dl className="relative max-w-xl divide-y divide-line border-y border-line">
+          {FATOS.map(([t, d]) => (
+            <div key={t} className="flex gap-6 py-4">
+              <dt className="w-44 shrink-0 font-display text-[15px] font-bold">{t}</dt>
+              <dd className="text-[13px] text-bone-dim">{d}</dd>
+            </div>
           ))}
-        </ul>
-        <div aria-hidden className="absolute -right-24 -top-24 size-72 rounded-full bg-gold/10" />
+        </dl>
       </section>
       <section className="flex items-center justify-center p-5 sm:p-10">
         <div className="w-full max-w-md">
-          <Logo className="mb-8 lg:hidden" />
+          <Logo className="mb-10 lg:hidden" />
           {children}
         </div>
       </section>

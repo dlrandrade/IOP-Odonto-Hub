@@ -125,7 +125,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
           <div className="scroll-thin -mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
             {FILTERS.map(([key, label]) => (
               <Link key={key} href={href({ f: key === "abertas" ? null : key, c: null })}
-                className={cn("shrink-0 rounded-full px-3 py-1 text-xs font-medium", filter === key ? "bg-gold text-ink" : "bg-surface-2 text-bone-dim hover:bg-line")}>{label}</Link>
+                className={cn("shrink-0 rounded-full px-3 py-1 text-xs font-medium", filter === key ? "bg-acento text-ink" : "bg-surface-2 text-bone-dim hover:bg-line")}>{label}</Link>
             ))}
           </div>
         </div>
@@ -220,7 +220,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                 const who = m.sender_type === "patient" ? "Paciente" : m.sender_type === "ai" ? ctx.clinic.assistant_name + " (IA)" : m.sender_type === "human" ? m.sender ?? "Equipe" : "Automação";
                 return (
                   <div key={m.id} className={cn("flex", out ? "justify-end" : "justify-start")}>
-                    <div className={cn("max-w-[78%] rounded-2xl px-3.5 py-2.5 shadow-sm", out ? (m.sender_type === "ai" ? "bg-gold text-ink" : "bg-bone-mute text-white") : "bg-surface")}>
+                    <div className={cn("max-w-[78%] rounded-2xl px-3.5 py-2.5 shadow-sm", out ? (m.sender_type === "ai" ? "bg-acento text-ink" : "bg-bone-mute text-white") : "bg-surface")}>
                       <p className={cn("mb-0.5 text-[10px] font-bold uppercase tracking-wider", out ? "text-gold" : "text-bone-mute")}>{who}</p>
                       {m.type === "audio" && (
                         <div className="space-y-1.5">

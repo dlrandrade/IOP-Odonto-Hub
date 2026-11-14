@@ -43,8 +43,8 @@ export default async function PlatformPage() {
       </div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="eyebrow text-bone-mute">Operador da plataforma</p>
-          <h1 className="text-3xl font-bold">Suas <span className="marker">clínicas</span></h1>
+          <p className="eyebrow mb-2 text-bone-mute">Operador da plataforma</p>
+          <h1 className="display text-[40px] leading-none">Suas clínicas</h1>
         </div>
         <Modal trigger="Nova clínica cliente" title="Nova clínica cliente" triggerClass={buttonClass("accent")}>
           <ActionForm action={createClientClinicAction} className="space-y-4" resetOnDone={false}>

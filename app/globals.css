@@ -1,48 +1,138 @@
 @import "tailwindcss";
 
 /*
- * Design system — IOP Business (tema único escuro; não existe modo claro).
- * Fonte da verdade dos tokens: este bloco. Superfícies e texto vêm do documento oficial do design system.
- * PROVISÓRIO até conferir com o documento completo: --color-gold (ouro), --color-up/--color-down (verde/coral)
- * e os acentos por página.
+ * Design system — IOP Business (sistema irmão: iopbusiness.com.br). Tema único escuro.
+ * Tokens copiados do código do iopbusiness (app/globals.css, tailwind.config.ts, lib/tema.ts).
+ * Regras: ouro = dinheiro, CTA e marca; verde/coral = só dados e estados; uma cor de acento por página.
  */
-@theme {
-  /* Superfícies e linhas */
-  --color-ink: #0a0e13;
-  --color-surface: #141a21;
-  --color-surface-2: #1b232c;
-  --color-line: #232d38;
-  /* Texto */
+@theme inline {
+  /* superfícies e linhas (tingidas pelo acento da página via [data-tema]) */
+  --color-ink: var(--ink);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-line: var(--line);
+  /* texto */
   --color-bone: #f2efe9;
   --color-bone-dim: #a8b0b9;
   --color-bone-mute: #8a939d;
-  /* Marca: ouro é dinheiro, CTA e marca. Nunca decoração solta. */
-  --color-gold: #c8a24a;
-  --color-gold-soft: #d9b866;
-  /* Semântica de dados (indicadores, variações, estados) */
-  --color-ok: #5fd39a;
-  --color-ok-soft: #10261c;
-  --color-warn: #e6b24c;
-  --color-warn-soft: #2a2112;
-  --color-danger: #e5645b;
-  --color-danger-soft: #2e1517;
-  --font-sans: "Lexend", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --radius-card: 1.5rem;
+  /* marca */
+  --color-gold: #e8b54b;
+  --color-gold-deep: #b88a2e;
+  --color-gold-soft: #f0c569;
+  /* acento da página */
+  --color-acento: rgb(var(--acento-rgb));
+  /* semântica de dados */
+  --color-ok: #3ddc97;
+  --color-ok-soft: #173a30;
+  --color-warn: #e8b54b;
+  --color-warn-soft: #3a3020;
+  --color-danger: #ff6b5a;
+  --color-danger-soft: #3d2326;
+
+  --font-display: var(--font-bricolage), system-ui, sans-serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-card: 20px;
+  --shadow-deep: 0 24px 60px -20px rgb(0 0 0 / 0.65);
 }
 
-:root { color-scheme: dark; }
-html { background: var(--color-ink); color: var(--color-bone); }
-body { font-family: var(--font-sans); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+:root {
+  --ink: #0a0e13;
+  --surface: #141a21;
+  --surface-2: #1b232c;
+  --line: #232d38;
+  --acento-rgb: 232 181 75;
+  color-scheme: dark;
+}
 
-:focus-visible { outline: 3px solid var(--color-gold); outline-offset: 2px; border-radius: 6px; }
+/* Cada página tinge superfícies e bordas com 4–12% da sua cor: a página muda de temperatura sem trocar o sistema. */
+@supports (background: color-mix(in oklab, red, blue)) {
+  [data-tema] {
+    --ink: color-mix(in oklab, #0a0e13 96%, rgb(var(--acento-rgb)));
+    --surface: color-mix(in oklab, #141a21 93%, rgb(var(--acento-rgb)));
+    --surface-2: color-mix(in oklab, #1b232c 91%, rgb(var(--acento-rgb)));
+    --line: color-mix(in oklab, #232d38 88%, rgb(var(--acento-rgb)));
+  }
+}
 
-.marker { background: var(--color-gold); padding: 0 0.35em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
-.eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; }
+@layer base {
+  h1, h2, h3 { text-wrap: balance; }
+  p, li { text-wrap: pretty; }
+  html { -webkit-text-size-adjust: 100%; background: var(--ink); }
+  body {
+    background-color: var(--ink);
+    color: var(--color-bone);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100dvh;
+  }
+  /* brilho suave da cor da página no topo; some conforme se desce */
+  body::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(70% 36% at 50% -8%, rgb(var(--acento-rgb) / 0.11), transparent 70%);
+  }
+  /* textura quase imperceptível: evita o aspecto de template chapado */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.025;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
+  }
+  ::selection { background: var(--color-gold); color: var(--ink); }
+  :focus-visible { outline: 2px solid var(--color-gold); outline-offset: 2px; border-radius: 4px; }
+}
 
-dialog::backdrop { background: rgb(0 0 0 / 0.6); backdrop-filter: blur(2px); }
+@layer components {
+  .display { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em; }
+  .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.4;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-weight: 500;
+  }
+  /* fio na cor da página que cresce no topo do cartão em hover/ativo */
+  .fio-topo { position: relative; }
+  .fio-topo::before {
+    content: "";
+    position: absolute;
+    inset-inline: 16px;
+    top: -1px;
+    height: 2px;
+    background: rgb(var(--acento-rgb));
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 420ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .fio-topo:hover::before, .fio-topo[data-ativo="true"]::before { transform: scaleX(1); }
+  .lift { transition: transform 320ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms ease; }
+  @media (hover: hover) { .lift:hover { transform: translateY(-2px); border-color: rgb(var(--acento-rgb) / 0.45); } }
+}
+
+dialog::backdrop { background: rgb(0 0 0 / 0.62); backdrop-filter: blur(3px); }
 dialog { margin: auto; color: var(--color-bone); }
-
-.scroll-thin { scrollbar-width: thin; scrollbar-color: var(--color-line) transparent; }
-
-/* Itens de grid não podem alargar a página no celular (tabelas e campos rolam dentro do cartão). */
+.scroll-thin { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+/* itens de grid não alargam a página no celular */
 .grid > * { min-width: 0; }
+/* a faixa do fundo cobre a tela inteira mesmo com a página curta */
+.marker { background: var(--color-gold); color: var(--ink); padding: 0 0.3em; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lift:hover { transform: none; }
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

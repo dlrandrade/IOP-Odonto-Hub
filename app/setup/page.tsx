@@ -37,7 +37,7 @@ export default async function SetupPage() {
   return (
     <main className="mx-auto max-w-2xl p-6 py-12">
       <Logo />
-      <h1 className="mt-8 text-3xl font-bold">Falta pouco para <span className="marker">começar</span></h1>
+      <h1 className="display mt-8 text-[40px] leading-none">Falta pouco para começar</h1>
       <p className="mt-2 text-bone-mute">Siga os passos de <code>docs/SETUP.md</code>. Esta página some quando tudo estiver configurado.</p>
       <div className="mt-6 space-y-3">
         {steps.map((s, i) => (

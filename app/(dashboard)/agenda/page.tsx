@@ -161,7 +161,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           <Link href={href({ d: shift(1) })} aria-label="Próximo" className="rounded-full p-2 hover:bg-surface-2"><ChevronRight size={16} /></Link>
           <div className="ml-2 flex rounded-full bg-surface-2 p-0.5">
             {(["dia", "semana", "mes"] as const).map((v) => (
-              <Link key={v} href={href({ v: v === "dia" ? null : v })} className={cn("rounded-full px-3 py-1 text-xs font-medium", view === v ? "bg-gold text-ink" : "text-bone-dim")}>{v === "mes" ? "Mês" : v === "dia" ? "Dia" : "Semana"}</Link>
+              <Link key={v} href={href({ v: v === "dia" ? null : v })} className={cn("rounded-full px-3 py-1 text-xs font-medium", view === v ? "bg-acento text-ink" : "text-bone-dim")}>{v === "mes" ? "Mês" : v === "dia" ? "Dia" : "Semana"}</Link>
             ))}
           </div>
         </div>

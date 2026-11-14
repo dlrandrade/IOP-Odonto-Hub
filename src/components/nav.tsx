@@ -18,17 +18,18 @@ const isActive = (path: string, href: string) => (href === "/" ? path === "/" : 
 export function TopNav({ items }: { items: NavItem[] }) {
   const path = usePathname();
   return (
-    <nav aria-label="Principal" className="scroll-thin -mx-1 flex items-center gap-1 overflow-x-auto px-1 py-1">
+    <nav aria-label="Principal" className="scroll-thin -mx-1 flex items-center gap-1 overflow-x-auto px-1">
       {items.map((item) => {
         const active = isActive(path, item.href);
         const Icon = ICONS[item.icon] ?? LayoutDashboard;
         return (
           <Link key={item.href} href={item.href} aria-current={active ? "page" : undefined}
-            className={cn("flex shrink-0 items-center gap-2 rounded-full px-4 py-2 text-[13px] font-medium transition",
-              active ? "bg-gold text-ink shadow" : "text-bone-dim hover:bg-surface")}>
-            <Icon size={15} aria-hidden />
+            className={cn("relative flex shrink-0 items-center gap-2 px-3 py-3 text-[13px] font-medium transition-colors",
+              active ? "text-bone" : "text-bone-mute hover:text-bone")}>
+            <Icon size={14} aria-hidden className={active ? "text-acento" : ""} />
             {item.label}
-            {!!item.badge && <span className={cn("rounded-full px-1.5 text-[10px] font-bold", active ? "bg-gold text-ink" : "bg-gold text-ink")}>{item.badge}</span>}
+            {!!item.badge && <span className="rounded-sm bg-acento px-1.5 font-mono text-[10px] font-medium text-ink">{item.badge}</span>}
+            <span aria-hidden className={cn("absolute inset-x-3 -bottom-px h-0.5 bg-acento transition-transform duration-300", active ? "scale-x-100" : "scale-x-0")} />
           </Link>
         );
       })}

@@ -1,21 +1,21 @@
 import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/format";
 
-/** Primitivos de interface no estilo IOP Business (cartões brancos arredondados sobre creme, marinho + amarelo). */
+/** Primitivos de interface no estilo IOP Business: superfícies escuras, linhas finas, ouro só em CTA e marca. */
 
 type ButtonVariant = "primary" | "accent" | "outline" | "ghost" | "danger";
 const BUTTON: Record<ButtonVariant, string> = {
-  primary: "bg-gold text-ink hover:bg-gold-soft",
-  accent: "bg-bone text-ink hover:opacity-90",
-  outline: "border border-line bg-surface text-bone hover:bg-surface-2",
-  ghost: "text-bone-dim hover:bg-surface-2",
-  danger: "bg-danger text-white hover:opacity-90",
+  primary: "bg-gold text-ink hover:bg-gold-deep",
+  accent: "bg-gold text-ink hover:bg-gold-deep",
+  outline: "border border-line text-bone hover:border-bone-dim hover:bg-surface-2",
+  ghost: "text-bone-dim hover:bg-surface-2 hover:text-bone",
+  danger: "bg-danger text-ink hover:opacity-90",
 };
 
 export function buttonClass(variant: ButtonVariant = "primary", size: "sm" | "md" = "md"): string {
   return cn(
-    "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap",
-    size === "sm" ? "h-8 px-3 text-xs" : "h-10 px-5 text-sm", BUTTON[variant],
+    "inline-flex items-center justify-center gap-2 rounded-sm font-mono font-medium uppercase transition-colors disabled:opacity-50 disabled:pointer-events-none whitespace-nowrap",
+    size === "sm" ? "h-8 px-3 text-[10.5px] tracking-[0.12em]" : "h-10 px-5 text-[11.5px] tracking-[0.14em]", BUTTON[variant],
   );
 }
 
@@ -24,15 +24,15 @@ export function Button({ variant = "primary", size = "md", className, ...props }
 }
 
 export function Card({ className, tone = "white", ...props }: ComponentProps<"div"> & { tone?: "white" | "navy" | "sun" }) {
-  const bg = tone === "navy" ? "bg-surface-2" : tone === "sun" ? "bg-gold text-ink" : "bg-surface";
-  return <div className={cn("rounded-[var(--radius-card)] border border-line p-5", bg, className)} {...props} />;
+  const bg = tone === "navy" ? "bg-surface-2" : "bg-surface";
+  return <div className={cn("rounded-lg border border-line p-5", bg, tone === "sun" && "border-t-acento", className)} {...props} />;
 }
 
 export function CardTitle({ children, action, hint }: { children: ReactNode; action?: ReactNode; hint?: string }) {
   return (
     <div className="mb-4 flex items-start justify-between gap-3">
       <div>
-        <h2 className="text-base font-semibold">{children}</h2>
+        <h2 className="font-display text-[17px] font-bold tracking-[-0.01em]">{children}</h2>
         {hint && <p className="mt-0.5 text-xs text-bone-mute">{hint}</p>}
       </div>
       {action}
@@ -42,10 +42,10 @@ export function CardTitle({ children, action, hint }: { children: ReactNode; act
 
 export function PageHeader({ title, subtitle, children }: { title: string; subtitle?: string; children?: ReactNode }) {
   return (
-    <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-line pb-5">
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight md:text-[28px]">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-bone-mute">{subtitle}</p>}
+        <h1 className="display text-[32px] leading-[1.05] md:text-[44px]">{title}</h1>
+        {subtitle && <p className="mt-2 max-w-[68ch] text-[14px] text-bone-dim">{subtitle}</p>}
       </div>
       <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{children}</div>
     </div>
@@ -59,13 +59,13 @@ const TONES: Record<Tone, string> = {
 };
 
 export function Badge({ tone = "neutral", className, ...props }: ComponentProps<"span"> & { tone?: Tone }) {
-  return <span className={cn("inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold", TONES[tone], className)} {...props} />;
+  return <span className={cn("inline-flex items-center gap-1 rounded-sm px-2 py-0.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.08em]", TONES[tone], className)} {...props} />;
 }
 
 /** Largura total por padrão; passe uma classe w-* para sobrescrever sem conflito de utilitários. */
 const width = (className?: string) => (className && /(^|\s)w-/.test(className) ? "" : "w-full");
 const height = (className: string | undefined, fallback: string, prefix: RegExp) => (className && prefix.test(className) ? "" : fallback);
-const FIELD = "rounded-xl border border-line bg-surface px-3 text-sm text-bone placeholder:text-bone-mute focus:border-line focus:outline-none";
+const FIELD = "rounded-md border border-line bg-surface-2 px-3 text-sm text-bone placeholder:text-bone-mute transition-colors hover:border-bone-mute/50 focus:border-acento focus:outline-none";
 
 export function Input({ className, ...props }: ComponentProps<"input">) {
   return <input className={cn(FIELD, width(className), height(className, "h-10", /(^|\s)h-/), className)} {...props} />;
@@ -80,7 +80,7 @@ export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
 export function Field({ label, hint, children, className }: { label: string; hint?: string; children: ReactNode; className?: string }) {
   return (
     <label className={cn("block", className)}>
-      <span className="mb-1 block text-xs font-semibold text-bone-dim">{label}</span>
+      <span className="mb-1.5 block text-xs font-medium text-bone-dim">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-[11px] leading-snug text-bone-mute">{hint}</span>}
     </label>
@@ -98,8 +98,8 @@ export function Checkbox({ label, hint, ...props }: ComponentProps<"input"> & { 
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-line px-4 py-8 text-center">
-      <p className="font-semibold">{title}</p>
+    <div className="rounded-md border border-dashed border-line px-4 py-8 text-center">
+      <p className="font-display text-[16px] font-bold">{title}</p>
       {children && <div className="mt-1 text-sm text-bone-mute">{children}</div>}
     </div>
   );
@@ -108,8 +108,8 @@ export function Empty({ title, children }: { title: string; children?: ReactNode
 export function Avatar({ name, color, size = 36 }: { name: string; color?: string; size?: number }) {
   const letters = name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
   return (
-    <span aria-hidden className="inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white"
-      style={{ width: size, height: size, fontSize: size * 0.36, background: color ?? "var(--color-line)" }}>
+    <span aria-hidden className="inline-flex shrink-0 items-center justify-center rounded-full font-display font-bold text-ink"
+      style={{ width: size, height: size, fontSize: size * 0.36, background: color ?? "rgb(var(--acento-rgb))" }}>
       {letters || "?"}
     </span>
   );
@@ -120,7 +120,7 @@ export function Table({ head, children }: { head: string[]; children: ReactNode 
     <div className="scroll-thin overflow-x-auto">
       <table className="w-full min-w-[520px] text-left text-sm">
         <thead>
-          <tr className="border-b border-line text-[11px] uppercase tracking-wider text-bone-mute">
+          <tr className="border-b border-line font-mono text-[10.5px] uppercase tracking-[0.14em] text-bone-mute">
             {head.map((h) => <th key={h} className="px-2 py-2 font-semibold">{h}</th>)}
           </tr>
         </thead>
@@ -132,5 +132,5 @@ export function Table({ head, children }: { head: string[]; children: ReactNode 
 
 export function Notice({ tone = "sun", children }: { tone?: "sun" | "danger" | "ok" | "neutral"; children: ReactNode }) {
   const map = { sun: "bg-gold/10 border-gold", danger: "bg-danger-soft border-danger", ok: "bg-ok-soft border-ok", neutral: "bg-surface-2 border-line" };
-  return <div className={cn("rounded-2xl border-l-4 px-4 py-3 text-sm", map[tone])}>{children}</div>;
+  return <div className={cn("rounded-md border-l-2 px-4 py-3 text-sm", map[tone])}>{children}</div>;
 }

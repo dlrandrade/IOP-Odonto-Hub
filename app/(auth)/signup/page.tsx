@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
 export default function SignupPage() {
   if (missingEnv().length > 0) redirect("/setup");
   return (
-    <AuthFrame title="Comece em" highlight="5 minutos" subtitle="Crie a conta, diga quantas cadeiras e dentistas você tem e a central já nasce com agenda, catálogo e automações prontos para revisar.">
-      <h2 className="text-2xl font-bold">Criar conta</h2>
+    <AuthFrame title="Comece em 5 minutos." subtitle="Crie a conta, diga quantas cadeiras e dentistas você tem e a central já nasce com agenda, catálogo e automações prontos para revisar.">
+      <h2 className="display text-[30px] leading-tight">Criar conta</h2>
       <p className="mb-6 mt-1 text-sm text-bone-mute">Você será o administrador da clínica.</p>
       <ActionForm action={signupAction} className="space-y-4" resetOnDone={false}>
         <Field label="E-mail"><Input name="email" type="email" autoComplete="email" required /></Field>
