@@ -43,29 +43,50 @@ export type Identity = {
 
 /** Quem é o usuário logado (sem exigir clínica). */
 export const getIdentity = cache(async (): Promise<Identity | null> => {
+  return (await loadSession())?.identity ?? null;
+});
+
+/**
+ * Identidade e clínica em uma única ida ao banco (consultas em paralelo). Cada viagem conta:
+ * esta função roda em toda página.
+ */
+const loadSession = cache(async (): Promise<{ identity: Identity; clinic: ClinicRow | null } | null> => {
   if (missingEnv().length > 0) return null;
   const user = await getAuthUser();
   if (!user) return null;
   const sql = db();
-  if (platformEmails().includes(user.email.toLowerCase())) {
+  const [[row], [clinic]] = await Promise.all([
+    sql<{ pa: boolean; acting_clinic_id: string | null; au_id: string | null; au_clinic: string | null; au_name: string | null; au_role: Role | null; au_active: boolean | null }[]>`
+      select pa.auth_user_id is not null as pa, pa.acting_clinic_id,
+             au.id as au_id, au.clinic_id as au_clinic, au.name as au_name, au.role as au_role, au.active as au_active
+      from (select 1) one
+      left join platform_admins pa on pa.auth_user_id = ${user.id}
+      left join app_users au on au.auth_user_id = ${user.id}`,
+    sql<ClinicRow[]>`
+      select c.* from clinics c
+      where c.id = coalesce(
+        (select acting_clinic_id from platform_admins where auth_user_id = ${user.id}),
+        (select clinic_id from app_users where auth_user_id = ${user.id} and active))`,
+  ]);
+  let isPlatformAdmin = !!row?.pa;
+  if (!isPlatformAdmin && platformEmails().includes(user.email.toLowerCase())) {
     await sql`insert into platform_admins (auth_user_id, email) values (${user.id}, ${user.email}) on conflict (auth_user_id) do nothing`;
+    isPlatformAdmin = true;
   }
-  const [pa] = await sql<{ acting_clinic_id: string | null }[]>`select acting_clinic_id from platform_admins where auth_user_id = ${user.id}`;
-  const [appUser] = await sql<{ id: string; clinic_id: string; name: string; role: Role; active: boolean }[]>`
-    select id, clinic_id, name, role, active from app_users where auth_user_id = ${user.id}`;
-  return { authUserId: user.id, email: user.email, isPlatformAdmin: !!pa, actingClinicId: pa?.acting_clinic_id ?? null, appUser: appUser ?? null };
+  const appUser = row?.au_id ? { id: row.au_id, clinic_id: row.au_clinic!, name: row.au_name!, role: row.au_role!, active: !!row.au_active } : null;
+  return { identity: { authUserId: user.id, email: user.email, isPlatformAdmin, actingClinicId: row?.acting_clinic_id ?? null, appUser }, clinic: clinic ?? null };
 });
 
 export const getCtx = cache(async (): Promise<Ctx | null> => {
-  const me = await getIdentity();
-  if (!me) return null;
+  const session = await loadSession();
+  if (!session) return null;
+  const me = session.identity;
   const acting = me.isPlatformAdmin && !!me.actingClinicId;
   // Usuário desativado perde o acesso imediatamente (conferido a cada requisição).
   const member = me.appUser?.active ? me.appUser : null;
   const clinicId = acting ? me.actingClinicId : member?.clinic_id;
-  if (!clinicId) return null;
-  const [clinic] = await db()<ClinicRow[]>`select * from clinics where id = ${clinicId}`;
-  if (!clinic) return null;
+  const clinic = session.clinic;
+  if (!clinicId || !clinic || clinic.id !== clinicId) return null;
   if (clinic.status === "suspended" && !me.isPlatformAdmin) return null;
   return {
     authUserId: me.authUserId, email: me.email,

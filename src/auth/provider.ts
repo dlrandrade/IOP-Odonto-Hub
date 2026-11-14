@@ -59,8 +59,12 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     return row ?? null;
   }
   if (!env.supabaseUrl || !env.supabaseAnonKey) return null;
-  const { data } = await (await supabaseServer()).auth.getUser();
-  return data.user?.email ? { id: data.user.id, email: data.user.email } : null;
+  // getClaims valida a assinatura do JWT localmente (chaves assimétricas, JWKS em cache) e só
+  // consulta o servidor de Auth quando precisa — evita uma viagem de rede a cada página.
+  const { data, error } = await (await supabaseServer()).auth.getClaims();
+  const claims = data?.claims;
+  if (error || !claims?.sub || typeof claims.email !== "string" || !claims.email) return null;
+  return { id: claims.sub, email: claims.email };
 }
 
 export async function signIn(email: string, password: string): Promise<AuthResult> {

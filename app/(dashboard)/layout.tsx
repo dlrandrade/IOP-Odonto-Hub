@@ -13,15 +13,19 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const ctx = await requireCtx();
-  const { counts, steps } = await q(ctx, async (tx) => ({
-    counts: can(ctx.role, "conversations.view")
-      ? (await tx<{ waiting: number; urgent: number }[]>`
-          select count(*) filter (where state = 'awaiting_human')::int as waiting,
-                 count(*) filter (where state = 'awaiting_human' and handoff_priority = 'urgente')::int as urgent
-          from conversations`)[0]
-      : undefined,
-    steps: await setupSteps(tx, ctx),
-  }));
+  // As duas consultas seguem juntas na mesma transação (pipeline do driver): uma única espera.
+  const { counts, steps } = await q(ctx, async (tx) => {
+    const [rows, steps] = await Promise.all([
+      can(ctx.role, "conversations.view")
+        ? tx<{ waiting: number; urgent: number }[]>`
+            select count(*) filter (where state = 'awaiting_human')::int as waiting,
+                   count(*) filter (where state = 'awaiting_human' and handoff_priority = 'urgente')::int as urgent
+            from conversations`
+        : Promise.resolve([]),
+      setupSteps(tx, ctx),
+    ]);
+    return { counts: rows[0], steps };
+  });
 
   // Menu por tarefa: o dia a dia no topo; gestão separada. Módulos P1 ficam ocultos até serem entregues.
   const entry = (href: string, label: string, icon: string, allowed: boolean, badge?: number): NavEntry[] => (allowed ? [{ href, label, icon, badge }] : []);

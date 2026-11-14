@@ -17,7 +17,8 @@ export async function middleware(request: NextRequest) {
       },
     },
   });
-  await supabase.auth.getUser();
+  // getClaims renova o token vencido e valida a assinatura localmente (sem viagem ao Auth a cada clique).
+  await supabase.auth.getClaims();
   return response;
 }
 
