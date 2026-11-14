@@ -129,7 +129,7 @@ export async function linkPatientAction(_: ActionState, form: FormData): Promise
 }
 
 export async function killSwitchAction(_: ActionState, form: FormData): Promise<ActionState> {
-  return act("ai.kill_switch", ["/", PATH, "/configuracoes"], async (ctx) => {
+  return act("ai.kill_switch", ["/", PATH, "/configuracoes", "/indicadores"], async (ctx) => {
     const on = form.get("on") === "true";
     await q(ctx, async (tx) => {
       await tx`update clinics set ai_kill_switch = ${on} where id = ${ctx.clinicId}`;

@@ -42,10 +42,10 @@ export function CardTitle({ children, action, hint }: { children: ReactNode; act
 
 export function PageHeader({ title, subtitle, children }: { title: string; subtitle?: string; children?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-line pb-5">
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
       <div className="min-w-0">
-        <h1 className="display text-[32px] leading-[1.05] md:text-[44px]">{title}</h1>
-        {subtitle && <p className="mt-2 max-w-[68ch] text-[14px] text-bone-dim">{subtitle}</p>}
+        <h1 className="display text-[30px] leading-[1.05] md:text-[38px]">{title}</h1>
+        {subtitle && <p className="mt-2 max-w-[62ch] text-[14px] text-bone-dim">{subtitle}</p>}
       </div>
       <div className="flex min-w-0 max-w-full flex-wrap items-center gap-2">{children}</div>
     </div>

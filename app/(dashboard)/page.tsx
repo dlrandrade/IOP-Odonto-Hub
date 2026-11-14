@@ -1,189 +1,178 @@
 import Link from "next/link";
-import { Check, ChevronRight } from "lucide-react";
+import { ArrowRight, Ban, CalendarCheck, Check, CircleDashed, DoorOpen, Stethoscope, UserX, type LucideIcon } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
-import { Bars, Stat } from "@/components/charts";
-import { SubmitOnChange } from "@/components/client";
-import { Badge, Card, CardTitle, Empty, Input, PageHeader, Select, Table } from "@/components/ui";
+import { Badge, Empty } from "@/components/ui";
 import { can } from "@/domain/permissions";
-import { addDays, formatShort, localDate, WEEKDAY_LABELS } from "@/lib/datetime";
-import { brl } from "@/lib/format";
+import { APPOINTMENT_STATUS_LABELS, type AppointmentStatus } from "@/domain/states";
+import { addDays, formatDay, formatShort, localDate, localParts, localTime, zonedToUtc } from "@/lib/datetime";
+import { formatPhone } from "@/lib/format";
 import { loadDashboard } from "@/services/dashboard";
 
-export const metadata = { title: "Visão geral" };
+export const metadata = { title: "Hoje" };
 
-function duration(seconds: number | null): string {
-  if (seconds == null) return "—";
-  if (seconds < 90) return `${Math.round(seconds)} s`;
-  if (seconds < 5400) return `${Math.round(seconds / 60)} min`;
-  return `${(seconds / 3600).toFixed(1).replace(".", ",")} h`;
+const ICON: Record<AppointmentStatus, LucideIcon> = {
+  scheduled: CircleDashed, confirmed: CalendarCheck, arrived: DoorOpen, in_service: Stethoscope, completed: Check, no_show: UserX, cancelled: Ban,
+};
+
+function Section({ title, hint, href, linkLabel, children }: { title: string; hint?: string; href?: string; linkLabel?: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <div className="mb-3 flex items-end justify-between gap-4 border-b border-line pb-3">
+        <div>
+          <h2 className="font-display text-[20px] font-bold tracking-[-0.01em]">{title}</h2>
+          {hint && <p className="mt-0.5 text-[12.5px] text-bone-mute">{hint}</p>}
+        </div>
+        {href && <Link href={href} className="flex shrink-0 items-center gap-1 text-[12.5px] font-medium text-bone-dim transition-colors hover:text-bone">{linkLabel} <ArrowRight size={13} aria-hidden /></Link>}
+      </div>
+      {children}
+    </section>
+  );
 }
 
-export default async function OverviewPage({ searchParams }: { searchParams: Promise<{ de?: string; ate?: string; prof?: string }> }) {
-  const ctx = await requireCtx("dashboard.view");
-  const sp = await searchParams;
-  const today = localDate(new Date(), ctx.tz);
-  const isDate = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
-  const from = isDate(sp.de) ? sp.de! : addDays(today, -29);
-  const to = isDate(sp.ate) ? sp.ate! : today;
+/** Tela inicial: só o que pede ação agora — conversas à espera, agenda do dia e tarefas. Métricas ficam em Indicadores. */
+export default async function TodayPage() {
+  const ctx = await requireCtx();
+  const now = new Date();
+  const today = localDate(now, ctx.tz);
+  const start = zonedToUtc(today, "00:00", ctx.tz);
+  const end = zonedToUtc(addDays(today, 1), "00:00", ctx.tz);
+  const hour = localParts(now, ctx.tz).hour;
+  const greeting = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const seesChats = can(ctx.role, "conversations.view");
+  const seesAgenda = can(ctx.role, "agenda.view");
 
   const data = await q(ctx, async (tx) => {
-    const professionals = await tx<{ id: string; name: string }[]>`select id, name from professionals where active order by name`;
-    // Dentista enxerga apenas os próprios números.
     const [own] = ctx.role === "dentista" && ctx.userId ? await tx<{ id: string }[]>`select id from professionals where app_user_id = ${ctx.userId}` : [];
-    const professionalId = ctx.role === "dentista" ? own?.id ?? "00000000-0000-0000-0000-000000000000" : professionals.find((p) => p.id === sp.prof)?.id ?? null;
-    const dash = await loadDashboard(tx, { clinicId: ctx.clinicId, tz: ctx.tz, from, to, professionalId });
-    const tasks = await tx<{ id: string; title: string; detail: string | null; conversation_id: string | null; created_at: Date }[]>`
-      select id, title, detail, conversation_id, created_at from tasks where status = 'open' order by created_at desc limit 6`;
-    const [setup] = await tx<{ services: number; docs: number; rules: number }[]>`
-      select (select count(*)::int from services where status = 'published') as services,
-             (select count(*)::int from knowledge_docs where status = 'published' and body <> '') as docs,
-             (select count(*)::int from availability_rules) as rules`;
-    const wa = can(ctx.role, "integrations.manage")
-      ? (await tx<{ connected: boolean }[]>`select (wa_phone_number_id is not null and wa_access_token_enc is not null) as connected from clinic_integrations`)[0]?.connected ?? false
-      : null;
-    return { professionals, dash, tasks, setup, wa, professionalId };
+    const waiting = seesChats && ctx.role !== "dentista" ? await tx<{ id: string; urgent: boolean; reason: string | null; preview: string | null; at: Date | null; name: string | null; phone: string; patient: string | null }[]>`
+      select c.id, (c.handoff_priority = 'urgente') as urgent, c.handoff_reason as reason, c.last_message_preview as preview, c.last_message_at as at,
+             ct.wa_profile_name as name, ct.phone_e164 as phone,
+             (select p.full_name from contact_patient_links l join patients p on p.id = l.patient_id where l.contact_id = ct.id order by (l.relationship = 'self') desc limit 1) as patient
+      from conversations c join contacts ct on ct.id = c.contact_id
+      where c.state = 'awaiting_human' order by (c.handoff_priority = 'urgente') desc, c.last_message_at asc limit 6` : [];
+    const mine = seesChats && ctx.userId ? (await tx<{ n: number }[]>`select count(*)::int as n from conversations where state = 'human_active' and assigned_to = ${ctx.userId}`)[0]?.n ?? 0 : 0;
+    const appts = seesAgenda ? await tx<{ id: string; starts_at: Date; ends_at: Date; status: AppointmentStatus; service: string; patient: string; patient_id: string; professional: string }[]>`
+      select a.id, a.starts_at, a.ends_at, a.status, s.name as service, p.full_name as patient, p.id as patient_id, pr.name as professional
+      from appointments a join services s on s.id = a.service_id join patients p on p.id = a.patient_id join professionals pr on pr.id = a.professional_id
+      where a.starts_at >= ${start} and a.starts_at < ${end} and a.status <> 'cancelled'
+        ${ctx.role === "dentista" ? tx`and a.professional_id = ${own?.id ?? null}` : tx``}
+      order by a.starts_at` : [];
+    const tasks = ctx.role === "dentista" ? [] : await tx<{ id: string; title: string; detail: string | null; conversation_id: string | null }[]>`
+      select id, title, detail, conversation_id from tasks where status = 'open' order by created_at desc limit 5`;
+    const week = can(ctx.role, "dashboard.view") && ctx.role !== "financeiro" && ctx.role !== "dentista"
+      ? await loadDashboard(tx, { clinicId: ctx.clinicId, tz: ctx.tz, from: addDays(today, -6), to: today, professionalId: null }) : null;
+    return { waiting, mine, appts, tasks, week };
   });
-  const d = data.dash;
-  const steps = can(ctx.role, "settings.manage") ? [
-    { done: (data.setup?.rules ?? 0) > 0, label: "Dentistas com expediente", href: "/configuracoes?aba=agenda" },
-    { done: (data.setup?.services ?? 0) > 0, label: "Publicar serviços e preços", href: "/servicos" },
-    { done: (data.setup?.docs ?? 0) > 0, label: "Publicar base de conhecimento", href: "/servicos?aba=conhecimento" },
-    { done: !!data.wa, label: "Conectar o WhatsApp", href: "/configuracoes?aba=whatsapp" },
-    { done: !!ctx.clinic.alert_approved_at, label: "Aprovar protocolo de urgência", href: "/configuracoes?aba=ia" },
-    { done: ctx.clinic.ai_enabled, label: "Ativar a assistente virtual", href: "/configuracoes?aba=ia" },
-  ] : [];
-  const pending = steps.filter((s) => !s.done);
-  const showFunnel = ["admin", "gestor", "comercial", "recepcao"].includes(ctx.role);
-  const financeOnly = ctx.role === "financeiro";
+
+  const nowMs = now.getTime();
+  const nextId = data.appts.find((a) => a.ends_at.getTime() > nowMs && ["scheduled", "confirmed", "arrived"].includes(a.status))?.id;
+  const open = data.appts.filter((a) => ["scheduled", "confirmed", "arrived", "in_service"].includes(a.status)).length;
 
   return (
-    <>
-      <PageHeader title={`Olá, ${ctx.name.split(" ")[0]}`} subtitle={`${ctx.clinic.name} · fuso ${ctx.tz} · atualizado em ${formatShort(d.updatedAt, ctx.tz)}`}>
-        <SubmitOnChange className="flex flex-wrap items-center gap-2">
-          <Input type="date" name="de" defaultValue={from} max={to} aria-label="De" className="w-auto" />
-          <Input type="date" name="ate" defaultValue={to} aria-label="Até" className="w-auto" />
-          {ctx.role !== "dentista" && (
-            <Select name="prof" defaultValue={data.professionalId ?? ""} aria-label="Profissional" className="w-auto">
-              <option value="">Todos os profissionais</option>
-              {data.professionals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </Select>
-          )}
-        </SubmitOnChange>
-      </PageHeader>
+    <div className="space-y-12">
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-[13px] text-bone-mute first-letter:uppercase">{formatDay(today)}</p>
+          <h1 className="display mt-1 text-[34px] leading-[1.05] lg:text-[44px]">{greeting}, {ctx.name.split(" ")[0]}</h1>
+        </div>
+        <p className="max-w-sm text-[14px] text-bone-dim">
+          {data.waiting.length > 0 ? `${data.waiting.length === 6 ? "6 ou mais" : data.waiting.length} conversa${data.waiting.length > 1 ? "s" : ""} esperando você. ` : "Nenhuma conversa esperando. "}
+          {seesAgenda ? `${open} consulta${open === 1 ? "" : "s"} por atender hoje.` : ""}
+        </p>
+      </header>
 
-      {pending.length > 0 && (
-        <Card tone="navy" className="mb-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <p className="eyebrow text-gold">Primeiros passos</p>
-              <h2 className="mt-1 text-xl font-bold">Faltam {pending.length} de {steps.length} para a central rodar sozinha</h2>
-            </div>
-            <div className="h-2 w-40 overflow-hidden rounded-full bg-bone-mute"><div className="h-full rounded-full bg-gold" style={{ width: `${((steps.length - pending.length) / steps.length) * 100}%` }} /></div>
-          </div>
-          <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {steps.map((s) => (
-              <li key={s.label}>
-                <Link href={s.href} className={`flex items-center gap-2 rounded-2xl px-3 py-2.5 text-sm ${s.done ? "bg-surface-2 text-bone-mute line-through" : "bg-surface font-semibold text-bone hover:bg-gold/10"}`}>
-                  <span className={`flex size-5 shrink-0 items-center justify-center rounded-full ${s.done ? "bg-ok text-white" : "border-2 border-line"}`}>{s.done && <Check size={12} />}</span>
-                  <span className="flex-1">{s.label}</span>
-                  {!s.done && <ChevronRight size={14} aria-hidden />}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
-
-      {financeOnly ? (
-        <Empty title="Indicadores financeiros chegam com o módulo de pagamentos (P1)">Por enquanto, seu acesso é ao cadastro de pacientes.</Empty>
-      ) : (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Novos contatos" value={String(d.newContacts)} note="Telefones vistos pela primeira vez" />
-            <Stat label="Conversas recebidas" value={String(d.conversations)} note="Conversas novas no período" />
-            <Stat label="Consultas marcadas" value={String(d.appointmentsBooked)} note="Criadas no período (sem reagendamentos)" tone="sun" />
-            {showFunnel && (
-              <Stat tone="navy" label="Contato → avaliação" value={d.conversion.rate == null ? "—" : `${Math.round(d.conversion.rate * 100)}%`}
-                note={`${d.conversion.converted} de ${d.conversion.eligible} em até 30 dias${d.conversion.partial ? " · coorte parcial" : ""}`} />
-            )}
-          </div>
-
-          <div className="mt-3 grid gap-3 lg:grid-cols-3">
-            <Card className="lg:col-span-2">
-              <CardTitle hint="Mensagens recebidas de pacientes, por hora local">Horários de maior movimento</CardTitle>
-              <Bars label="Mensagens recebidas por hora do dia" data={d.byHour.filter((h) => h.hour >= 6 && h.hour <= 22).map((h) => ({ key: `${h.hour}h`, value: h.total }))} />
-            </Card>
-            <Card>
-              <CardTitle hint="Mensagens recebidas por dia da semana">Dias de maior movimento</CardTitle>
-              <Bars label="Mensagens recebidas por dia da semana" data={d.byWeekday.map((w) => ({ key: WEEKDAY_LABELS[w.weekday]!.slice(0, 3), hint: WEEKDAY_LABELS[w.weekday], value: w.total }))} />
-            </Card>
-          </div>
-
-          <div className="mt-3 grid gap-3 lg:grid-cols-3">
-            <Card className="lg:col-span-2">
-              <CardTitle hint="Consultas com início no período. A lista é alfabética: volume sozinho não mede desempenho.">Consultas por profissional</CardTitle>
-              {d.byProfessional.length === 0 ? <Empty title="Sem consultas no período" /> : (
-                <Table head={["Profissional", "Consultas", "Compareceram", "Faltas"]}>
-                  {d.byProfessional.map((p) => (
-                    <tr key={p.professional}><td className="font-medium">{p.professional}</td><td>{p.total}</td><td>{p.attended}</td><td>{p.noShow}</td></tr>
-                  ))}
-                </Table>
-              )}
-              <p className="mt-3 text-xs text-bone-mute">
-                Desfechos no período: {d.attendance.attended} compareceram · {d.attendance.noShow} faltaram · {d.attendance.cancelled} canceladas · {d.attendance.pending} passadas sem desfecho registrado.
-              </p>
-            </Card>
-            <div className="space-y-3">
-              <Card>
-                <CardTitle hint="Mediana da primeira resposta em conversas novas">Tempo de primeira resposta</CardTitle>
-                <dl className="space-y-2 text-sm">
-                  {[["Assistente virtual", d.firstResponse.ai], ["Equipe", d.firstResponse.human], ["Fora do expediente", d.firstResponse.afterHours]].map(([k, v]) => (
-                    <div key={String(k)} className="flex items-center justify-between"><dt className="text-bone-mute">{k}</dt><dd className="font-semibold">{duration(v as number | null)}</dd></div>
-                  ))}
-                </dl>
-                <p className="mt-2 text-[11px] text-bone-mute">{d.firstResponse.samples} conversa(s) respondida(s) no período.</p>
-              </Card>
-              <Card>
-                <CardTitle action={<Link href="/conversas?f=nao-atribuidas" className="text-xs font-semibold underline">Abrir fila</Link>}>Fila humana agora</CardTitle>
-                <div className="flex flex-wrap gap-2">
-                  <Badge tone={d.queue.urgent ? "danger" : "neutral"}>{d.queue.urgent} urgentes</Badge>
-                  <Badge tone={d.queue.awaiting ? "warn" : "neutral"}>{d.queue.awaiting} aguardando</Badge>
-                  <Badge>{d.queue.humanActive} com a equipe</Badge>
-                  <Badge>{d.queue.aiActive} com a IA</Badge>
-                </div>
-                {can(ctx.role, "audit.view") && <p className="mt-3 text-xs text-bone-mute">Custo estimado de IA no período: {brl(Math.round(d.aiCostCents))} (referência em USD convertida 1:1; ver Configurações).</p>}
-              </Card>
-            </div>
-          </div>
-
-          <div className="mt-3 grid gap-3 lg:grid-cols-2">
-            <Card>
-              <CardTitle hint="Geradas por automações que precisam de uma pessoa">Tarefas abertas ({d.queue.openTasks})</CardTitle>
-              {data.tasks.length === 0 ? <Empty title="Nenhuma tarefa pendente" /> : (
+      <div className="grid gap-12 xl:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="space-y-12">
+          {seesChats && ctx.role !== "dentista" && (
+            <Section title="Esperando você" hint="Conversas que a assistente passou para a equipe. As urgentes vêm primeiro." href="/conversas?f=nao-atribuidas" linkLabel="Ver todas">
+              {data.waiting.length === 0 ? (
+                <Empty title="Fila vazia">Quando a assistente chamar a equipe, a conversa aparece aqui.</Empty>
+              ) : (
                 <ul className="divide-y divide-line">
-                  {data.tasks.map((t) => (
-                    <li key={t.id} className="flex items-start justify-between gap-3 py-2.5">
-                      <div className="min-w-0"><p className="truncate font-medium">{t.title}</p><p className="truncate text-xs text-bone-mute">{t.detail}</p></div>
-                      {t.conversation_id ? <Link className="shrink-0 text-xs font-semibold underline" href={`/conversas?c=${t.conversation_id}`}>Abrir</Link>
-                        : <Link className="shrink-0 text-xs font-semibold underline" href="/automacoes">Ver</Link>}
+                  {data.waiting.map((c) => (
+                    <li key={c.id}>
+                      <Link href={`/conversas?c=${c.id}`} className="group -mx-3 flex items-start gap-4 rounded-md px-3 py-3.5 transition-colors hover:bg-surface">
+                        <span className={`mt-1.5 size-2 shrink-0 rounded-full ${c.urgent ? "bg-danger" : "bg-gold"}`} aria-hidden />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex flex-wrap items-center gap-2">
+                            <span className="text-[15px] font-medium">{c.patient ?? c.name ?? formatPhone(c.phone)}</span>
+                            {c.urgent && <Badge tone="danger">Urgente</Badge>}
+                          </span>
+                          <span className="mt-0.5 block truncate text-[13px] text-bone-dim">{c.reason ?? c.preview}</span>
+                        </span>
+                        <span className="shrink-0 pt-0.5 text-[12px] text-bone-mute">{c.at ? formatShort(c.at, ctx.tz).slice(-5) : ""}</span>
+                        <ArrowRight size={15} aria-hidden className="mt-1 shrink-0 text-bone-mute transition-transform group-hover:translate-x-0.5" />
+                      </Link>
                     </li>
                   ))}
                 </ul>
               )}
-            </Card>
-            <Card>
-              <CardTitle>Como cada número é calculado</CardTitle>
-              <dl className="space-y-2 text-xs text-bone-dim">
-                <div><dt className="font-semibold">Novo contato</dt><dd>Telefone visto pela primeira vez na clínica no período. Não mede pacientes únicos. Exclui testes, simulador e contatos marcados como spam/fornecedor.</dd></div>
-                <div><dt className="font-semibold">Conversão</dt><dd>Contatos novos da coorte com ao menos uma avaliação agendada em até 30 dias ÷ contatos novos elegíveis. Coortes com menos de 30 dias aparecem como parciais.</dd></div>
-                <div><dt className="font-semibold">Consultas marcadas</dt><dd>Consultas criadas no período; a nova consulta de um reagendamento não é contada de novo.</dd></div>
-                <div><dt className="font-semibold">Primeira resposta</dt><dd>Primeira mensagem de uma conversa nova → primeira resposta da IA ou da equipe (mediana).</dd></div>
-                <div><dt className="font-semibold">Origem</dt><dd>Views SQL <code>v_contact_cohort</code>, <code>v_appointment_facts</code> e <code>v_first_response</code>; os totais conciliam com as tabelas.</dd></div>
+              {data.mine > 0 && <p className="mt-3 text-[13px] text-bone-mute">Você também está com <Link href="/conversas?f=minhas" className="font-medium text-bone underline underline-offset-2">{data.mine} conversa{data.mine > 1 ? "s" : ""} em atendimento</Link>.</p>}
+            </Section>
+          )}
+
+          {seesAgenda && (
+            <Section title="Agenda de hoje" hint={`${data.appts.length} consulta${data.appts.length === 1 ? "" : "s"} · ${ctx.tz}`} href={`/agenda?d=${today}`} linkLabel="Abrir agenda">
+              {data.appts.length === 0 ? (
+                <Empty title="Nenhuma consulta hoje">Aproveite para revisar a agenda dos próximos dias.</Empty>
+              ) : (
+                <ol className="divide-y divide-line">
+                  {data.appts.map((a) => {
+                    const Icon = ICON[a.status];
+                    const isNext = a.id === nextId;
+                    return (
+                      <li key={a.id} className={isNext ? "relative -mx-3 rounded-md bg-surface px-3" : ""}>
+                        {isNext && <span aria-hidden className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-acento" />}
+                        <Link href={`/pacientes/${a.patient_id}`} className="flex items-center gap-4 py-3.5">
+                          <span className="w-12 shrink-0 font-mono text-[13px] tabular-nums text-bone-dim">{localTime(a.starts_at, ctx.tz)}</span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[15px] font-medium">{a.patient}</span>
+                            <span className="block truncate text-[13px] text-bone-mute">{a.service} · {a.professional}</span>
+                          </span>
+                          {isNext && <span className="hidden text-[12px] font-medium text-acento sm:inline">Próxima</span>}
+                          <span className="flex shrink-0 items-center gap-1.5 text-[12px] text-bone-dim"><Icon size={14} aria-hidden /><span className="hidden sm:inline">{APPOINTMENT_STATUS_LABELS[a.status]}</span></span>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </Section>
+          )}
+        </div>
+
+        <aside className="space-y-12">
+          {data.tasks.length > 0 && (
+            <Section title="Tarefas" hint="Coisas que a automação não consegue fazer sozinha." href="/automacoes" linkLabel="Ver todas">
+              <ul className="divide-y divide-line">
+                {data.tasks.map((t) => (
+                  <li key={t.id} className="py-3">
+                    <p className="text-[14px] font-medium">{t.title}</p>
+                    {t.detail && <p className="mt-0.5 line-clamp-2 text-[12.5px] text-bone-mute">{t.detail}</p>}
+                    {t.conversation_id && <Link href={`/conversas?c=${t.conversation_id}`} className="mt-1.5 inline-block text-[12.5px] font-medium text-bone-dim underline underline-offset-2 hover:text-bone">Abrir conversa</Link>}
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          )}
+          {data.week && (
+            <Section title="Últimos 7 dias" href="/indicadores" linkLabel="Indicadores">
+              <dl className="divide-y divide-line">
+                {[
+                  ["Novos contatos", String(data.week.newContacts)],
+                  ["Consultas marcadas", String(data.week.appointmentsBooked)],
+                  ["Contato → avaliação", data.week.conversion.rate == null ? "—" : `${Math.round(data.week.conversion.rate * 100)}%`],
+                  ["Gasto estimado com IA", `US$ ${(data.week.aiCostCents / 100).toFixed(2)}`],
+                ].map(([k, v]) => (
+                  <div key={k} className="flex items-baseline justify-between gap-4 py-3">
+                    <dt className="text-[13.5px] text-bone-dim">{k}</dt>
+                    <dd className="display num text-[22px] leading-none">{v}</dd>
+                  </div>
+                ))}
               </dl>
-            </Card>
-          </div>
-        </>
-      )}
-    </>
+            </Section>
+          )}
+        </aside>
+      </div>
+    </div>
   );
 }

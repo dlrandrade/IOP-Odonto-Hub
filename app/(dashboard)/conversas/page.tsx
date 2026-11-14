@@ -100,7 +100,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const canReply = can(ctx.role, "conversations.reply");
 
   return (
-    <div className="grid gap-3 lg:h-[calc(100dvh-8.5rem)] lg:grid-cols-[340px_minmax(0,1fr)_300px]">
+    <div className="grid gap-3 lg:h-[calc(100dvh-9.5rem)] lg:grid-cols-[340px_minmax(0,1fr)_300px]">
       <LiveRefresh seconds={5} clinicId={ctx.clinicId} />
 
       {/* Lista */}

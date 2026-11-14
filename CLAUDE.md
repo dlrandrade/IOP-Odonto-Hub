@@ -44,7 +44,7 @@ Desenvolvimento sem Supabase: Postgres local + `AUTH_MODE=local` no `.env.local`
 ```
 app/                      Next.js (App Router)
   (auth)/                 login, cadastro
-  (dashboard)/            telas: visão geral, conversas, crm, agenda, pacientes, servicos, automacoes, simulador, configuracoes
+  (dashboard)/            telas: hoje (início), conversas, agenda, pacientes, crm, indicadores, servicos, automacoes, simulador, configuracoes
   admin/                  painel do operador da plataforma (clínicas clientes)
   onboarding/ setup/      criação da clínica; checagem de instalação
   api/webhooks/whatsapp   webhook da Cloud API

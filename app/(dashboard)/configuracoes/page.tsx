@@ -71,11 +71,17 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader title="Configurações" subtitle="Tudo é ajustável por aqui, sem mexer em código." />
-      <div className="scroll-thin mb-3 flex gap-1 overflow-x-auto rounded-full bg-surface p-1 border border-line sm:inline-flex">
-        {TABS.filter(([k]) => isAdmin || k === "auditoria").map(([k, label]) => (
-          <Link key={k} href={`/configuracoes?aba=${k}`} className={cn("shrink-0 rounded-full px-4 py-1.5 text-sm font-medium", tab === k ? "bg-acento text-ink" : "text-bone-dim")}>{label}</Link>
-        ))}
-      </div>
+      <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-10">
+        <nav aria-label="Seções de configuração" className="scroll-thin -mx-4 flex gap-1 overflow-x-auto px-4 lg:mx-0 lg:block lg:space-y-0.5 lg:overflow-visible lg:px-0">
+          {TABS.filter(([k]) => isAdmin || k === "auditoria").map(([k, label]) => (
+            <Link key={k} href={`/configuracoes?aba=${k}`} aria-current={tab === k ? "page" : undefined}
+              className={cn("relative shrink-0 rounded-md px-3 py-2 text-[13.5px] font-medium transition-colors lg:block", tab === k ? "bg-surface-2 text-bone" : "text-bone-mute hover:text-bone")}>
+              {tab === k && <span aria-hidden className="absolute inset-y-1.5 left-0 hidden w-0.5 rounded-full bg-acento lg:block" />}
+              {label}
+            </Link>
+          ))}
+        </nav>
+        <div className="min-w-0 space-y-4">
       {!allowed && <Notice tone="danger">Apenas administradores acessam esta seção.</Notice>}
 
       {allowed && tab === "clinica" && (
@@ -291,6 +297,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           )}
         </Card>
       )}
+        </div>
+      </div>
     </>
   );
 }

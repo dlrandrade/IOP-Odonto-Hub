@@ -20,6 +20,6 @@ export function temaDaRota(caminho: string): Tema {
   if (caminho.startsWith("/pacientes")) return MAGENTA;
   if (caminho.startsWith("/servicos") || caminho.startsWith("/simulador")) return LIMA;
   if (caminho.startsWith("/automacoes") || caminho.startsWith("/configuracoes") || caminho.startsWith("/admin")) return ACO;
-  if (caminho === "/") return AZUL;
+  if (caminho === "/" || caminho.startsWith("/indicadores")) return AZUL;
   return OURO; // login, cadastro, onboarding, instalação
 }
