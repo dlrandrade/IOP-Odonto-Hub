@@ -14,7 +14,7 @@ export type LlmResponse = {
   /** Conteúdo bruto do turno do assistente, devolvido intacto na próxima chamada. */
   assistantContent: Anthropic.Beta.BetaContentBlockParam[];
   stopReason: string | null;
-  usage: { input: number; output: number };
+  usage: { input: number; output: number; costUsd?: number };
   model: string;
 };
 

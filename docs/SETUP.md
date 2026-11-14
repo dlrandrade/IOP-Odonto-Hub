@@ -91,6 +91,24 @@ No Meta for Developers, com um app do tipo Business e o produto WhatsApp:
 5. Em WhatsApp → Configuração → **Webhook**, informe a URL de callback e o token de verificação mostrados na tela e assine o campo **messages**.
 6. Crie no WhatsApp Manager os templates `lembrete_consulta`, `confirmacao_consulta` e `retomada_contato` (categoria Utilidade, pt_BR) com o texto exibido em Automações. Quando a Meta aprovar, marque "Aprovado" em Automações.
 
+### WhatsApp por QR code (Evolution API — não oficial)
+
+Alternativa para quem não tem acesso ao Business Manager. **Risco:** o WhatsApp pode banir o número; use um chip dedicado à clínica.
+
+1. Suba uma Evolution API v2 (servidor próprio ou hospedado) com HTTPS e anote a URL e a `AUTHENTICATION_API_KEY`.
+2. Em Configurações → WhatsApp, escolha **"Conexão por QR Code"**, informe URL, chave e um nome de instância e salve: o sistema cria a instância e registra o webhook (`/api/webhooks/evolution/<token secreto>`).
+3. Clique em **Mostrar QR Code** e leia com o WhatsApp do celular da clínica (Aparelhos conectados). A tela atualiza sozinha quando conectar.
+4. Templates da Meta não se aplicam: lembretes e follow-ups saem como texto comum, sem a janela de 24 h.
+
+### Provedor de IA (Configurações → Assistente)
+
+- **Padrão da plataforma:** usa `ANTHROPIC_API_KEY` da Vercel.
+- **Claude (Anthropic):** chave própria da clínica.
+- **OpenRouter:** crie a chave em openrouter.ai/keys, cole, clique em **Carregar modelos**, escolha (ex.: `anthropic/claude-sonnet-5-5`) e **Testar conexão**.
+- **Outro compatível:** URL base no formato OpenAI (`https://.../v1`), chave e modelo.
+
+O modelo precisa suportar *tool calling*. Chaves ficam criptografadas e nunca voltam para a tela.
+
 ## Desenvolvimento local sem Supabase
 
 ```bash

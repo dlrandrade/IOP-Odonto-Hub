@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Bot, ImageIcon, Wrench } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, LiveRefresh, ScrollToEnd } from "@/components/client";
-import { Badge, Button, Card, CardTitle, Empty, Input, Notice, PageHeader } from "@/components/ui";
+import { Badge, Button, Card, CardTitle, Empty, Input, Notice, PageHeader, buttonClass } from "@/components/ui";
+import { db } from "@/db/client";
 import { env } from "@/lib/env";
 import { localTime } from "@/lib/datetime";
 import { cn, normalizePhone } from "@/lib/format";
@@ -26,36 +27,38 @@ export default async function SimulatorPage({ searchParams }: { searchParams: Pr
     return { conv, messages, runs };
   });
   const aiOn = ctx.clinic.ai_enabled && !ctx.clinic.ai_kill_switch;
+  const [llm] = await db()<{ llm_provider: string; has_key: boolean }[]>`select llm_provider, llm_api_key_enc is not null as has_key from clinic_integrations where clinic_id = ${ctx.clinicId}`;
+  const llmReady = llm && llm.llm_provider !== "platform" ? llm.has_key || llm.llm_provider === "openai_compatible" : !!env.anthropicKey;
 
   return (
     <>
       <LiveRefresh seconds={3} clinicId={ctx.clinicId} />
       <PageHeader title="Simulador de paciente" subtitle="Converse como se fosse um paciente. As mensagens passam pelo mesmo pipeline do WhatsApp, sem enviar nada para fora." />
-      <div className="mb-3 space-y-2">
+      <div className="mb-6 space-y-3 empty:hidden">
         {!aiOn && <Notice tone="sun">A assistente está {ctx.clinic.ai_kill_switch ? "pausada" : "desligada"}: as mensagens entram na fila humana. <Link className="font-semibold underline" href="/configuracoes?aba=ia">Ativar a IA</Link></Notice>}
-        {aiOn && !env.anthropicKey && <Notice tone="sun">Sem <code>ANTHROPIC_API_KEY</code> configurada, a assistente não responde: a conversa é encaminhada para a equipe (o restante do fluxo funciona normalmente).</Notice>}
+        {aiOn && !llmReady && <Notice tone="sun">Nenhuma inteligência artificial configurada: a conversa é encaminhada para a equipe (o restante do fluxo funciona normalmente). Configure em <Link className="underline underline-offset-2" href="/configuracoes?aba=ia">Configurações → Assistente</Link>.</Notice>}
       </div>
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="flex min-h-[65dvh] flex-col p-0">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
             <form className="flex items-center gap-2" action="/simulador">
-              <label className="text-xs font-semibold" htmlFor="tel">Telefone fictício</label>
-              <Input id="tel" name="tel" defaultValue={phone} className="h-8 w-44" />
+              <label className="t-small" htmlFor="tel">Telefone fictício</label>
+              <Input id="tel" name="tel" defaultValue={phone} className="h-8 w-44 font-mono text-[13px]" />
               <Button size="sm" variant="outline">Trocar</Button>
             </form>
             <div className="flex items-center gap-2">
               {data.conv && <Badge tone={data.conv.state === "ai_active" ? "ok" : "warn"}>{data.conv.state === "ai_active" ? "IA ativa" : data.conv.state === "closed" ? "Encerrada" : "Com a equipe"}</Badge>}
-              {data.conv && <Link className="text-xs font-semibold underline" href={`/conversas?c=${data.conv.id}`}>Ver na inbox</Link>}
+              {data.conv && <Link className={buttonClass("outline", "sm")} href={`/conversas?c=${data.conv.id}`}>Ver na inbox</Link>}
               <ActionForm action={resetSimulationAction}><input type="hidden" name="phone" value={phone} /><Button size="sm" variant="ghost">Limpar</Button></ActionForm>
             </div>
           </div>
           <div className="scroll-thin min-h-0 flex-1 space-y-2 overflow-y-auto bg-surface-2 p-4">
             {data.messages.length === 0 && <Empty title="Comece a conversa">Experimente: “Oi, quanto custa a limpeza?” ou “Quero marcar uma avaliação”.</Empty>}
             {data.messages.map((m) => m.type === "note" ? (
-              <p key={m.id} className="mx-auto max-w-[85%] rounded-xl bg-gold/10 px-3 py-1.5 text-center text-xs">{m.body}</p>
+              <p key={m.id} className="mx-auto max-w-[85%] rounded-md bg-gold/10 px-3 py-1.5 text-center text-xs">{m.body}</p>
             ) : (
               <div key={m.id} className={cn("flex", m.direction === "inbound" ? "justify-end" : "justify-start")}>
-                <div className={cn("max-w-[78%] rounded-2xl px-3.5 py-2 text-sm shadow-sm", m.direction === "inbound" ? "bg-gold/20" : "bg-surface")}>
+                <div className={cn("max-w-[78%] rounded-md px-3.5 py-2 text-sm shadow-sm", m.direction === "inbound" ? "bg-gold/20" : "bg-surface")}>
                   <p className="text-[10px] font-bold uppercase tracking-wider text-bone-mute">{m.direction === "inbound" ? "Você (paciente)" : m.sender_type === "ai" ? `${ctx.clinic.assistant_name} (IA)` : m.sender_type === "human" ? "Equipe" : "Automação"}</p>
                   <p className="whitespace-pre-wrap break-words">{m.type === "image" ? `📷 Imagem${m.body ? `: ${m.body}` : ""}` : m.body}</p>
                   <p className="mt-0.5 text-right text-[10px] text-bone-mute">{localTime(m.created_at, ctx.tz)}</p>
@@ -75,9 +78,9 @@ export default async function SimulatorPage({ searchParams }: { searchParams: Pr
         <Card>
           <CardTitle hint="O que a IA pediu ao servidor em cada resposta">Bastidores</CardTitle>
           {data.runs.length === 0 ? <Empty title="Nenhuma execução ainda">As ferramentas chamadas e o desfecho aparecem aqui.</Empty> : (
-            <ul className="space-y-3">
+            <ul className="space-y-6">
               {data.runs.map((r) => (
-                <li key={r.id} className="rounded-2xl border border-line p-3">
+                <li key={r.id} className="rounded-md border border-line p-3">
                   <div className="flex items-center justify-between gap-2">
                     <span className="flex items-center gap-1.5 text-xs font-semibold"><Bot size={13} aria-hidden /> {localTime(r.created_at, ctx.tz)}</span>
                     <Badge tone={r.outcome === "replied" ? "ok" : r.outcome === "alert" ? "danger" : "warn"}>{r.outcome}</Badge>

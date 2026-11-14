@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowLeft, Bot, Check, CheckCheck, Clock, Mic, Search, StickyNote, UserRound, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bot, Check, CheckCheck, Clock, Mic, Plus, Search, Send, StickyNote, UserRound, XCircle } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
+import { db } from "@/db/client";
 import { ActionForm, LiveRefresh, Modal, ScrollToEnd } from "@/components/client";
 import { Avatar, Badge, Button, buttonClass, Card, Checkbox, Empty, Field, Input, Notice, Select, Textarea } from "@/components/ui";
 import { can } from "@/domain/permissions";
@@ -85,8 +86,9 @@ export default async function ConversationsPage({ searchParams }: { searchParams
     const users = await tx<{ id: string; name: string }[]>`select id, name from app_users where active and role <> 'financeiro' order by name`;
     const allPatients = await tx<{ id: string; full_name: string }[]>`select id, full_name from patients where merged_into_patient_id is null order by full_name limit 500`;
     const [template] = await tx`select 1 from message_templates where name = 'retomada_contato' and wa_template_status = 'approved'`;
+    const [integ] = await db()<{ wa_provider: string }[]>`select wa_provider from clinic_integrations where clinic_id = ${ctx.clinicId}`;
     if (selected.unread_count > 0 && selected.assigned_to === ctx.userId) await tx`update conversations set unread_count = 0 where id = ${selected.id}`;
-    return { rows, selected, detail: detail!, messages, patients, appointments, users, allPatients, hasTemplate: !!template };
+    return { rows, selected, detail: detail!, messages, patients, appointments, users, allPatients, hasTemplate: !!template, windowRule: integ?.wa_provider !== "evolution" };
   });
 
   const href = (params: Record<string, string | null>) => {
@@ -96,11 +98,11 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   };
   const sel = data.selected;
   const displayName = (r: Row) => r.patient_name ?? r.wa_profile_name ?? formatPhone(r.phone_e164);
-  const inWindow = sel && "detail" in data && (sel.channel === "simulator" || (!!data.detail.window_expires_at && data.detail.window_expires_at > new Date()));
+  const inWindow = sel && "detail" in data && (sel.channel === "simulator" || !data.windowRule || (!!data.detail.window_expires_at && data.detail.window_expires_at > new Date()));
   const canReply = can(ctx.role, "conversations.reply");
 
   return (
-    <div className="grid gap-3 lg:h-[calc(100dvh-9.5rem)] lg:grid-cols-[340px_minmax(0,1fr)_300px]">
+    <div className="grid gap-6 lg:h-[calc(100dvh-9.5rem)] lg:grid-cols-[340px_minmax(0,1fr)_300px]">
       <LiveRefresh seconds={5} clinicId={ctx.clinicId} />
 
       {/* Lista */}
@@ -122,10 +124,10 @@ export default async function ConversationsPage({ searchParams }: { searchParams
             <Search size={15} className="absolute left-3 top-3 text-bone-mute" aria-hidden />
             <Input name="q" defaultValue={search} placeholder="Nome, telefone ou texto" aria-label="Buscar conversas" className="pl-9" />
           </form>
-          <div className="scroll-thin -mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
+          <div className="flex flex-wrap gap-1.5">
             {FILTERS.map(([key, label]) => (
               <Link key={key} href={href({ f: key === "abertas" ? null : key, c: null })}
-                className={cn("shrink-0 rounded-full px-3 py-1 text-xs font-medium", filter === key ? "bg-acento text-ink" : "bg-surface-2 text-bone-dim hover:bg-line")}>{label}</Link>
+                className={cn("btn flex h-8 shrink-0 items-center rounded-sm px-3 text-[12.5px] font-medium", filter === key ? "bg-acento text-ink" : "bg-surface-2/70 text-bone-dim hover:bg-surface-2 hover:text-bone")}>{label}</Link>
             ))}
           </div>
         </div>
@@ -159,7 +161,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
 
       {/* Histórico */}
       {!sel || !("detail" in data) ? (
-        <Card className="hidden items-center justify-center lg:col-span-2 lg:flex"><Empty title="Selecione uma conversa">O histórico, a ficha e as ações aparecem aqui.</Empty></Card>
+        <Card className="hidden p-3 lg:col-span-2 lg:flex"><Empty title="Selecione uma conversa à esquerda">O histórico de mensagens, a ficha do paciente e os botões de ação aparecem aqui.</Empty></Card>
       ) : (
         <>
           <Card className="flex min-h-[70dvh] flex-col p-0 lg:min-h-0">
@@ -184,7 +186,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                         <Field label="Pendências para a IA (opcional)" hint="A IA recebe o resumo, as últimas mensagens e este texto, para não repetir perguntas já respondidas.">
                           <Textarea name="pending" placeholder="Ex.: paciente já informou que prefere manhã; falta escolher o dia." />
                         </Field>
-                        <Button type="submit">Devolver</Button>
+                        <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Devolver</Button></div>
                       </ActionForm>
                     </Modal>
                   )}
@@ -192,7 +194,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     <ActionForm action={conversationStateAction} className="space-y-4">
                       <input type="hidden" name="conversationId" value={sel.id} /><input type="hidden" name="op" value="transfer" />
                       <Field label="Para quem?"><Select name="to" required>{data.users.filter((u) => u.id !== ctx.userId).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select></Field>
-                      <Button type="submit">Transferir</Button>
+                      <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Transferir</Button></div>
                     </ActionForm>
                   </Modal>
                   {sel.state !== "closed" && (
@@ -210,7 +212,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
               {data.messages.map((m) => {
                 if (m.type === "note") {
                   return (
-                    <div key={m.id} className="mx-auto flex max-w-[85%] items-start gap-2 rounded-xl bg-gold/10 px-3 py-2 text-xs text-bone-dim">
+                    <div key={m.id} className="mx-auto flex max-w-[85%] items-start gap-2 rounded-md bg-gold/10 px-3 py-2 text-xs text-bone-dim">
                       <StickyNote size={13} className="mt-0.5 shrink-0" aria-hidden />
                       <span><span className="font-semibold">{m.sender_type === "system" ? "Sistema" : `Nota interna${m.sender ? ` · ${m.sender}` : ""}`}:</span> {m.body} <span className="text-bone-mute">· {localTime(m.created_at, ctx.tz)}</span></span>
                     </div>
@@ -220,7 +222,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                 const who = m.sender_type === "patient" ? "Paciente" : m.sender_type === "ai" ? ctx.clinic.assistant_name + " (IA)" : m.sender_type === "human" ? m.sender ?? "Equipe" : "Automação";
                 return (
                   <div key={m.id} className={cn("flex", out ? "justify-end" : "justify-start")}>
-                    <div className={cn("max-w-[78%] rounded-2xl px-3.5 py-2.5 shadow-sm", out ? (m.sender_type === "ai" ? "bg-acento text-ink" : "bg-bone-mute text-white") : "bg-surface")}>
+                    <div className={cn("max-w-[78%] rounded-md px-3.5 py-2.5 shadow-sm", out ? (m.sender_type === "ai" ? "bg-acento text-ink" : "bg-bone text-ink") : "bg-surface")}>
                       <p className={cn("mb-0.5 text-[10px] font-bold uppercase tracking-wider", out ? "text-gold" : "text-bone-mute")}>{who}</p>
                       {m.type === "audio" && (
                         <div className="space-y-1.5">
@@ -238,7 +240,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                       )}
                       {m.type === "image" && (m.media_path || m.wa_media_id) && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={`/api/media/${m.id}`} alt="Imagem enviada pelo paciente" className="mb-1 max-h-64 rounded-xl" loading="lazy" />
+                        <img src={`/api/media/${m.id}`} alt="Imagem enviada pelo paciente" className="mb-1 max-h-64 rounded-md" loading="lazy" />
                       )}
                       {m.type === "image" && !m.media_path && !m.wa_media_id && <p className="text-xs italic">📷 Imagem (simulada)</p>}
                       {m.type !== "audio" && m.body && <p className="whitespace-pre-wrap break-words text-sm">{m.body}</p>}
@@ -255,101 +257,109 @@ export default async function ConversationsPage({ searchParams }: { searchParams
               <ScrollToEnd dep={data.messages.length} />
             </div>
             {canReply && (
-              <div className="border-t border-line p-3">
+              <div className="space-y-3 border-t border-line p-4">
+                {sel.state === "ai_active" && (
+                  <p className="flex items-center gap-2 rounded-sm bg-ok-soft px-3 py-2 text-[13px] text-ok"><Bot size={15} aria-hidden /> A assistente está cuidando desta conversa. Se você escrever, a conversa passa para você.</p>
+                )}
                 {!inWindow && (
-                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-warn-soft px-3 py-2 text-xs text-warn">
-                    <span>Janela de 24 h encerrada: o WhatsApp só permite template aprovado. Notas internas continuam liberadas.</span>
-                    {data.hasTemplate && <ActionForm action={sendTemplateAction}><input type="hidden" name="conversationId" value={sel.id} /><Button size="sm" variant="outline">Enviar template de retomada</Button></ActionForm>}
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm bg-warn-soft px-3 py-2 text-[13px] text-warn">
+                    <span>Passaram 24 h da última mensagem do paciente: o WhatsApp oficial só aceita uma mensagem pronta (template). Notas internas continuam liberadas.</span>
+                    {data.hasTemplate && <ActionForm action={sendTemplateAction}><input type="hidden" name="conversationId" value={sel.id} /><Button size="sm" variant="outline">Enviar mensagem pronta</Button></ActionForm>}
                   </div>
                 )}
-                <ActionForm action={sendMessageAction} className="flex flex-wrap items-end gap-2">
+                <ActionForm action={sendMessageAction} className="space-y-6">
                   <input type="hidden" name="conversationId" value={sel.id} />
-                  <Textarea name="body" required placeholder="Escreva sua resposta…" aria-label="Mensagem" className="min-h-11 flex-1 basis-64" rows={2} />
-                  <Select name="mode" aria-label="Tipo de envio" className="w-auto" defaultValue={inWindow ? "message" : "note"}>
-                    <option value="message" disabled={!inWindow}>Enviar ao paciente</option>
-                    <option value="note">Nota interna</option>
-                  </Select>
-                  <Button type="submit">Enviar</Button>
+                  <Textarea name="body" required placeholder={inWindow ? "Escreva a mensagem para o paciente…" : "Escreva uma nota interna…"} aria-label="Mensagem" className="min-h-[76px] resize-none" rows={3} />
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    <span className="t-small mr-auto hidden sm:inline">Notas internas só a equipe vê.</span>
+                    <Button type="submit" name="mode" value="note" variant="outline"><StickyNote aria-hidden /> Salvar como nota</Button>
+                    <Button type="submit" name="mode" value="message" disabled={!inWindow}><Send aria-hidden /> Enviar ao paciente</Button>
+                  </div>
                 </ActionForm>
-                {sel.state !== "human_active" && <p className="mt-1 text-[11px] text-bone-mute">Ao responder, você assume a conversa e a IA para de responder nela.</p>}
               </div>
             )}
           </Card>
 
-          {/* Ficha lateral */}
-          <div className="scroll-thin space-y-3 overflow-y-auto lg:min-h-0">
-            <Card>
-              <p className="eyebrow text-bone-mute">Contato</p>
-              <p className="mt-1 font-semibold">{sel.wa_profile_name ?? "Sem nome no WhatsApp"}</p>
-              <p className="text-xs text-bone-mute">{formatPhone(sel.phone_e164)}</p>
-              {data.detail.opted_out_at && <div className="mt-2"><Notice tone="danger">Pediu para não receber mensagens automáticas.</Notice></div>}
-              {data.detail.window_expires_at && sel.channel === "whatsapp" && (
-                <p className="mt-2 text-xs text-bone-mute">Janela de 24 h {inWindow ? "aberta até" : "encerrada em"} {formatShort(data.detail.window_expires_at, ctx.tz)}</p>
+          {/* Ficha lateral: um só painel, seções separadas por linhas finas (mais leve que vários cartões). */}
+          <Card className="scroll-thin gap-0 overflow-y-auto p-0 lg:min-h-0">
+            <SidePart title="Contato">
+              <p className="t-h3">{sel.wa_profile_name ?? "Sem nome no WhatsApp"}</p>
+              <p className="t-small font-mono">{formatPhone(sel.phone_e164)}</p>
+              {data.detail.opted_out_at && <div className="mt-3"><Notice tone="danger">Pediu para não receber mensagens automáticas.</Notice></div>}
+              {data.windowRule && data.detail.window_expires_at && sel.channel === "whatsapp" && (
+                <p className="t-small mt-2">Pode receber mensagem livre {inWindow ? "até" : "— encerrado em"} {formatShort(data.detail.window_expires_at, ctx.tz)}</p>
               )}
               {canReply && !data.detail.is_test && (
-                <ActionForm action={contactFlagsAction} className="mt-3 space-y-2">
+                <ActionForm action={contactFlagsAction} className="mt-4 flex items-center justify-between gap-3">
                   <input type="hidden" name="contactId" value={data.detail.contact_id} />
-                  <Checkbox name="excluded" defaultChecked={data.detail.excluded_from_metrics} label="Spam ou fornecedor" hint="Fica fora dos indicadores." />
-                  <Button size="sm" variant="outline">Salvar</Button>
+                  <Checkbox name="excluded" defaultChecked={data.detail.excluded_from_metrics} label="É spam ou fornecedor" />
+                  <Button size="sm" variant="ghost">Salvar</Button>
                 </ActionForm>
               )}
-            </Card>
-            <Card>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="eyebrow text-bone-mute">Pacientes neste telefone</p>
-                {can(ctx.role, "patients.write") && (
-                  <Modal trigger="Vincular" title="Vincular paciente ao contato" triggerClass="text-xs font-semibold underline">
-                    <ActionForm action={linkPatientAction} className="space-y-4">
-                      <input type="hidden" name="contactId" value={data.detail.contact_id} />
-                      <Field label="Paciente já cadastrado"><Select name="patientId" defaultValue=""><option value="">— novo paciente —</option>{data.allPatients.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</Select></Field>
-                      <Field label="Ou nome completo do novo paciente"><Input name="fullName" /></Field>
-                      <Field label="Data de nascimento" hint="Usada para verificar a identidade antes de revelar histórico."><Input name="birthDate" type="date" /></Field>
-                      <Field label="Quem é o paciente para o dono do telefone?">
-                        <Select name="relationship" defaultValue="self"><option value="self">A própria pessoa</option><option value="filho">Filho(a)</option><option value="conjuge">Cônjuge</option><option value="dependente">Dependente</option><option value="outro">Outro</option></Select>
-                      </Field>
-                      <Button type="submit">Vincular</Button>
-                    </ActionForm>
-                  </Modal>
-                )}
-              </div>
-              {data.patients.length === 0 ? <p className="text-sm text-bone-mute">Nenhum paciente vinculado ainda.</p> : (
-                <ul className="space-y-1.5">
+            </SidePart>
+            <SidePart title="Pacientes deste telefone" action={can(ctx.role, "patients.write") ? (
+              <Modal trigger={<><Plus aria-hidden /> Vincular</>} title="Vincular paciente ao telefone" description="Um telefone pode atender várias pessoas, como uma mãe e os filhos." triggerClass={buttonClass("ghost", "sm")}>
+                <ActionForm action={linkPatientAction} className="space-y-5">
+                  <input type="hidden" name="contactId" value={data.detail.contact_id} />
+                  <Field label="Paciente já cadastrado"><Select name="patientId" defaultValue=""><option value="">Escolha na lista ou cadastre abaixo…</option>{data.allPatients.map((p) => <option key={p.id} value={p.id}>{p.full_name}</option>)}</Select></Field>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Ou nome completo do novo"><Input name="fullName" /></Field>
+                    <Field label="Data de nascimento" hint="Usada para confirmar a identidade."><Input name="birthDate" type="date" /></Field>
+                  </div>
+                  <Field label="Quem é o paciente para o dono do telefone?">
+                    <Select name="relationship" defaultValue="self"><option value="self">A própria pessoa</option><option value="filho">Filho(a)</option><option value="conjuge">Cônjuge</option><option value="dependente">Dependente</option><option value="outro">Outro</option></Select>
+                  </Field>
+                  <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Vincular paciente</Button></div>
+                </ActionForm>
+              </Modal>
+            ) : undefined}>
+              {data.patients.length === 0 ? <p className="t-small">Nenhum paciente vinculado ainda.</p> : (
+                <ul className="space-y-2">
                   {data.patients.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between gap-2 text-sm">
-                      <Link href={`/pacientes/${p.id}`} className="truncate font-medium underline decoration-line underline-offset-2">{p.full_name}</Link>
+                    <li key={p.id} className="flex items-center justify-between gap-3">
+                      <Link href={`/pacientes/${p.id}`} className="truncate text-[14px] font-medium hover:underline">{p.full_name}</Link>
                       <Badge>{p.relationship === "self" ? "titular" : p.relationship}</Badge>
                     </li>
                   ))}
                 </ul>
               )}
-            </Card>
-            <Card>
-              <p className="eyebrow text-bone-mute">Próximas consultas</p>
-              {data.appointments.length === 0 ? <p className="mt-2 text-sm text-bone-mute">Nenhuma consulta futura.</p> : (
-                <ul className="mt-2 space-y-2 text-sm">
+            </SidePart>
+            <SidePart title="Próximas consultas" action={<Link href="/agenda" className={buttonClass("ghost", "sm")}>Agenda</Link>}>
+              {data.appointments.length === 0 ? <p className="t-small">Nenhuma consulta marcada.</p> : (
+                <ul className="space-y-6">
                   {data.appointments.map((a) => (
-                    <li key={a.id}><p className="font-medium">{a.service} · {a.patient}</p><p className="text-xs text-bone-mute">{formatFull(a.starts_at, ctx.tz)}</p></li>
+                    <li key={a.id}><p className="text-[14px] font-medium">{a.service} · {a.patient}</p><p className="t-small">{formatFull(a.starts_at, ctx.tz)}</p></li>
                   ))}
                 </ul>
               )}
-              <Link href="/agenda" className="mt-3 inline-block text-xs font-semibold underline">Abrir agenda</Link>
-            </Card>
-            <Card>
-              <p className="eyebrow text-bone-mute">Resumo do atendimento</p>
-              <p className="mb-2 mt-1 text-[11px] text-bone-mute">
-                {data.detail.summary_by === "ai" ? "Gerado por IA" : data.detail.summary_by === "human" ? "Editado pela equipe" : "Ainda sem resumo"}
-                {data.detail.summary_updated_at ? ` · ${formatShort(data.detail.summary_updated_at, ctx.tz)}` : ""} · Não é evolução clínica.
+            </SidePart>
+            <SidePart title="Resumo do atendimento" last>
+              <p className="t-small mb-3">
+                {data.detail.summary_by === "ai" ? "Escrito pela assistente" : data.detail.summary_by === "human" ? "Editado pela equipe" : "Ainda sem resumo"}
+                {data.detail.summary_updated_at ? ` · ${formatShort(data.detail.summary_updated_at, ctx.tz)}` : ""}. Não é registro clínico.
               </p>
-              <ActionForm action={saveSummaryAction} resetOnDone={false} className="space-y-2">
+              <ActionForm action={saveSummaryAction} resetOnDone={false} className="space-y-6">
                 <input type="hidden" name="conversationId" value={sel.id} />
-                <Textarea name="summary" defaultValue={data.detail.summary ?? ""} key={data.detail.summary_updated_at?.getTime() ?? 0} aria-label="Resumo" readOnly={!canReply} />
-                {canReply && <Button size="sm" variant="outline">Salvar resumo</Button>}
+                <Textarea name="summary" defaultValue={data.detail.summary ?? ""} key={data.detail.summary_updated_at?.getTime() ?? 0} aria-label="Resumo" readOnly={!canReply} className="min-h-24 resize-none" />
+                {canReply && <div className="flex justify-end"><Button size="sm" variant="outline">Salvar resumo</Button></div>}
               </ActionForm>
-              {data.detail.pending_notes && <p className="mt-2 rounded-xl bg-gold/10 px-3 py-2 text-xs"><span className="font-semibold">Pendências:</span> {data.detail.pending_notes}</p>}
-            </Card>
-          </div>
+              {data.detail.pending_notes && <p className="mt-3 rounded-sm border-l-2 border-gold/70 bg-gold/[0.07] px-3 py-2 text-[13px]"><span className="font-medium">Pendências:</span> {data.detail.pending_notes}</p>}
+            </SidePart>
+          </Card>
         </>
       )}
     </div>
+  );
+}
+
+function SidePart({ title, action, children, last }: { title: string; action?: React.ReactNode; children: React.ReactNode; last?: boolean }) {
+  return (
+    <section className={cn("px-6 py-5", !last && "border-b border-line")}>
+      <div className="mb-3 flex min-h-8 items-center justify-between gap-3">
+        <h2 className="eyebrow text-bone-mute">{title}</h2>
+        {action}
+      </div>
+      {children}
+    </section>
   );
 }

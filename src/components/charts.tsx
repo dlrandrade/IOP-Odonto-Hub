@@ -1,25 +1,47 @@
 import { cn } from "@/lib/format";
 
+/** Topo "redondo" do eixo (1, 2, 5 × 10ⁿ) para as linhas de grade caírem em números legíveis. */
+function niceMax(v: number): number {
+  if (v <= 4) return 4;
+  const p = 10 ** Math.floor(Math.log10(v));
+  const n = v / p;
+  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 4 ? 4 : n <= 5 ? 5 : 10;
+  return step * p;
+}
+
 /**
- * Barras de magnitude em uma única matiz (marinho): pontas arredondadas ancoradas na base,
- * rótulo só no pico, valor exato no hover/foco e tabela equivalente para leitores de tela.
+ * Barras de magnitude numa única cor (o acento da página), com grade horizontal e eixo.
+ * Valor exato aparece no hover/foco; há tabela equivalente para leitores de tela.
  */
-export function Bars({ data, label, height = 120 }: { data: { key: string; value: number; hint?: string }[]; label: string; height?: number }) {
-  const max = Math.max(1, ...data.map((d) => d.value));
-  const peak = data.reduce((a, d) => (d.value > a.value ? d : a), data[0] ?? { key: "", value: 0 });
+export function Bars({ data, label, height = 168 }: { data: { key: string; value: number; hint?: string }[]; label: string; height?: number }) {
+  const top = niceMax(Math.max(0, ...data.map((d) => d.value)));
+  const ticks = [1, 0.75, 0.5, 0.25, 0].map((f) => Math.round(top * f));
+  const empty = data.every((d) => d.value === 0);
   return (
-    <figure>
-      <div role="img" aria-label={label} className="flex items-end gap-[2px] border-b border-line" style={{ height }}>
-        {data.map((d) => (
-          <div key={d.key} tabIndex={0} title={`${d.hint ?? d.key}: ${d.value}`} className="group relative flex h-full flex-1 items-end justify-center outline-offset-0">
-            {d.value > 0 && d.key === peak.key && <span className="absolute text-[10px] font-semibold text-bone" style={{ bottom: `calc(${(d.value / max) * 100}% + 2px)` }}>{d.value}</span>}
-            <div className={cn("w-full max-w-7 rounded-t-[4px] bg-acento/60 transition group-hover:bg-acento group-focus:bg-acento", d.value === 0 && "bg-line")}
-              style={{ height: d.value === 0 ? 2 : `${Math.max(3, (d.value / max) * 100)}%` }} />
+    <figure className="flex flex-1 flex-col">
+      <div className="flex flex-1 gap-3">
+        <div aria-hidden className="flex flex-col justify-between py-0 text-right font-mono text-[10px] tabular-nums text-bone-mute" style={{ height }}>
+          {ticks.map((t, i) => <span key={i} className="-translate-y-1/2 leading-none last:translate-y-0">{t}</span>)}
+        </div>
+        <div className="relative flex-1">
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 flex flex-col justify-between" style={{ height }}>
+            {ticks.map((_, i) => <span key={i} className={cn("block h-px", i === ticks.length - 1 ? "bg-line" : "border-t border-dashed border-line/70")} />)}
           </div>
-        ))}
-      </div>
-      <div className="mt-1 flex gap-[2px] text-center text-[10px] text-bone-mute">
-        {data.map((d) => <span key={d.key} className="flex-1 truncate">{d.key}</span>)}
+          <div role="img" aria-label={label} className="relative flex items-end gap-1.5" style={{ height }}>
+            {data.map((d) => (
+              <div key={d.key} tabIndex={0} className="group relative flex h-full flex-1 items-end justify-center outline-none">
+                <span className="pointer-events-none absolute z-10 -translate-y-2 whitespace-nowrap rounded-sm border border-line bg-ink px-2 py-1 font-mono text-[11px] opacity-0 transition-opacity group-hover:opacity-100 group-focus:opacity-100"
+                  style={{ bottom: `${(d.value / top) * 100}%` }}>{d.hint ?? d.key}: {d.value}</span>
+                <div className="w-full max-w-6 rounded-t-[3px] bg-acento/55 transition-colors group-hover:bg-acento group-focus:bg-acento"
+                  style={{ height: d.value === 0 ? 0 : `${Math.max(2, (d.value / top) * 100)}%` }} />
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 flex gap-1.5 text-center font-mono text-[10px] text-bone-mute">
+            {data.map((d) => <span key={d.key} className="flex-1 truncate">{d.key}</span>)}
+          </div>
+          {empty && <p className="t-small absolute inset-x-0 top-1/3 text-center">Sem mensagens no período.</p>}
+        </div>
       </div>
       <table className="sr-only">
         <caption>{label}</caption>
@@ -29,12 +51,13 @@ export function Bars({ data, label, height = 120 }: { data: { key: string; value
   );
 }
 
+/** Indicador: rótulo, número e nota. Altura fixa para a linha de indicadores ficar simétrica. */
 export function Stat({ label, value, note, tone }: { label: string; value: string; note?: string; tone?: "sun" | "navy" }) {
   return (
-    <div className={cn("fio-topo rounded-lg border border-line p-5", tone === "navy" ? "bg-surface-2" : "bg-surface")} data-ativo={tone === "sun"}>
+    <div className="fio-topo flex h-full min-h-[148px] flex-col justify-between rounded-lg border border-line bg-surface/70 p-6" data-ativo={tone === "sun"}>
       <p className="eyebrow text-bone-mute">{label}</p>
-      <p className={cn("display num mt-3 text-[44px] leading-none", tone === "navy" ? "text-gold" : "text-bone")}>{value}</p>
-      {note && <p className="mt-2 text-xs text-bone-mute">{note}</p>}
+      <p className={cn("display num text-[40px] leading-none", tone === "navy" ? "text-gold" : "text-bone")}>{value}</p>
+      <p className="t-small min-h-[19px] truncate">{note ?? ""}</p>
     </div>
   );
 }

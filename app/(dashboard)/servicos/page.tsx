@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal } from "@/components/client";
-import { Badge, Button, buttonClass, Card, Checkbox, Empty, Field, Input, Notice, PageHeader, Select, Table, Textarea } from "@/components/ui";
+import { Badge, Button, buttonClass, Card, Checkbox, Empty, Field, Input, Notice, PageHeader, Segmented, Select, Table, Textarea } from "@/components/ui";
 import { brl, cn } from "@/lib/format";
 import { formatShort } from "@/lib/datetime";
 import { saveDocAction, saveServiceAction } from "./actions";
@@ -43,7 +43,7 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
   const ServiceForm = ({ s }: { s?: Service }) => (
     <ActionForm action={saveServiceAction} className="space-y-4" resetOnDone={!s}>
       {s && <input type="hidden" name="serviceId" value={s.id} />}
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2">
         <Field label="Nome"><Input name="name" defaultValue={s?.name} required /></Field>
         <Field label="Especialidade"><Input name="specialty" defaultValue={s?.specialty ?? ""} /></Field>
         <Field label="Tipo"><Select name="kind" defaultValue={s?.kind ?? "procedure"}>{Object.entries(KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Field>
@@ -52,16 +52,16 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
           <Field label="Intervalo (min)"><Input type="number" name="buffer" min={0} defaultValue={s?.buffer_min ?? 0} /></Field>
         </div>
       </div>
-      <fieldset className="rounded-2xl border border-line p-3">
+      <fieldset className="rounded-md border border-line p-4">
         <legend className="px-1 text-xs font-semibold">Preço que a assistente pode informar</legend>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-3">
           <Field label="Modo"><Select name="priceMode" defaultValue={s?.price_mode ?? "on_evaluation"}><option value="on_evaluation">Sob avaliação</option><option value="fixed">Valor fixo</option><option value="range">Faixa</option></Select></Field>
           <Field label="Valor / mínimo (R$)"><Input name="priceMin" inputMode="decimal" defaultValue={money(s?.price_min_cents ?? null)} placeholder="0,00" /></Field>
           <Field label="Máximo (R$)"><Input name="priceMax" inputMode="decimal" defaultValue={money(s?.price_max_cents ?? null)} placeholder="só para faixa" /></Field>
         </div>
         <p className="mt-2 text-[11px] text-bone-mute">Sem preço cadastrado, a assistente diz que depende de avaliação. Ela nunca inventa valor nem oferece desconto.</p>
       </fieldset>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2">
         <Checkbox name="bookable" defaultChecked={s?.bookable_directly ?? false} label="Agenda direto pela assistente" hint="Indicado para avaliação, limpeza e retorno." />
         <Field label="Se não agenda direto, leva à avaliação"><Select name="leadsTo" defaultValue={s?.leads_to_evaluation_service_id ?? evaluations[0]?.id ?? ""}><option value="">—</option>{evaluations.filter((e) => e.id !== s?.id).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</Select></Field>
       </div>
@@ -75,7 +75,7 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
         </div>
       </fieldset>
       <Field label="Situação" hint="Publicado vale já na próxima resposta da assistente, sem retreinar."><Select name="status" defaultValue={s?.status ?? "draft"}><option value="draft">Rascunho</option><option value="published">Publicado</option></Select></Field>
-      <Button type="submit">Salvar</Button>
+      <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>
     </ActionForm>
   );
 
@@ -90,16 +90,15 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
               <Field label="Título"><Input name="title" required placeholder="Ex.: Formas de pagamento" /></Field>
               <Field label="Conteúdo"><Textarea name="body" className="min-h-40" /></Field>
               <Field label="Situação"><Select name="status" defaultValue="draft"><option value="draft">Rascunho</option><option value="published">Publicado</option></Select></Field>
-              <Button type="submit">Salvar</Button>
+              <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>
             </ActionForm>
           </Modal>
         )}
       </PageHeader>
-      <div className="mb-3 inline-flex rounded-full bg-surface p-1 border border-line">
-        {[["servicos", "Serviços"], ["conhecimento", "Base de conhecimento"]].map(([k, label]) => (
-          <Link key={k} href={k === "servicos" ? "/servicos" : "/servicos?aba=conhecimento"} className={cn("rounded-full px-4 py-1.5 text-sm font-medium", tab === k ? "bg-acento text-ink" : "text-bone-dim")}>{label}</Link>
-        ))}
-      </div>
+      <Segmented label="Seções" className="mb-6" items={[
+        { href: "/servicos", label: "Serviços", active: tab === "servicos" },
+        { href: "/servicos?aba=conhecimento", label: "Base de conhecimento", active: tab === "conhecimento" },
+      ]} />
       {ctx.clinic.is_demo && <div className="mb-3"><Notice tone="sun">Clínica de demonstração: preços e textos são <strong>fictícios</strong>.</Notice></div>}
 
       {tab === "servicos" ? (
@@ -113,15 +112,15 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
                   <td>{s.duration_min} min{s.buffer_min ? ` +${s.buffer_min}` : ""}</td>
                   <td>{price(s)}</td>
                   <td>{s.bookable_directly ? <Badge tone="ok">direto</Badge> : <Badge>via avaliação</Badge>}</td>
-                  <td><Badge tone={s.status === "published" ? "navy" : "warn"}>{s.status === "published" ? "Publicado" : "Rascunho"}</Badge><p className="mt-0.5 text-[10px] text-bone-mute">v{s.version}{s.approver ? ` · ${s.approver.split(" ")[0]}` : ""}</p></td>
-                  <td className="text-right"><Modal trigger="Editar" title={`Editar: ${s.name}`} wide triggerClass="text-xs font-semibold underline"><ServiceForm s={s} /></Modal></td>
+                  <td><Badge tone={s.status === "published" ? "navy" : "warn"}>{s.status === "published" ? "Publicado" : "Rascunho"}</Badge><p className="t-small mt-1">v{s.version}{s.approver ? ` · ${s.approver.split(" ")[0]}` : ""}</p></td>
+                  <td className="text-right"><Modal trigger="Editar" title={`Editar: ${s.name}`} wide triggerClass={buttonClass("outline", "sm")}><ServiceForm s={s} /></Modal></td>
                 </tr>
               ))}
             </Table>
           )}
         </Card>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2">
           {data.docs.length === 0 && <Empty title="Nenhum documento" />}
           {data.docs.map((d) => (
             <Card key={d.id}>
@@ -132,13 +131,13 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
               <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm text-bone-dim">{d.body || <span className="text-bone-mute">Sem conteúdo ainda. A assistente não responde sobre este tema até você publicar.</span>}</p>
               <div className="mt-3 flex items-center justify-between text-[11px] text-bone-mute">
                 <span>v{d.version} · {d.versions} versão(ões) no histórico · {formatShort(d.updated_at, ctx.tz)}{d.approver ? ` · aprovado por ${d.approver.split(" ")[0]}` : ""}</span>
-                <Modal trigger="Editar" title={`Editar: ${d.title}`} wide triggerClass="text-xs font-semibold text-bone underline">
+                <Modal trigger="Editar" title={`Editar: ${d.title}`} wide triggerClass={buttonClass("outline", "sm")}>
                   <ActionForm action={saveDocAction} className="space-y-4" resetOnDone={false}>
                     <input type="hidden" name="docId" value={d.id} />
                     <Field label="Título"><Input name="title" defaultValue={d.title} required /></Field>
                     <Field label="Conteúdo" hint="Texto administrativo aprovado: endereço, horários, pagamento, convênios, acessibilidade."><Textarea name="body" defaultValue={d.body} className="min-h-48" /></Field>
                     <Field label="Situação"><Select name="status" defaultValue={d.status}><option value="draft">Rascunho</option><option value="published">Publicado</option></Select></Field>
-                    <Button type="submit">Salvar nova versão</Button>
+                    <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar nova versão</Button></div>
                   </ActionForm>
                 </Modal>
               </div>

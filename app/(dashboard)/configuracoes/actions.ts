@@ -1,13 +1,17 @@
 "use server";
 
-import { z } from "zod";
+import { z, ZodError } from "zod";
 import { adminCreateUser, adminSetPassword } from "@/auth/provider";
-import { q } from "@/auth/session";
+import { actionCtx, q } from "@/auth/session";
 import type { ActionState } from "@/components/client";
 import { ROLES } from "@/domain/permissions";
 import { parseSettings, settingsSchema } from "@/domain/settings";
 import { act, actorOf, bool, optStr, str, UserError } from "@/lib/action";
-import { encryptField } from "@/lib/crypto";
+import { decryptField, encryptField } from "@/lib/crypto";
+import { env } from "@/lib/env";
+import { buildProvider, listClaudeModels, listOpenAiModels, LlmUnavailableError, OPENROUTER_URL, type LlmSettings } from "@/integrations/llm";
+import { evolutionConfig } from "@/integrations/whatsapp";
+import { ensureEvolutionInstance, evolutionLogout, evolutionQr, evolutionState, setEvolutionWebhook, type EvolutionConfig } from "@/integrations/whatsapp/evolution";
 import { WEEKDAY_KEYS, type BusinessHours } from "@/lib/datetime";
 import { audit, diff } from "@/services/audit";
 
@@ -147,7 +151,7 @@ export async function saveWhatsAppAction(_: ActionState, form: FormData): Promis
       if (!token && !current?.wa_access_token_enc) throw new UserError("Informe o token de acesso.");
       if (!secret && !current?.wa_app_secret_enc) throw new UserError("Informe a chave secreta do app (App Secret).");
       // Segredos ficam criptografados no banco e nunca voltam para a tela.
-      await tx`update clinic_integrations set wa_phone_number_id = ${phoneId}, wa_business_account_id = ${optStr(form, "wabaId")}, wa_display_phone = ${optStr(form, "displayPhone")},
+      await tx`update clinic_integrations set wa_provider = 'cloud', wa_phone_number_id = ${phoneId}, wa_business_account_id = ${optStr(form, "wabaId")}, wa_display_phone = ${optStr(form, "displayPhone")},
                  wa_access_token_enc = ${token ? encryptField(token) : current?.wa_access_token_enc ?? null},
                  wa_app_secret_enc = ${secret ? encryptField(secret) : current?.wa_app_secret_enc ?? null}, wa_connected_at = now(), wa_last_error = null
                where clinic_id = ${ctx.clinicId}`;
@@ -185,4 +189,152 @@ export async function saveAiAction(_: ActionState, form: FormData): Promise<Acti
     });
     return { ok: true, message: "Configuração da assistente salva." };
   });
+}
+
+// ───────────── WhatsApp alternativo (Evolution API) ─────────────
+
+async function evoConfig(ctx: { authUserId: string }): Promise<{ cfg: EvolutionConfig; token: string } | null> {
+  const [row] = await q(ctx, (tx) => tx<{ evo_base_url: string | null; evo_instance: string | null; evo_api_key_enc: string | null; evo_webhook_token: string }[]>`
+    select evo_base_url, evo_instance, evo_api_key_enc, evo_webhook_token from clinic_integrations`);
+  if (!row) return null;
+  const cfg = evolutionConfig(row);
+  return cfg ? { cfg, token: row.evo_webhook_token } : null;
+}
+
+export async function saveEvolutionAction(_: ActionState, form: FormData): Promise<ActionState> {
+  return act("integrations.manage", [PATH, "/"], async (ctx) => {
+    const baseUrl = z.string().url("Informe o endereço completo, começando com https://").parse(str(form, "baseUrl")).replace(/\/+$/, "");
+    if (!baseUrl.startsWith("https://") && !baseUrl.startsWith("http://localhost")) throw new UserError("Use um endereço https:// para proteger a chave.");
+    const instance = z.string().regex(/^[A-Za-z0-9_-]{2,40}$/, "Nome da instância: só letras, números, hífen e sublinhado.").parse(str(form, "instance"));
+    const apiKey = optStr(form, "apiKey");
+    await q(ctx, async (tx) => {
+      const [cur] = await tx<{ evo_api_key_enc: string | null }[]>`select evo_api_key_enc from clinic_integrations`;
+      if (!apiKey && !cur?.evo_api_key_enc) throw new UserError("Informe a chave (API key) da Evolution.");
+      await tx`update clinic_integrations set wa_provider = 'evolution', evo_base_url = ${baseUrl}, evo_instance = ${instance},
+                 evo_api_key_enc = ${apiKey ? encryptField(apiKey) : cur?.evo_api_key_enc ?? null}, wa_last_error = null
+               where clinic_id = ${ctx.clinicId}`;
+      await audit(tx, actorOf(ctx), "whatsapp.evolution", "clinic_integrations", ctx.clinicId, null, { base_url: baseUrl, instance, key_changed: !!apiKey });
+    });
+    const conf = await evoConfig(ctx);
+    if (!conf) throw new UserError("Configuração incompleta.");
+    try {
+      await ensureEvolutionInstance(conf.cfg);
+      await setEvolutionWebhook(conf.cfg, `${env.appUrl}/api/webhooks/evolution/${conf.token}`);
+    } catch (e) {
+      throw new UserError(`Dados salvos, mas a Evolution não respondeu como esperado: ${e instanceof Error ? e.message : "erro"}`);
+    }
+    return { ok: true, message: "Pronto. Agora clique em “Mostrar QR Code” e leia com o celular da clínica." };
+  });
+}
+
+export async function evolutionQrAction(): Promise<{ image: string | null; pairingCode: string | null; state: string; error?: string }> {
+  const ctx = await actionCtx("integrations.manage");
+  const conf = await evoConfig(ctx);
+  if (!conf) return { image: null, pairingCode: null, state: "close", error: "Salve os dados da Evolution primeiro." };
+  try {
+    const state = await evolutionState(conf.cfg);
+    if (state === "open") return { image: null, pairingCode: null, state };
+    const qr = await evolutionQr(conf.cfg);
+    return { ...qr, state };
+  } catch (e) {
+    return { image: null, pairingCode: null, state: "close", error: e instanceof Error ? e.message : "Erro ao falar com a Evolution." };
+  }
+}
+
+export async function evolutionStatusAction(): Promise<{ state: string }> {
+  const ctx = await actionCtx("integrations.manage");
+  const conf = await evoConfig(ctx);
+  if (!conf) return { state: "close" };
+  const state = await evolutionState(conf.cfg).catch(() => "close" as const);
+  if (state === "open") await q(ctx, (tx) => tx`update clinic_integrations set evo_connected_at = coalesce(evo_connected_at, now()) where clinic_id = ${ctx.clinicId}`);
+  return { state };
+}
+
+export async function evolutionLogoutAction(): Promise<ActionState> {
+  return act("integrations.manage", PATH, async (ctx) => {
+    const conf = await evoConfig(ctx);
+    if (conf) await evolutionLogout(conf.cfg).catch(() => undefined);
+    await q(ctx, (tx) => tx`update clinic_integrations set evo_connected_at = null where clinic_id = ${ctx.clinicId}`);
+    return { ok: true, message: "Celular desconectado." };
+  });
+}
+
+export async function useOfficialWhatsAppAction(): Promise<ActionState> {
+  return act("integrations.manage", [PATH, "/"], async (ctx) => {
+    await q(ctx, async (tx) => {
+      await tx`update clinic_integrations set wa_provider = 'cloud' where clinic_id = ${ctx.clinicId}`;
+      await audit(tx, actorOf(ctx), "whatsapp.provider", "clinic_integrations", ctx.clinicId, null, { wa_provider: "cloud" });
+    });
+  });
+}
+
+// ───────────── Provedor de IA ─────────────
+
+const llmSchema = z.object({
+  provider: z.enum(["platform", "anthropic", "openrouter", "openai_compatible"]),
+  model: z.string().trim().max(120).optional(),
+  baseUrl: z.string().trim().url("Endereço inválido").optional(),
+});
+
+async function llmFromForm(ctx: { authUserId: string }, form: FormData): Promise<LlmSettings> {
+  const p = llmSchema.parse({ provider: form.get("provider"), model: optStr(form, "model") ?? undefined, baseUrl: optStr(form, "baseUrl") ?? undefined });
+  const typed = optStr(form, "apiKey");
+  const [row] = await q(ctx, (tx) => tx<{ llm_provider: string; llm_api_key_enc: string | null }[]>`select llm_provider, llm_api_key_enc from clinic_integrations`);
+  // Chave em branco = mantém a salva, desde que seja do mesmo provedor.
+  const stored = row?.llm_provider === p.provider ? decryptField(row.llm_api_key_enc) : null;
+  return { provider: p.provider, apiKey: typed ?? stored, model: p.model ?? null, baseUrl: p.provider === "openai_compatible" ? p.baseUrl ?? null : null };
+}
+
+export async function saveLlmAction(_: ActionState, form: FormData): Promise<ActionState> {
+  return act("ai.configure", [PATH, "/"], async (ctx) => {
+    const s = await llmFromForm(ctx, form);
+    if (s.provider !== "platform") {
+      if (!s.apiKey) throw new UserError("Informe a chave de API do provedor.");
+      if (!s.model) throw new UserError("Escolha o modelo (use “Carregar modelos”).");
+      if (s.provider === "openai_compatible" && !s.baseUrl) throw new UserError("Informe o endereço da API.");
+    }
+    const typed = optStr(form, "apiKey");
+    await q(ctx, async (tx) => {
+      await tx`update clinic_integrations set llm_provider = ${s.provider}, llm_model = ${s.model}, llm_base_url = ${s.baseUrl},
+                 llm_api_key_enc = ${s.provider === "platform" ? null : typed ? encryptField(typed) : tx`llm_api_key_enc`}, llm_last_error = null
+               where clinic_id = ${ctx.clinicId}`;
+      await audit(tx, actorOf(ctx), "ai.provider", "clinic_integrations", ctx.clinicId, null, { provider: s.provider, model: s.model, key_changed: !!typed });
+    });
+    return { ok: true, message: "Provedor de IA salvo. Vale a partir da próxima resposta." };
+  });
+}
+
+export async function listModelsAction(form: FormData): Promise<{ models: string[]; error?: string }> {
+  const ctx = await actionCtx("ai.configure");
+  try {
+    const s = await llmFromForm(ctx, form);
+    if (s.provider === "platform") return { models: [] };
+    if (s.provider === "anthropic") {
+      if (!s.apiKey) return { models: [], error: "Informe a chave primeiro." };
+      return { models: await listClaudeModels(s.apiKey) };
+    }
+    const base = s.provider === "openrouter" ? OPENROUTER_URL : s.baseUrl;
+    if (!base) return { models: [], error: "Informe o endereço da API." };
+    return { models: await listOpenAiModels(base, s.apiKey) };
+  } catch (e) {
+    return { models: [], error: e instanceof ZodError ? e.issues[0]?.message ?? "Dados inválidos." : "Não foi possível carregar os modelos. Confira a chave e o endereço." };
+  }
+}
+
+export async function testLlmAction(form: FormData): Promise<{ ok: boolean; message: string }> {
+  const ctx = await actionCtx("ai.configure");
+  try {
+    const s = await llmFromForm(ctx, form);
+    const provider = buildProvider(s);
+    if (!provider) return { ok: false, message: s.provider === "platform" ? "A plataforma ainda não tem uma chave de IA configurada." : "Preencha chave e modelo." };
+    const started = Date.now();
+    const r = await provider.complete({ system: "Responda apenas: ok", messages: [{ role: "user", content: "Teste de conexão." }], tools: [] });
+    const text = r.blocks.filter((b) => b.type === "text").map((b) => b.text).join(" ").trim();
+    await q(ctx, (tx) => tx`update clinic_integrations set llm_checked_at = now(), llm_last_error = null where clinic_id = ${ctx.clinicId}`);
+    return { ok: true, message: `Funcionou em ${((Date.now() - started) / 1000).toFixed(1)} s. Modelo: ${r.model}. Resposta: “${text.slice(0, 60) || "(vazia)"}”.` };
+  } catch (e) {
+    const msg = e instanceof LlmUnavailableError ? e.message : e instanceof ZodError ? e.issues[0]?.message ?? "Dados inválidos." : "Falhou. Confira a chave, o modelo e o endereço.";
+    await q(ctx, (tx) => tx`update clinic_integrations set llm_last_error = ${msg} where clinic_id = ${ctx.clinicId}`).catch(() => undefined);
+    return { ok: false, message: msg };
+  }
 }

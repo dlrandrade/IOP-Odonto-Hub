@@ -7,7 +7,7 @@ import { addMinutes, clampToQuietHours, formatFull, localParts } from "@/lib/dat
 import { LlmUnavailableError } from "@/integrations/llm";
 import { extensionFor, mediaStore } from "@/integrations/storage";
 import { transcriptionProvider } from "@/integrations/transcription";
-import { providerFor } from "@/integrations/whatsapp";
+import { enforcesWindow, providerFor } from "@/integrations/whatsapp";
 import { deliverMessage, sendOutbound } from "./conversations";
 import { debounceConversationJob, enqueueJob } from "./jobs-queue";
 
@@ -183,7 +183,8 @@ async function followup(sql: Sql, job: Job, now: Date): Promise<string> {
   const scheduledAfter = typeof job.payload.scheduledAfter === "string" ? new Date(job.payload.scheduledAfter) : null;
   const decision = decideAutomation({
     now, kind: job.type as "followup_1" | "followup_2", conversationState: c.state, lastInboundAt: c.last_inbound_at,
-    lastOutboundAt: c.last_message_direction === "outbound" ? c.last_message_at : null, windowExpiresAt: c.window_expires_at,
+    lastOutboundAt: c.last_message_direction === "outbound" ? c.last_message_at : null,
+    windowExpiresAt: (await enforcesWindow(sql, job.clinic_id)) ? c.window_expires_at : addMinutes(now, 60),
     optedOut: !!c.opted_out_at, serviceMessagesAllowed: c.service_messages_allowed,
     automatedSentLast24h: await automatedCount(sql, job.conversation_id, now), maxAutomatedPerDay: settings.maxAutomatedPerDay,
     scheduledAfter, hasFutureAppointment: !!future, hasApprovedTemplate: !!template,
@@ -235,7 +236,7 @@ async function reminder(sql: Sql, job: Job, now: Date): Promise<string> {
   const template = await approvedTemplate(sql, job.clinic_id, templateName);
   const decision = decideAutomation({
     now, kind: isConfirmation ? "confirmation" : "reminder", conversationState: conv.state, lastInboundAt: conv.last_inbound_at, lastOutboundAt: null,
-    windowExpiresAt: channel === "simulator" ? addMinutes(now, 60) : conv.window_expires_at,
+    windowExpiresAt: channel === "simulator" || !(await enforcesWindow(sql, job.clinic_id)) ? addMinutes(now, 60) : conv.window_expires_at,
     optedOut: !!contact.opted_out_at, serviceMessagesAllowed: contact.service_messages_allowed,
     automatedSentLast24h: await automatedCount(sql, conv.id, now), maxAutomatedPerDay: settings.maxAutomatedPerDay,
     scheduledAfter: null, hasFutureAppointment: true, hasApprovedTemplate: !!template,

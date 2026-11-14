@@ -47,10 +47,10 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           <Modal trigger={<><Plus size={15} aria-hidden /> Nova oportunidade</>} title="Nova oportunidade" triggerClass={buttonClass("accent")}>
             <ActionForm action={createOpportunityAction} className="space-y-4">
               <Field label="Contato existente"><Select name="contactId" defaultValue=""><option value="">— novo contato —</option>{data.contacts.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</Select></Field>
-              <div className="grid gap-3 sm:grid-cols-2"><Field label="Ou telefone (com DDD)"><Input name="phone" inputMode="tel" /></Field><Field label="Nome"><Input name="name" /></Field></div>
+              <div className="grid gap-6 sm:grid-cols-2"><Field label="Ou telefone (com DDD)"><Input name="phone" inputMode="tel" /></Field><Field label="Nome"><Input name="name" /></Field></div>
               <Field label="Serviço de interesse"><Select name="serviceId" defaultValue=""><option value="">Outro / não definido</option>{data.services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</Select></Field>
               <Field label="Descrição do interesse"><Input name="interest" required placeholder="Ex.: implante no dente da frente" /></Field>
-              <Button type="submit">Criar</Button>
+              <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Criar</Button></div>
             </ActionForm>
           </Modal>
         )}
@@ -65,11 +65,11 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
               <section key={stage} aria-label={OPPORTUNITY_STAGE_LABELS[stage]} className={cn("w-[264px] shrink-0 rounded-[var(--radius-card)] p-2.5", tone)}>
                 <h2 className="flex items-center justify-between px-2 py-1.5 text-sm font-semibold">{OPPORTUNITY_STAGE_LABELS[stage]}<span className="rounded-full bg-surface-2 px-2 text-[11px] text-white">{list.length}</span></h2>
                 <ul className="mt-1 space-y-2">
-                  {list.length === 0 && <li className="rounded-2xl border border-dashed border-line px-3 py-5 text-center text-xs text-bone-mute">Vazio</li>}
+                  {list.length === 0 && <li className="rounded-md border border-dashed border-line px-3 py-5 text-center text-xs text-bone-mute">Vazio</li>}
                   {list.map((o) => {
                     const overdue = o.next_step_due && o.next_step_due < new Date() && !["accepted", "lost"].includes(o.stage);
                     return (
-                      <li key={o.id} className="rounded-2xl bg-surface p-3 border border-line">
+                      <li key={o.id} className="rounded-md bg-surface p-3 border border-line">
                         <p className="truncate text-sm font-semibold">{o.patient ?? o.wa_profile_name ?? formatPhone(o.phone_e164)}</p>
                         <p className="truncate text-xs text-bone-mute">{o.service_interest}</p>
                         <div className="mt-2 flex flex-wrap gap-1">
@@ -84,25 +84,25 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
                         )}
                         {o.lost_reason && <p className="mt-2 text-[11px] text-bone-mute">Motivo: {o.lost_reason}</p>}
                         <div className="mt-2 flex items-center justify-between border-t border-line pt-2">
-                          {o.conversation_id && can(ctx.role, "conversations.view") ? <Link href={`/conversas?c=${o.conversation_id}`} className="text-[11px] font-semibold underline">Conversa</Link> : <span />}
+                          {o.conversation_id && can(ctx.role, "conversations.view") ? <Link href={`/conversas?c=${o.conversation_id}`} className={buttonClass("ghost", "sm")}>Conversa</Link> : <span />}
                           {canWrite && (
-                            <Modal trigger="Mover / editar" title={`${o.service_interest} — ${OPPORTUNITY_STAGE_LABELS[o.stage]}`} triggerClass="text-[11px] font-semibold underline">
-                              <ActionForm action={moveOpportunityAction} className="space-y-3">
+                            <Modal trigger="Mover / editar" title={`${o.service_interest} — ${OPPORTUNITY_STAGE_LABELS[o.stage]}`} triggerClass={buttonClass("outline", "sm")}>
+                              <ActionForm action={moveOpportunityAction} className="space-y-6">
                                 <input type="hidden" name="opportunityId" value={o.id} />
                                 <Field label="Mover para"><Select name="to" defaultValue="">{OPPORTUNITY_STAGES.filter((s) => s !== o.stage).map((s) => <option key={s} value={s}>{OPPORTUNITY_STAGE_LABELS[s]}</option>)}</Select></Field>
                                 <Field label="Evidência do aceite" hint="Obrigatória para “Aceito”: o que comprova (mensagem, assinatura, registro)."><Input name="evidence" /></Field>
                                 <Field label="Motivo da perda" hint="Obrigatório para “Perdido”."><Input name="lostReason" /></Field>
-                                <Button type="submit">Mover</Button>
+                                <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Mover</Button></div>
                               </ActionForm>
                               <hr className="my-5 border-line" />
-                              <ActionForm action={updateOpportunityAction} className="space-y-3">
+                              <ActionForm action={updateOpportunityAction} className="space-y-6">
                                 <input type="hidden" name="opportunityId" value={o.id} />
                                 <Field label="Responsável"><Select name="ownerId" defaultValue={o.owner_id ?? ""}><option value="">Sem responsável</option>{data.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select></Field>
-                                <div className="grid gap-3 sm:grid-cols-2">
+                                <div className="grid gap-6 sm:grid-cols-2">
                                   <Field label="Próximo passo"><Input name="nextStep" defaultValue={o.next_step ?? ""} /></Field>
                                   <Field label="Prazo"><Input type="date" name="nextStepDue" defaultValue={o.next_step_due?.toISOString().slice(0, 10) ?? ""} /></Field>
                                 </div>
-                                <Button type="submit" variant="outline">Salvar</Button>
+                                <div className="flex justify-end border-t border-line pt-5"><Button type="submit" variant="outline">Salvar</Button></div>
                               </ActionForm>
                             </Modal>
                           )}

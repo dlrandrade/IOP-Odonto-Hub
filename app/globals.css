@@ -72,14 +72,18 @@
     -webkit-font-smoothing: antialiased;
     min-height: 100dvh;
   }
-  /* brilho suave da cor da página no topo; some conforme se desce */
+  /* Grade de fundo (como no iopbusiness) + brilho da cor da página no topo. Some em direção ao rodapé. */
   body::after {
     content: "";
     position: fixed;
     inset: 0;
     z-index: -1;
     pointer-events: none;
-    background: radial-gradient(70% 36% at 50% -8%, rgb(var(--acento-rgb) / 0.11), transparent 70%);
+    background:
+      radial-gradient(70% 38% at 50% -6%, rgb(var(--acento-rgb) / 0.10), transparent 72%),
+      linear-gradient(to right, rgb(242 239 233 / 0.028) 1px, transparent 1px) 0 0 / 64px 64px,
+      linear-gradient(to bottom, rgb(242 239 233 / 0.028) 1px, transparent 1px) 0 0 / 64px 64px;
+    mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 90%);
   }
   /* textura quase imperceptível: evita o aspecto de template chapado */
   body::before {
@@ -96,6 +100,14 @@
 }
 
 @layer components {
+  /* ── Escala tipográfica única. Toda tela usa só estes níveis. ── */
+  .t-h1 { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em; font-size: 30px; line-height: 1.08; }
+  .t-h2 { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.015em; font-size: 19px; line-height: 1.25; }
+  .t-h3 { font-family: var(--font-sans); font-weight: 600; font-size: 15px; line-height: 1.4; }
+  .t-body { font-size: 14px; line-height: 1.6; }
+  .t-small { font-size: 12.5px; line-height: 1.5; color: var(--color-bone-mute); }
+  @media (min-width: 1024px) { .t-h1 { font-size: 36px; } }
+
   .display { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.03em; }
   .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; }
   .eyebrow {
@@ -126,6 +138,16 @@
 
 dialog::backdrop { background: rgb(0 0 0 / 0.62); backdrop-filter: blur(3px); }
 dialog { margin: auto; color: var(--color-bone); }
+
+/* ── Movimento: só para revelar conteúdo ou responder a uma ação. Tudo desliga com prefers-reduced-motion. ── */
+@keyframes surgir { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes abrir { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes esmaecer { from { opacity: 0; } to { opacity: 1; } }
+.entrada { animation: surgir 360ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+dialog[open] { animation: abrir 220ms cubic-bezier(0.16, 1, 0.3, 1); }
+dialog[open]::backdrop { animation: esmaecer 220ms ease; }
+.btn { transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 120ms ease; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
 .scroll-thin { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 /* itens de grid não alargam a página no celular */
 .grid > * { min-width: 0; }
@@ -134,5 +156,6 @@ dialog { margin: auto; color: var(--color-bone); }
 
 @media (prefers-reduced-motion: reduce) {
   .lift:hover { transform: none; }
+  .entrada, dialog[open], dialog[open]::backdrop { animation: none; }
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }

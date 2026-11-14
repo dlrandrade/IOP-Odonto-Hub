@@ -36,31 +36,40 @@ export function ActionForm({ action, children, className, resetOnDone = true }: 
     >
       {/* O layout (space-y, flex, grid) vai no fieldset, que é o pai direto dos campos. */}
       <fieldset disabled={pending} className={cn("m-0 min-w-0 border-0 p-0", className)}>{children}</fieldset>
-      {state?.error && <p role="alert" className="mt-3 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{state.error}</p>}
-      {state?.ok && state.message && <p role="status" className="mt-3 rounded-xl bg-ok-soft px-3 py-2 text-sm text-ok">{state.message}</p>}
+      {state?.error && <p role="alert" className="mt-4 rounded-sm border-l-2 border-danger bg-danger-soft px-4 py-3 text-[14px] text-danger">{state.error}</p>}
+      {state?.ok && state.message && <p role="status" className="mt-4 rounded-sm border-l-2 border-ok bg-ok-soft px-4 py-3 text-[14px] text-ok">{state.message}</p>}
     </form>
   );
 }
 
-export function Modal({ trigger, title, children, triggerClass, wide }: { trigger: ReactNode; title: string; children: ReactNode; triggerClass?: string; wide?: boolean }) {
+/**
+ * Janela sobreposta padrão. `defaultOpen` abre sozinha (links como /agenda?nova=1 levam direto ao formulário).
+ * Fecha com Esc, com o X ou clicando fora, e também quando o formulário dentro dela conclui.
+ */
+export function Modal({ trigger, title, children, triggerClass, wide, defaultOpen, description }: {
+  trigger: ReactNode; title: string; children: ReactNode; triggerClass?: string; wide?: boolean; defaultOpen?: boolean; description?: string;
+}) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const close = () => el.close();
     el.addEventListener("action:done", close);
+    if (defaultOpen && !el.open) el.showModal();
     return () => el.removeEventListener("action:done", close);
-  }, []);
+  }, [defaultOpen]);
   return (
     <>
       <button type="button" className={triggerClass ?? buttonClass("primary")} onClick={() => ref.current?.showModal()}>{trigger}</button>
-      <dialog ref={ref} className={cn("w-[calc(100vw-2rem)] rounded-[var(--radius-card)] bg-surface p-0 text-bone shadow-2xl", wide ? "max-w-2xl" : "max-w-lg")}
+      <dialog ref={ref} className={cn("relative w-[calc(100vw-2rem)] rounded-lg border border-line bg-surface p-0 text-bone shadow-deep", wide ? "max-w-2xl" : "max-w-lg")}
         onClick={(e) => { if (e.target === ref.current) ref.current?.close(); }}>
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="text-base font-semibold">{title}</h2>
-          <button type="button" aria-label="Fechar" className="rounded-full p-1.5 hover:bg-surface-2" onClick={() => ref.current?.close()}><X size={18} /></button>
+        <div className="border-b border-line py-5 pl-6 pr-16">
+          <h2 className="t-h2">{title}</h2>
+          {description && <p className="t-small mt-1">{description}</p>}
         </div>
-        <div className="max-h-[75vh] overflow-y-auto p-5">{children}</div>
+        <div className="max-h-[75vh] overflow-y-auto px-6 py-6">{children}</div>
+        {/* o botão de fechar vem depois do conteúdo: ao abrir, o foco cai no primeiro campo, não no X */}
+        <button type="button" aria-label="Fechar" className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-sm text-bone-mute transition-colors hover:bg-surface-2 hover:text-bone" onClick={() => ref.current?.close()}><X size={18} /></button>
       </dialog>
     </>
   );

@@ -49,7 +49,7 @@ export default async function SetupPage() {
               {i === 0 && missing.length > 0 && (
                 <ul className="mt-3 space-y-2">
                   {missing.map((m) => (
-                    <li key={m} className="rounded-xl bg-surface-2 px-3 py-2 text-xs"><code className="font-semibold">{m}</code><span className="mt-0.5 block text-bone-mute">{HELP[m]}</span></li>
+                    <li key={m} className="rounded-md bg-surface-2 px-3 py-2 text-xs"><code className="font-semibold">{m}</code><span className="mt-0.5 block text-bone-mute">{HELP[m]}</span></li>
                   ))}
                 </ul>
               )}

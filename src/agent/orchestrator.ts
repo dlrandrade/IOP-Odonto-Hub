@@ -3,7 +3,7 @@ import type { Sql } from "@/db/client";
 import { detectAlert } from "@/domain/alerts";
 import { parseSettings } from "@/domain/settings";
 import { formatFull, isWithinBusinessHours, type BusinessHours } from "@/lib/datetime";
-import { estimateCostCents, llmProvider, LlmUnavailableError } from "@/integrations/llm";
+import { estimateCostCents, llmProviderFor, LlmUnavailableError } from "@/integrations/llm";
 import { requestHuman, scheduleFollowups, sendOutbound, type ConversationRow } from "@/services/conversations";
 import { buildSystemPrompt, buildTurnContext } from "./prompt";
 import { runTool, TOOL_SPECS, type ToolCtx } from "./tools";
@@ -42,10 +42,11 @@ export async function processConversation(sql: Sql, clinicId: string, conversati
   const expect = { state: conv.state, rowVersion: conv.row_version };
   const withinHours = isWithinBusinessHours(now, clinic.timezone, clinic.business_hours);
   const settings = parseSettings(clinic.settings);
+  let costUsd: number | null = null;
   const record = (outcome: RunOutcome, extra: { model?: string; tokensIn?: number; tokensOut?: number; tools?: unknown[] } = {}) => sql<{ id: string }[]>`
     insert into ai_runs (clinic_id, conversation_id, model, tokens_in, tokens_out, cost_cents, tools_called, latency_ms, outcome)
     values (${clinicId}, ${conversationId}, ${extra.model ?? null}, ${extra.tokensIn ?? 0}, ${extra.tokensOut ?? 0},
-            ${estimateCostCents(extra.model ?? "", extra.tokensIn ?? 0, extra.tokensOut ?? 0)}, ${sql.json((extra.tools ?? []) as never)}, ${Date.now() - started}, ${outcome})
+            ${costUsd != null ? Math.round(costUsd * 100 * 10_000) / 10_000 : estimateCostCents(extra.model ?? "", extra.tokensIn ?? 0, extra.tokensOut ?? 0)}, ${sql.json((extra.tools ?? []) as never)}, ${Date.now() - started}, ${outcome})
     returning id`;
 
   // Sinal de alerta clínico: fluxo prioritário e determinístico, antes de qualquer chamada ao modelo.
@@ -62,9 +63,9 @@ export async function processConversation(sql: Sql, clinicId: string, conversati
     return "alert";
   }
 
-  const provider = llmProvider();
+  const provider = await llmProviderFor(sql, clinicId);
   if (!provider) {
-    await requestHuman(sql, clinicId, conversationId, "Assistente de IA não configurado (sem chave de API)", "normal");
+    await requestHuman(sql, clinicId, conversationId, "Assistente de IA sem provedor configurado (Configurações → Assistente)", "normal");
     await record("no_provider");
     return "no_provider";
   }
@@ -105,6 +106,7 @@ export async function processConversation(sql: Sql, clinicId: string, conversati
       const res = await provider.complete({ system: buildSystemPrompt({ name: clinic.name, assistantName: clinic.assistant_name, alertMessage: clinic.alert_message }), messages, tools: TOOL_SPECS });
       tokensIn += res.usage.input;
       tokensOut += res.usage.output;
+      if (res.usage.costUsd != null) costUsd = (costUsd ?? 0) + res.usage.costUsd;
       model = res.model;
       const toolUses = res.blocks.filter((b) => b.type === "tool_use");
       if (res.stopReason === "pause_turn") { messages.push({ role: "assistant", content: res.assistantContent }); continue; }

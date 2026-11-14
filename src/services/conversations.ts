@@ -3,7 +3,7 @@ import { isOptOut } from "@/domain/alerts";
 import { parseSettings } from "@/domain/settings";
 import { reopenState, type ConversationState } from "@/domain/states";
 import { addMinutes, isWithinBusinessHours, type BusinessHours } from "@/lib/datetime";
-import { providerFor, ProviderError, type InboundMessage } from "@/integrations/whatsapp";
+import { enforcesWindow, providerFor, ProviderError, type InboundMessage } from "@/integrations/whatsapp";
 import { cancelJobs, debounceConversationJob, enqueueJob } from "./jobs-queue";
 import { setAppointmentStatus } from "./booking";
 
@@ -162,6 +162,7 @@ export type OutboundResult =
  */
 export async function sendOutbound(sql: Sql, o: OutboundInput): Promise<OutboundResult> {
   const now = o.now ?? new Date();
+  const windowRule = await enforcesWindow(sql, o.clinicId);
   const prepared = await inTx(sql, async (tx) => {
     const [conv] = await tx<(ConversationRow & { phone_e164: string })[]>`
       select c.*, ct.phone_e164 from conversations c join contacts ct on ct.id = c.contact_id
@@ -171,7 +172,7 @@ export async function sendOutbound(sql: Sql, o: OutboundInput): Promise<Outbound
       return { kind: "discarded" as const };
     }
     const inWindow = !!conv.window_expires_at && now < conv.window_expires_at;
-    if (!o.template && !inWindow && conv.channel === "whatsapp") return { kind: "window" as const };
+    if (!o.template && !inWindow && conv.channel === "whatsapp" && windowRule) return { kind: "window" as const };
     const [msg] = await tx<{ id: string }[]>`
       insert into messages (clinic_id, conversation_id, direction, sender_type, sender_user_id, type, body, delivery_status, ai_run_id, created_at)
       values (${o.clinicId}, ${conv.id}, 'outbound', ${o.senderType}, ${o.senderUserId ?? null}, ${o.template ? "template" : "text"}, ${o.body}, 'queued', ${o.aiRunId ?? null}, ${now})
@@ -207,7 +208,7 @@ export async function deliverMessage(sql: Sql, clinicId: string, messageId: stri
   }
   try {
     const res = d.template
-      ? await provider.sendTemplate(d.to, d.template.name, d.template.language, d.template.params)
+      ? await provider.sendTemplate(d.to, d.template.name, d.template.language, d.template.params, d.body)
       : await provider.sendText(d.to, d.body);
     await sql`update messages set wa_message_id = ${res.waMessageId}, delivery_status = 'sent', error = null where id = ${messageId}`;
     return true;

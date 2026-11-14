@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Ban, CalendarCheck, Check, ChevronLeft, ChevronRight, CircleDashed, DoorOpen, Lock, Plus, Stethoscope, UserX, type LucideIcon } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal, SubmitOnChange } from "@/components/client";
-import { Badge, Button, buttonClass, Card, Checkbox, Empty, Field, Input, PageHeader, Select } from "@/components/ui";
+import { Badge, Button, buttonClass, Card, Checkbox, Empty, Field, Input, PageHeader, Segmented, Select } from "@/components/ui";
 import { can } from "@/domain/permissions";
 import { APPOINTMENT_STATUSES, APPOINTMENT_STATUS_LABELS, type AppointmentStatus } from "@/domain/states";
 import { addDays, formatDay, formatFull, localDate, localParts, localTime, weekdayOf, zonedToUtc } from "@/lib/datetime";
@@ -22,7 +22,7 @@ const STATUS: Record<AppointmentStatus, { icon: LucideIcon; cls: string }> = {
   scheduled: { icon: CircleDashed, cls: "bg-surface-2 border-bone-mute text-bone" },
   confirmed: { icon: CalendarCheck, cls: "bg-gold/15 border-gold text-bone" },
   arrived: { icon: DoorOpen, cls: "bg-sky-400/15 border-sky-400 text-bone" },
-  in_service: { icon: Stethoscope, cls: "bg-bone border-bone text-ink" },
+  in_service: { icon: Stethoscope, cls: "bg-acento/15 border-acento text-bone" },
   completed: { icon: Check, cls: "bg-ok-soft border-ok text-ok" },
   no_show: { icon: UserX, cls: "bg-danger-soft border-danger text-danger" },
   cancelled: { icon: Ban, cls: "bg-surface-2 border-line text-bone-mute line-through" },
@@ -35,7 +35,7 @@ const DAY_START = 7;
 const DAY_END = 20;
 const PPM = 1.15; // pixels por minuto
 
-export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ d?: string; v?: string; prof?: string; esp?: string; st?: string }> }) {
+export default async function AgendaPage({ searchParams }: { searchParams: Promise<{ d?: string; v?: string; prof?: string; esp?: string; st?: string; nova?: string }> }) {
   const ctx = await requireCtx("agenda.view");
   const sp = await searchParams;
   const today = localDate(new Date(), ctx.tz);
@@ -93,7 +93,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     const Icon = S.icon;
     return (
       <Modal title={`${a.service} · ${a.patient}`} wide
-        triggerClass={cn("block w-full overflow-hidden rounded-xl border-l-4 px-2 py-1 text-left text-xs shadow-sm hover:brightness-95", S.cls, compact ? "" : "h-full")}
+        triggerClass={cn("block w-full overflow-hidden rounded-sm border-l-2 px-2 py-1 text-left text-xs shadow-sm hover:brightness-95", S.cls, compact ? "" : "h-full")}
         trigger={<>
           <span className="flex items-center gap-1 font-semibold"><Icon size={11} aria-hidden className="shrink-0" /><span className="truncate">{localTime(a.starts_at, ctx.tz)} {a.patient}</span></span>
           <span className="block truncate opacity-80">{a.service} · {APPOINTMENT_STATUS_LABELS[a.status]}</span>
@@ -146,35 +146,31 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                 <Checkbox name="allDay" label="Dia inteiro" />
                 <div className="grid grid-cols-2 gap-3"><Field label="Início"><Input type="time" name="start" defaultValue="12:00" /></Field><Field label="Fim"><Input type="time" name="end" defaultValue="13:00" /></Field></div>
                 <Field label="Motivo"><Input name="reason" placeholder="Ex.: almoço, congresso, feriado" /></Field>
-                <Button type="submit">Bloquear</Button>
+                <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Bloquear</Button></div>
               </ActionForm>
             </Modal>
-            <Modal trigger={<><Plus size={15} aria-hidden /> Nova consulta</>} title="Nova consulta" wide triggerClass={buttonClass("accent")}><BookingForm {...bookingProps} /></Modal>
+            <Modal trigger={<><Plus aria-hidden /> Agendar consulta</>} title="Agendar consulta" description="Três passos: paciente, serviço e horário. Só aparecem horários realmente livres." wide defaultOpen={sp.nova === "1"} triggerClass={buttonClass("primary")}><BookingForm {...bookingProps} /></Modal>
           </>
         )}
       </PageHeader>
 
-      <Card className="mb-3 flex flex-wrap items-center justify-between gap-3 py-3">
-        <div className="flex items-center gap-1">
-          <Link href={href({ d: shift(-1) })} aria-label="Anterior" className="rounded-full p-2 hover:bg-surface-2"><ChevronLeft size={16} /></Link>
-          <Link href={href({ d: null })} className={buttonClass("outline", "sm")}>Hoje</Link>
-          <Link href={href({ d: shift(1) })} aria-label="Próximo" className="rounded-full p-2 hover:bg-surface-2"><ChevronRight size={16} /></Link>
-          <div className="ml-2 flex rounded-full bg-surface-2 p-0.5">
-            {(["dia", "semana", "mes"] as const).map((v) => (
-              <Link key={v} href={href({ v: v === "dia" ? null : v })} className={cn("rounded-full px-3 py-1 text-xs font-medium", view === v ? "bg-acento text-ink" : "text-bone-dim")}>{v === "mes" ? "Mês" : v === "dia" ? "Dia" : "Semana"}</Link>
-            ))}
-          </div>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface/70 p-3">
+        <div className="flex items-center gap-2">
+          <Link href={href({ d: shift(-1) })} aria-label="Anterior" className={cn(buttonClass("outline"), "w-10 px-0!")}><ChevronLeft size={16} /></Link>
+          <Link href={href({ d: null })} className={buttonClass("outline")}>Hoje</Link>
+          <Link href={href({ d: shift(1) })} aria-label="Próximo" className={cn(buttonClass("outline"), "w-10 px-0!")}><ChevronRight size={16} /></Link>
+          <Segmented label="Visualização" className="ml-2" items={(["dia", "semana", "mes"] as const).map((v) => ({ href: href({ v: v === "dia" ? null : v }), label: v === "mes" ? "Mês" : v === "dia" ? "Dia" : "Semana", active: view === v }))} />
         </div>
         <SubmitOnChange className="flex flex-wrap items-center gap-2">
           {day !== today && <input type="hidden" name="d" value={day} />}
           {view !== "dia" && <input type="hidden" name="v" value={view} />}
           {ctx.role !== "dentista" && (
-            <Select name="prof" defaultValue={sp.prof ?? ""} aria-label="Dentista" className="h-8 w-auto text-xs"><option value="">Todos os dentistas</option>{data.allProfessionals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
+            <Select name="prof" defaultValue={sp.prof ?? ""} aria-label="Dentista" className="w-auto"><option value="">Todos os dentistas</option>{data.allProfessionals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select>
           )}
-          <Select name="esp" defaultValue={sp.esp ?? ""} aria-label="Especialidade" className="h-8 w-auto text-xs"><option value="">Todas as especialidades</option>{specialties.map((s) => <option key={s}>{s}</option>)}</Select>
-          <Select name="st" defaultValue={sp.st ?? ""} aria-label="Status" className="h-8 w-auto text-xs"><option value="">Ativas</option>{APPOINTMENT_STATUSES.map((s) => <option key={s} value={s}>{APPOINTMENT_STATUS_LABELS[s]}</option>)}</Select>
+          <Select name="esp" defaultValue={sp.esp ?? ""} aria-label="Especialidade" className="w-auto"><option value="">Todas as especialidades</option>{specialties.map((s) => <option key={s}>{s}</option>)}</Select>
+          <Select name="st" defaultValue={sp.st ?? ""} aria-label="Status" className="w-auto"><option value="">Consultas ativas</option>{APPOINTMENT_STATUSES.map((s) => <option key={s} value={s}>{APPOINTMENT_STATUS_LABELS[s]}</option>)}</Select>
         </SubmitOnChange>
-      </Card>
+      </div>
 
       {data.professionals.length === 0 ? <Empty title="Nenhum dentista para exibir">Cadastre dentistas em Configurações → Agenda.</Empty> : view === "dia" ? (
         <Card className="p-0">
@@ -182,9 +178,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             <div className="grid min-w-[640px]" style={{ gridTemplateColumns: `52px repeat(${data.professionals.length}, minmax(170px, 1fr))` }}>
               <div className="sticky left-0 z-10 border-b border-line bg-surface" />
               {data.professionals.map((p) => (
-                <div key={p.id} className="border-b border-l border-line px-3 py-3">
-                  <p className="flex items-center gap-2 text-sm font-semibold"><span className="size-2.5 rounded-full" style={{ background: p.color }} aria-hidden />{p.name}</p>
-                  <p className="text-[11px] text-bone-mute">{p.specialty ?? "—"} · {data.appts.filter((a) => a.professional_id === p.id).length} consulta(s)</p>
+                <div key={p.id} className="border-b border-l border-line px-4 py-4">
+                  <p className="t-h3 flex items-center gap-2"><span className="size-2.5 shrink-0 rounded-full" style={{ background: p.color }} aria-hidden />{p.name}</p>
+                  <p className="t-small mt-0.5 pl-[18px]">{p.specialty ?? "—"} · {(() => { const n = data.appts.filter((a) => a.professional_id === p.id).length; return `${n} consulta${n === 1 ? "" : "s"}`; })()}</p>
                 </div>
               ))}
               <div className="sticky left-0 z-10 bg-surface" style={{ height: (DAY_END - DAY_START) * 60 * PPM }}>
@@ -196,10 +192,10 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
                     const top = Math.max(0, localDate(b.s, ctx.tz) < day ? 0 : minutesFromStart(b.s)) * PPM;
                     const bottom = Math.min((DAY_END - DAY_START) * 60, localDate(b.e, ctx.tz) > day ? 9999 : minutesFromStart(b.e)) * PPM;
                     return (
-                      <div key={b.id} className="absolute inset-x-1 flex items-start justify-between gap-1 overflow-hidden rounded-xl border border-dashed border-line px-2 py-1 text-[11px] text-bone-dim"
+                      <div key={b.id} className="absolute inset-x-1 flex items-start justify-between gap-1 overflow-hidden rounded-sm border border-dashed border-line px-2 py-1 text-[11px] text-bone-dim"
                         style={{ top, height: Math.max(22, bottom - top), backgroundImage: "repeating-linear-gradient(45deg, var(--color-surface-2) 0 8px, var(--color-line) 8px 16px)" }}>
                         <span className="flex items-center gap-1 font-medium"><Lock size={10} aria-hidden /> {b.reason ?? "Bloqueado"}</span>
-                        {canWrite && <ActionForm action={deleteBlockAction}><input type="hidden" name="blockId" value={b.id} /><button className="underline" aria-label="Remover bloqueio">remover</button></ActionForm>}
+                        {canWrite && <ActionForm action={deleteBlockAction}><input type="hidden" name="blockId" value={b.id} /><button className={buttonClass("ghost", "sm")} aria-label="Remover bloqueio">Remover</button></ActionForm>}
                       </div>
                     );
                   })}
@@ -232,9 +228,9 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
             {Array.from({ length: 42 }, (_, i) => addDays(gridStart, i)).map((d) => {
               const n = data.appts.filter((a) => localDate(a.starts_at, ctx.tz) === d).length;
               return (
-                <Link key={d} href={href({ d, v: null })} className={cn("min-h-16 rounded-xl border border-line p-2 text-left hover:bg-surface-2", d.slice(0, 7) !== day.slice(0, 7) && "opacity-40", d === today && "border-gold bg-gold/10")}>
+                <Link key={d} href={href({ d, v: null })} className={cn("min-h-16 rounded-sm border border-line p-2 text-left hover:bg-surface-2", d.slice(0, 7) !== day.slice(0, 7) && "opacity-40", d === today && "border-gold bg-gold/10")}>
                   <span className="text-xs font-semibold">{Number(d.slice(8))}</span>
-                  {n > 0 && <span className="mt-1 block rounded-full bg-surface-2 px-1.5 text-center text-[10px] font-semibold text-white">{n} consulta{n > 1 ? "s" : ""}</span>}
+                  {n > 0 && <span className="mt-1 block rounded-full bg-surface-2 px-1.5 text-center text-[10px] font-semibold text-bone">{n} consulta{n > 1 ? "s" : ""}</span>}
                 </Link>
               );
             })}
@@ -243,7 +239,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       )}
 
       <div className="mt-3 flex flex-wrap gap-2 text-xs" aria-label="Legenda de status">
-        {APPOINTMENT_STATUSES.map((s) => { const Icon = STATUS[s].icon; return <span key={s} className={cn("inline-flex items-center gap-1 rounded-full border px-2 py-0.5", STATUS[s].cls, "no-underline")}><Icon size={11} aria-hidden /> {APPOINTMENT_STATUS_LABELS[s]}</span>; })}
+        {APPOINTMENT_STATUSES.map((s) => { const Icon = STATUS[s].icon; return <span key={s} className={cn("inline-flex h-7 items-center gap-1.5 rounded-sm border-l-2 px-2.5", STATUS[s].cls)}><Icon size={12} aria-hidden /> {APPOINTMENT_STATUS_LABELS[s]}</span>; })}
       </div>
     </>
   );

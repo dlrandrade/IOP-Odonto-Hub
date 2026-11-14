@@ -11,7 +11,8 @@ export class ProviderError extends Error {
 export interface WhatsAppProvider {
   readonly name: string;
   sendText(to: string, body: string): Promise<SendResult>;
-  sendTemplate(to: string, templateName: string, language: string, params: string[]): Promise<SendResult>;
+  /** fallbackBody: texto pronto, usado por canais sem templates (Evolution). */
+  sendTemplate(to: string, templateName: string, language: string, params: string[], fallbackBody?: string): Promise<SendResult>;
   downloadMedia(mediaId: string): Promise<{ data: Buffer; mime: string }>;
 }
 

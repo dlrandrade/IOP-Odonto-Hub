@@ -49,18 +49,18 @@ export default async function PlatformPage() {
         <Modal trigger="Nova clínica cliente" title="Nova clínica cliente" triggerClass={buttonClass("accent")}>
           <ActionForm action={createClientClinicAction} className="space-y-4" resetOnDone={false}>
             <Field label="Nome da clínica"><Input name="clinicName" required /></Field>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-6 sm:grid-cols-2">
               <Field label="Responsável"><Input name="ownerName" required /></Field>
               <Field label="Cadeiras"><Input name="chairs" type="number" min={1} max={30} defaultValue={2} required /></Field>
             </div>
             <Field label="E-mail do responsável"><Input name="ownerEmail" type="email" required /></Field>
             <Field label="Senha provisória" hint="Entregue ao cliente por um canal seguro; ele entra como administrador da clínica."><Input name="ownerPassword" type="text" minLength={8} required autoComplete="off" /></Field>
             <Checkbox name="demo" label="Criar com dados de demonstração" hint="Pacientes, consultas e funil fictícios — ideal para apresentações de venda." />
-            <Button type="submit">Criar clínica</Button>
+            <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Criar clínica</Button></div>
           </ActionForm>
         </Modal>
       </div>
-      <div className="mb-4 grid gap-3 sm:grid-cols-3">
+      <div className="mb-4 grid gap-6 sm:grid-cols-3">
         <Stat label="Clínicas" value={String(clinics.length)} note={`${clinics.filter((c) => c.status === "active").length} ativas · ${clinics.filter((c) => c.status === "trial").length} em teste`} />
         <Stat label="Conversas (30 dias)" value={String(clinics.reduce((a, c) => a + c.conversations_30d, 0))} tone="sun" />
         <Stat label="Consultas marcadas (30 dias)" value={String(clinics.reduce((a, c) => a + c.appointments_30d, 0))} tone="navy" />

@@ -10,7 +10,7 @@ import { savePatientAction } from "./actions";
 
 export const metadata = { title: "Pacientes" };
 
-export default async function PatientsPage({ searchParams }: { searchParams: Promise<{ q?: string; p?: string }> }) {
+export default async function PatientsPage({ searchParams }: { searchParams: Promise<{ q?: string; p?: string; novo?: string }> }) {
   const ctx = await requireCtx("patients.view");
   const sp = await searchParams;
   const search = (sp.q ?? "").trim().slice(0, 80);
@@ -41,15 +41,15 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
           <Input name="q" defaultValue={search} placeholder="Nome ou telefone" aria-label="Buscar pacientes" className="w-60 pl-9" />
         </form>
         {can(ctx.role, "patients.write") && (
-          <Modal trigger={<><Plus size={15} aria-hidden /> Novo paciente</>} title="Novo paciente" triggerClass={buttonClass("accent")}>
+          <Modal trigger={<><Plus aria-hidden /> Cadastrar paciente</>} title="Cadastrar paciente" description="Só o nome é obrigatório. O WhatsApp liga o paciente às conversas." defaultOpen={sp.novo === "1"} triggerClass={buttonClass("primary")}>
             <ActionForm action={savePatientAction} className="space-y-4">
               <Field label="Nome completo"><Input name="fullName" required /></Field>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-6 sm:grid-cols-2">
                 <Field label="Data de nascimento" hint="Usada na verificação de identidade."><Input type="date" name="birthDate" /></Field>
                 <Field label="WhatsApp (com DDD)"><Input name="phone" inputMode="tel" /></Field>
               </div>
               <Field label="Observações administrativas" hint="Não registre informação clínica aqui."><Textarea name="notes" className="min-h-16" /></Field>
-              <Button type="submit">Salvar</Button>
+              <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>
             </ActionForm>
           </Modal>
         )}
@@ -63,14 +63,14 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
                 <td className="text-bone-dim">{p.phones?.length ? formatPhone(p.phones[0]!) : "—"}{(p.phones?.length ?? 0) > 1 ? ` +${p.phones!.length - 1}` : ""}</td>
                 <td>{p.next_at ? formatShort(p.next_at, ctx.tz) : <span className="text-bone-mute">—</span>}</td>
                 <td>{p.total}</td>
-                <td className="text-right"><Link href={`/pacientes/${p.id}`} className="text-xs font-semibold underline">Abrir ficha</Link></td>
+                <td className="text-right"><Link href={`/pacientes/${p.id}`} className={buttonClass("outline", "sm")}>Abrir ficha</Link></td>
               </tr>
             ))}
           </Table>
         )}
         <div className="mt-4 flex justify-between text-sm">
-          {page > 1 ? <Link className="font-semibold underline" href={`/pacientes?q=${encodeURIComponent(search)}&p=${page - 1}`}>← Anteriores</Link> : <span />}
-          {hasMore && <Link className="font-semibold underline" href={`/pacientes?q=${encodeURIComponent(search)}&p=${page + 1}`}>Próximos →</Link>}
+          {page > 1 ? <Link className={buttonClass("outline", "sm")} href={`/pacientes?q=${encodeURIComponent(search)}&p=${page - 1}`}>← Anteriores</Link> : <span />}
+          {hasMore && <Link className={buttonClass("outline", "sm")} href={`/pacientes?q=${encodeURIComponent(search)}&p=${page + 1}`}>Próximos →</Link>}
         </div>
       </Card>
     </>

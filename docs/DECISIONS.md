@@ -36,6 +36,8 @@ Registro das decisões tomadas na construção. Defaults da seção 17 do PRD fo
 | Detecção de alerta só pela IA | Detecção determinística por palavras aprovadas **antes** do modelo, além da instrução no prompt | O fluxo prioritário não pode depender do modelo |
 | Imagens enviadas ao modelo | Imagens nunca vão ao provedor de IA; a conversa é sempre encaminhada | Minimização (LGPD) e proibição de laudo |
 | Confirmação "1/2" pelo agente | Tratada de forma determinística no pipeline | Mais previsível e sem custo de IA |
+| Só Cloud API oficial ("APIs não oficiais proibidas") | Cloud API continua o padrão; **Evolution API v2 (WhatsApp Web por QR code)** fica como alternativa opcional por clínica (`wa_provider = 'evolution'`), com aviso de risco na tela | Decisão do dono do produto: clínicas pequenas sem acesso ao Business Manager. Sem janela de 24 h nem templates (o lembrete vai como texto), mas o número pode ser banido pela Meta e não há garantia de entrega. Integração escrita a partir do código-fonte da Evolution v2; validar com uma instância real antes de usar com pacientes |
+| Só Claude | `LlmProvider` por clínica: padrão da plataforma (Claude via `ANTHROPIC_API_KEY`), chave própria da Anthropic, **OpenRouter** ou qualquer API compatível com OpenAI (Groq, Together, servidor próprio) | Clínica escolhe custo/modelo. Chaves criptografadas (`encryptField`). Guardrails, tools tipadas e detecção de alerta são os mesmos para todos; modelos menores podem errar mais no uso das tools — rode `npm run eval:agent` antes de trocar |
 
 ## Decisões técnicas complementares
 

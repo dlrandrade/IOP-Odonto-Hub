@@ -107,7 +107,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full min-w-0 max-w-[1320px] flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-12 lg:pt-10">{children}</main>
+        <main className="entrada mx-auto w-full min-w-0 max-w-[1320px] flex-1 px-4 pb-28 pt-8 sm:px-6 lg:px-10 lg:pb-16 lg:pt-12">{children}</main>
       </div>
       <MobileTabs primary={primary} more={more} />
     </div>

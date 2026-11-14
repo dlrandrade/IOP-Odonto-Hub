@@ -7,12 +7,22 @@ const PRICES: Record<string, [number, number]> = {
   "claude-opus-5-5": [4, 20], "claude-sonnet-5-5": [2, 10], "claude-haiku-5-5": [0.1, 0.5], "claude-fable-5-2": [8, 40],
 };
 
+/** Lista os modelos Claude da chave informada. */
+export async function listClaudeModels(apiKey: string): Promise<string[]> {
+  const client = new Anthropic({ apiKey, timeout: 20_000, maxRetries: 1 });
+  const ids: string[] = [];
+  for await (const m of client.models.list({ limit: 100 })) ids.push(m.id);
+  return ids;
+}
+
 export function estimateCostCents(model: string, tokensIn: number, tokensOut: number): number {
   const p = PRICES[model];
   if (!p) return 0;
   const usd = (tokensIn * p[0] + tokensOut * p[1]) / 1_000_000;
   return Math.round(usd * 100 * 10_000) / 10_000;
 }
+
+const MODERN = /^claude-(opus|sonnet|haiku|fable|mythos)-5/;
 
 export class ClaudeProvider implements LlmProvider {
   readonly name = "claude";
@@ -29,12 +39,17 @@ export class ClaudeProvider implements LlmProvider {
         system: [{ type: "text", text: req.system, cache_control: { type: "ephemeral" } }],
         tools: req.tools,
         messages: req.messages,
-        thinking: { type: "adaptive" },
-        // Atendimento por chat: respostas curtas e rápidas (meta p95 ≤ 15 s com debounce).
-        output_config: { effort: "low" },
-        // Se o modelo recusar por política, a própria API tenta o modelo substituto padrão.
-        betas: ["server-side-fallback-2026-07-01"],
-        fallbacks: "default",
+        // Pensamento adaptativo, esforço e fallback só nos modelos da geração 5 (o admin pode escolher modelos antigos).
+        ...(MODERN.test(this.model)
+          ? {
+              thinking: { type: "adaptive" as const },
+              // Atendimento por chat: respostas curtas e rápidas (meta p95 ≤ 15 s com debounce).
+              output_config: { effort: "low" as const },
+              // Se o modelo recusar por política, a própria API tenta o modelo substituto padrão.
+              betas: ["server-side-fallback-2026-07-01"],
+              fallbacks: "default" as const,
+            }
+          : {}),
       });
       if (res.stop_reason === "refusal") throw new LlmUnavailableError("O modelo recusou a solicitação", false);
       const blocks: LlmBlock[] = [];

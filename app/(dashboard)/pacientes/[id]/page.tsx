@@ -50,15 +50,15 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
     <>
       <Link href="/pacientes" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold"><ArrowLeft size={15} aria-hidden /> Pacientes</Link>
       {p.merged_into_patient_id && <div className="mb-3"><Notice tone="sun">Este cadastro foi mesclado. <Link className="font-semibold underline" href={`/pacientes/${p.merged_into_patient_id}`}>Abrir o cadastro principal</Link></Notice></div>}
-      <div className="grid gap-3 lg:grid-cols-[340px_minmax(0,1fr)]">
-        <div className="space-y-3">
+      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+        <div className="space-y-6">
           <Card>
             <div className="flex items-center gap-3"><Avatar name={p.full_name} size={52} /><div><h1 className="text-xl font-bold leading-tight">{p.full_name}</h1><p className="text-xs text-bone-mute">Cadastro desde {new Intl.DateTimeFormat("pt-BR").format(p.created_at)}</p></div></div>
             <dl className="mt-4 space-y-2 text-sm">
               <div className="flex justify-between"><dt className="text-bone-mute">Nascimento</dt><dd>{p.birth_date ? p.birth_date.split("-").reverse().join("/") : "—"}</dd></div>
               <div className="flex justify-between"><dt className="text-bone-mute">CPF</dt><dd>{p.has_cpf ? "cadastrado (criptografado)" : "não informado"}</dd></div>
             </dl>
-            {p.notes && <p className="mt-3 rounded-xl bg-surface-2 px-3 py-2 text-sm">{p.notes}</p>}
+            {p.notes && <p className="mt-3 rounded-md bg-surface-2 px-3 py-2 text-sm">{p.notes}</p>}
             {canWrite && (
               <div className="mt-4">
                 <Modal trigger="Editar cadastro" title="Editar cadastro" triggerClass={buttonClass("outline", "sm")}>
@@ -68,7 +68,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
                     <Field label="Data de nascimento"><Input type="date" name="birthDate" defaultValue={p.birth_date ?? ""} /></Field>
                     <Field label="CPF (opcional)" hint="Peça apenas com finalidade definida (ex.: nota fiscal). Fica criptografado e nunca é enviado à IA. Deixe em branco para manter."><Input name="cpf" inputMode="numeric" autoComplete="off" /></Field>
                     <Field label="Observações administrativas"><Textarea name="notes" defaultValue={p.notes ?? ""} className="min-h-16" /></Field>
-                    <Button type="submit">Salvar</Button>
+                    <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>
                   </ActionForm>
                 </Modal>
               </div>
@@ -77,7 +77,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
           <Card>
             <CardTitle hint="Quem fala por este paciente no WhatsApp">Contatos e responsáveis</CardTitle>
             {data.links.length === 0 ? <p className="text-sm text-bone-mute">Sem telefone vinculado. Vincule pela tela de Conversas.</p> : (
-              <ul className="space-y-3">
+              <ul className="space-y-6">
                 {data.links.map((l) => (
                   <li key={l.id} className="text-sm">
                     <p className="font-medium">{fullPhone ? formatPhone(l.phone_e164) : maskPhone(l.phone_e164)} {l.wa_profile_name && <span className="font-normal text-bone-mute">· {l.wa_profile_name}</span>}</p>
@@ -87,7 +87,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
                       {l.is_payer && <Badge>pagador</Badge>}
                       {l.verified_at && <Badge tone="ok">identidade verificada</Badge>}
                       {l.opted_out_at && <Badge tone="danger">não receber mensagens</Badge>}
-                      {canWrite && <ActionForm action={unlinkContactAction}><input type="hidden" name="linkId" value={l.id} /><button className="text-[11px] text-bone-mute underline">desvincular</button></ActionForm>}
+                      {canWrite && <ActionForm action={unlinkContactAction}><input type="hidden" name="linkId" value={l.id} /><button className={buttonClass("ghost", "sm")}>Desvincular</button></ActionForm>}
                     </div>
                   </li>
                 ))}
@@ -97,7 +97,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
           {data.others.length > 0 && !p.merged_into_patient_id && (
             <Card>
               <CardTitle hint="Use quando o mesmo paciente foi cadastrado duas vezes. A ação fica registrada na auditoria.">Mesclar duplicado</CardTitle>
-              <ActionForm action={mergePatientsAction} className="space-y-3">
+              <ActionForm action={mergePatientsAction} className="space-y-6">
                 <input type="hidden" name="keepId" value={p.id} />
                 <Field label="Cadastro duplicado (será incorporado a este)">
                   <Select name="duplicateId" required defaultValue=""><option value="" disabled>Escolha…</option>{data.others.map((o) => <option key={o.id} value={o.id}>{o.full_name}{o.birth_date ? ` (${o.birth_date.split("-").reverse().join("/")})` : ""}</option>)}</Select>
@@ -107,10 +107,10 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
             </Card>
           )}
         </div>
-        <div className="space-y-3">
+        <div className="space-y-6">
           {data.tasks.length > 0 && <Notice tone="sun"><strong>Tarefas abertas:</strong> {data.tasks.map((t) => t.title).join(" · ")}</Notice>}
           <Card>
-            <CardTitle action={can(ctx.role, "agenda.write") ? <Link href="/agenda" className="text-xs font-semibold underline">Agendar</Link> : undefined}>Consultas</CardTitle>
+            <CardTitle action={can(ctx.role, "agenda.write") ? <Link href="/agenda" className={buttonClass("outline", "sm")}>Agendar</Link> : undefined}>Consultas</CardTitle>
             {data.appointments.length === 0 ? <Empty title="Nenhuma consulta" /> : (
               <Table head={["Quando", "Serviço", "Dentista", "Status", "Origem"]}>
                 {data.appointments.map((a) => (
@@ -123,7 +123,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
           </Card>
           {can(ctx.role, "crm.view") && (
             <Card>
-              <CardTitle action={<Link href="/crm" className="text-xs font-semibold underline">Abrir CRM</Link>}>Interesses</CardTitle>
+              <CardTitle action={<Link href="/crm" className={buttonClass("outline", "sm")}>Abrir CRM</Link>}>Interesses</CardTitle>
               {data.opportunities.length === 0 ? <Empty title="Nenhum interesse registrado" /> : (
                 <ul className="divide-y divide-line">{data.opportunities.map((o) => (
                   <li key={o.id} className="flex items-center justify-between gap-2 py-2 text-sm"><span>{o.service_interest}</span><Badge>{OPPORTUNITY_STAGE_LABELS[o.stage]}</Badge></li>
@@ -135,9 +135,9 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
             <Card>
               <CardTitle hint="Resumos são apoio administrativo, não evolução clínica.">Conversas</CardTitle>
               {data.conversations.length === 0 ? <Empty title="Nenhuma conversa" /> : (
-                <ul className="space-y-3">{data.conversations.map((c) => (
-                  <li key={c.id} className="rounded-2xl border border-line p-3 text-sm">
-                    <div className="flex items-center justify-between gap-2"><span className="text-xs text-bone-mute">{c.last_message_at ? formatShort(c.last_message_at, ctx.tz) : "—"}</span><Link href={`/conversas?c=${c.id}`} className="text-xs font-semibold underline">Abrir conversa</Link></div>
+                <ul className="space-y-6">{data.conversations.map((c) => (
+                  <li key={c.id} className="rounded-md border border-line p-3 text-sm">
+                    <div className="flex items-center justify-between gap-2"><span className="text-xs text-bone-mute">{c.last_message_at ? formatShort(c.last_message_at, ctx.tz) : "—"}</span><Link href={`/conversas?c=${c.id}`} className={buttonClass("outline", "sm")}>Abrir conversa</Link></div>
                     <p className="mt-1">{c.summary ?? <span className="text-bone-mute">Sem resumo.</span>}</p>
                     {c.summary && <p className="mt-1 text-[11px] text-bone-mute">{c.summary_by === "ai" ? "Resumo gerado por IA" : "Resumo editado pela equipe"}</p>}
                   </li>

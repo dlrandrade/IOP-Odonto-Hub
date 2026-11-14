@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { ArrowRight, Ban, CalendarCheck, Check, CircleDashed, DoorOpen, Stethoscope, UserX, type LucideIcon } from "lucide-react";
+import { ArrowRight, Ban, CalendarCheck, CalendarPlus, Check, CircleDashed, DoorOpen, MessageCircle, Stethoscope, UserPlus, UserX, type LucideIcon } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
-import { Badge, Empty } from "@/components/ui";
+import { Badge, buttonClass, Card, CardTitle, Empty } from "@/components/ui";
 import { can } from "@/domain/permissions";
 import { APPOINTMENT_STATUS_LABELS, type AppointmentStatus } from "@/domain/states";
 import { addDays, formatDay, formatShort, localDate, localParts, localTime, zonedToUtc } from "@/lib/datetime";
@@ -14,18 +14,13 @@ const ICON: Record<AppointmentStatus, LucideIcon> = {
   scheduled: CircleDashed, confirmed: CalendarCheck, arrived: DoorOpen, in_service: Stethoscope, completed: Check, no_show: UserX, cancelled: Ban,
 };
 
-function Section({ title, hint, href, linkLabel, children }: { title: string; hint?: string; href?: string; linkLabel?: string; children: React.ReactNode }) {
+/** Bloco da tela inicial: cartão com título, apoio e um botão de ação no canto. Mesma altura dos vizinhos. */
+function Block({ title, hint, href, linkLabel, children }: { title: string; hint?: string; href?: string; linkLabel?: string; children: React.ReactNode }) {
   return (
-    <section>
-      <div className="mb-3 flex items-end justify-between gap-4 border-b border-line pb-3">
-        <div>
-          <h2 className="font-display text-[20px] font-bold tracking-[-0.01em]">{title}</h2>
-          {hint && <p className="mt-0.5 text-[12.5px] text-bone-mute">{hint}</p>}
-        </div>
-        {href && <Link href={href} className="flex shrink-0 items-center gap-1 text-[12.5px] font-medium text-bone-dim transition-colors hover:text-bone">{linkLabel} <ArrowRight size={13} aria-hidden /></Link>}
-      </div>
-      {children}
-    </section>
+    <Card className="min-h-[380px]">
+      <CardTitle hint={hint} action={href ? <Link href={href} className={buttonClass("outline", "sm")}>{linkLabel} <ArrowRight aria-hidden /></Link> : undefined}>{title}</CardTitle>
+      <div className="flex flex-1 flex-col">{children}</div>
+    </Card>
   );
 }
 
@@ -67,111 +62,126 @@ export default async function TodayPage() {
   const nextId = data.appts.find((a) => a.ends_at.getTime() > nowMs && ["scheduled", "confirmed", "arrived"].includes(a.status))?.id;
   const open = data.appts.filter((a) => ["scheduled", "confirmed", "arrived", "in_service"].includes(a.status)).length;
 
+  const actions = [
+    can(ctx.role, "agenda.write") && { href: "/agenda?nova=1", icon: CalendarPlus, title: "Agendar consulta", text: "Escolha o paciente, o serviço e um horário livre." },
+    can(ctx.role, "patients.write") && { href: "/pacientes?novo=1", icon: UserPlus, title: "Cadastrar paciente", text: "Nome, nascimento e WhatsApp. Leva 1 minuto." },
+    seesChats && { href: "/conversas", icon: MessageCircle, title: "Responder conversas", text: data.waiting.length ? `${data.waiting.length} esperando a equipe agora.` : "Veja o que a assistente está respondendo." },
+  ].filter((x): x is { href: string; icon: LucideIcon; title: string; text: string } => !!x);
+  const cols = ["", "sm:grid-cols-1", "sm:grid-cols-2", "sm:grid-cols-3"][actions.length] ?? "sm:grid-cols-3";
+
   return (
-    <div className="space-y-12">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <div className="space-y-10">
+      <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div>
-          <p className="text-[13px] text-bone-mute first-letter:uppercase">{formatDay(today)}</p>
-          <h1 className="display mt-1 text-[34px] leading-[1.05] lg:text-[44px]">{greeting}, {ctx.name.split(" ")[0]}</h1>
+          <p className="t-small first-letter:uppercase">{formatDay(today)}</p>
+          <h1 className="t-h1 mt-1">{greeting}, {ctx.name.split(" ")[0]}</h1>
         </div>
-        <p className="max-w-sm text-[14px] text-bone-dim">
-          {data.waiting.length > 0 ? `${data.waiting.length === 6 ? "6 ou mais" : data.waiting.length} conversa${data.waiting.length > 1 ? "s" : ""} esperando você. ` : "Nenhuma conversa esperando. "}
+        <p className="t-body max-w-sm text-bone-dim">
+          {seesChats && ctx.role !== "dentista" ? (data.waiting.length > 0 ? `${data.waiting.length === 6 ? "6 ou mais" : data.waiting.length} conversa${data.waiting.length > 1 ? "s" : ""} esperando você. ` : "Nenhuma conversa esperando. ") : ""}
           {seesAgenda ? `${open} consulta${open === 1 ? "" : "s"} por atender hoje.` : ""}
         </p>
       </header>
 
-      <div className="grid gap-12 xl:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="space-y-12">
-          {seesChats && ctx.role !== "dentista" && (
-            <Section title="Esperando você" hint="Conversas que a assistente passou para a equipe. As urgentes vêm primeiro." href="/conversas?f=nao-atribuidas" linkLabel="Ver todas">
-              {data.waiting.length === 0 ? (
-                <Empty title="Fila vazia">Quando a assistente chamar a equipe, a conversa aparece aqui.</Empty>
-              ) : (
-                <ul className="divide-y divide-line">
-                  {data.waiting.map((c) => (
-                    <li key={c.id}>
-                      <Link href={`/conversas?c=${c.id}`} className="group -mx-3 flex items-start gap-4 rounded-md px-3 py-3.5 transition-colors hover:bg-surface">
-                        <span className={`mt-1.5 size-2 shrink-0 rounded-full ${c.urgent ? "bg-danger" : "bg-gold"}`} aria-hidden />
-                        <span className="min-w-0 flex-1">
-                          <span className="flex flex-wrap items-center gap-2">
-                            <span className="text-[15px] font-medium">{c.patient ?? c.name ?? formatPhone(c.phone)}</span>
-                            {c.urgent && <Badge tone="danger">Urgente</Badge>}
-                          </span>
-                          <span className="mt-0.5 block truncate text-[13px] text-bone-dim">{c.reason ?? c.preview}</span>
-                        </span>
-                        <span className="shrink-0 pt-0.5 text-[12px] text-bone-mute">{c.at ? formatShort(c.at, ctx.tz).slice(-5) : ""}</span>
-                        <ArrowRight size={15} aria-hidden className="mt-1 shrink-0 text-bone-mute transition-transform group-hover:translate-x-0.5" />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {data.mine > 0 && <p className="mt-3 text-[13px] text-bone-mute">Você também está com <Link href="/conversas?f=minhas" className="font-medium text-bone underline underline-offset-2">{data.mine} conversa{data.mine > 1 ? "s" : ""} em atendimento</Link>.</p>}
-            </Section>
-          )}
+      {actions.length > 0 && (
+        <nav aria-label="Atalhos" className={`grid gap-6 ${cols}`}>
+          {actions.map((a) => (
+            <Link key={a.href} href={a.href} className="group fio-topo flex h-[104px] items-center gap-4 rounded-lg border border-line bg-surface/70 px-5 transition-colors hover:border-bone-mute/50 hover:bg-surface">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-md bg-acento/12 text-acento"><a.icon size={20} aria-hidden /></span>
+              <span className="min-w-0 flex-1">
+                <span className="t-h3 block">{a.title}</span>
+                <span className="t-small mt-1 line-clamp-2 block">{a.text}</span>
+              </span>
+              <ArrowRight size={16} aria-hidden className="shrink-0 text-bone-mute transition-transform group-hover:translate-x-0.5 group-hover:text-bone" />
+            </Link>
+          ))}
+        </nav>
+      )}
 
-          {seesAgenda && (
-            <Section title="Agenda de hoje" hint={`${data.appts.length} consulta${data.appts.length === 1 ? "" : "s"} · ${ctx.tz}`} href={`/agenda?d=${today}`} linkLabel="Abrir agenda">
-              {data.appts.length === 0 ? (
-                <Empty title="Nenhuma consulta hoje">Aproveite para revisar a agenda dos próximos dias.</Empty>
-              ) : (
-                <ol className="divide-y divide-line">
-                  {data.appts.map((a) => {
-                    const Icon = ICON[a.status];
-                    const isNext = a.id === nextId;
-                    return (
-                      <li key={a.id} className={isNext ? "relative -mx-3 rounded-md bg-surface px-3" : ""}>
-                        {isNext && <span aria-hidden className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-acento" />}
-                        <Link href={`/pacientes/${a.patient_id}`} className="flex items-center gap-4 py-3.5">
-                          <span className="w-12 shrink-0 font-mono text-[13px] tabular-nums text-bone-dim">{localTime(a.starts_at, ctx.tz)}</span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-[15px] font-medium">{a.patient}</span>
-                            <span className="block truncate text-[13px] text-bone-mute">{a.service} · {a.professional}</span>
-                          </span>
-                          {isNext && <span className="hidden text-[12px] font-medium text-acento sm:inline">Próxima</span>}
-                          <span className="flex shrink-0 items-center gap-1.5 text-[12px] text-bone-dim"><Icon size={14} aria-hidden /><span className="hidden sm:inline">{APPOINTMENT_STATUS_LABELS[a.status]}</span></span>
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ol>
-              )}
-            </Section>
-          )}
-        </div>
-
-        <aside className="space-y-12">
-          {data.tasks.length > 0 && (
-            <Section title="Tarefas" hint="Coisas que a automação não consegue fazer sozinha." href="/automacoes" linkLabel="Ver todas">
-              <ul className="divide-y divide-line">
-                {data.tasks.map((t) => (
-                  <li key={t.id} className="py-3">
-                    <p className="text-[14px] font-medium">{t.title}</p>
-                    {t.detail && <p className="mt-0.5 line-clamp-2 text-[12.5px] text-bone-mute">{t.detail}</p>}
-                    {t.conversation_id && <Link href={`/conversas?c=${t.conversation_id}`} className="mt-1.5 inline-block text-[12.5px] font-medium text-bone-dim underline underline-offset-2 hover:text-bone">Abrir conversa</Link>}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {seesChats && ctx.role !== "dentista" && (
+          <Block title="Esperando você" hint="A assistente passou estas conversas para a equipe. Urgentes primeiro." href="/conversas?f=nao-atribuidas" linkLabel="Ver todas">
+            {data.waiting.length === 0 ? (
+              <Empty title="Ninguém esperando">Quando a assistente precisar da equipe, a conversa aparece aqui.</Empty>
+            ) : (
+              <ul className="-mx-2 divide-y divide-line">
+                {data.waiting.map((c) => (
+                  <li key={c.id}>
+                    <Link href={`/conversas?c=${c.id}`} className="group flex h-16 items-center gap-4 rounded-sm px-2 transition-colors hover:bg-surface-2/60">
+                      <span className={`size-2 shrink-0 rounded-full ${c.urgent ? "bg-danger" : "bg-gold"}`} aria-hidden />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center gap-2"><span className="t-h3 truncate">{c.patient ?? c.name ?? formatPhone(c.phone)}</span>{c.urgent && <Badge tone="danger">Urgente</Badge>}</span>
+                        <span className="t-small block truncate">{c.reason ?? c.preview}</span>
+                      </span>
+                      <span className="t-small shrink-0 font-mono">{c.at ? formatShort(c.at, ctx.tz).slice(-5) : ""}</span>
+                    </Link>
                   </li>
                 ))}
               </ul>
-            </Section>
-          )}
-          {data.week && (
-            <Section title="Últimos 7 dias" href="/indicadores" linkLabel="Indicadores">
-              <dl className="divide-y divide-line">
-                {[
-                  ["Novos contatos", String(data.week.newContacts)],
-                  ["Consultas marcadas", String(data.week.appointmentsBooked)],
-                  ["Contato → avaliação", data.week.conversion.rate == null ? "—" : `${Math.round(data.week.conversion.rate * 100)}%`],
-                  ["Gasto estimado com IA", `US$ ${(data.week.aiCostCents / 100).toFixed(2)}`],
-                ].map(([k, v]) => (
-                  <div key={k} className="flex items-baseline justify-between gap-4 py-3">
-                    <dt className="text-[13.5px] text-bone-dim">{k}</dt>
-                    <dd className="display num text-[22px] leading-none">{v}</dd>
-                  </div>
+            )}
+            {data.mine > 0 && <p className="t-small mt-auto pt-4">Você está atendendo <Link href="/conversas?f=minhas" className="text-bone underline underline-offset-2">{data.mine} conversa{data.mine > 1 ? "s" : ""}</Link>.</p>}
+          </Block>
+        )}
+
+        {seesAgenda && (
+          <Block title="Agenda de hoje" hint={`${data.appts.length} consulta${data.appts.length === 1 ? "" : "s"} marcada${data.appts.length === 1 ? "" : "s"}`} href={`/agenda?d=${today}`} linkLabel="Abrir agenda">
+            {data.appts.length === 0 ? (
+              <Empty title="Nenhuma consulta hoje" action={can(ctx.role, "agenda.write") ? <Link href="/agenda?nova=1" className={buttonClass("outline", "sm")}>Agendar consulta</Link> : undefined}>A agenda está livre.</Empty>
+            ) : (
+              <ol className="-mx-2 divide-y divide-line">
+                {data.appts.map((a) => {
+                  const Icon = ICON[a.status];
+                  const isNext = a.id === nextId;
+                  return (
+                    <li key={a.id}>
+                      <Link href={`/pacientes/${a.patient_id}`} className={`relative flex h-16 items-center gap-4 rounded-sm px-2 transition-colors hover:bg-surface-2/60 ${isNext ? "bg-acento/[0.06]" : ""}`}>
+                        {isNext && <span aria-hidden className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-acento" />}
+                        <span className="w-12 shrink-0 font-mono text-[13px] tabular-nums text-bone-dim">{localTime(a.starts_at, ctx.tz)}</span>
+                        <span className="min-w-0 flex-1">
+                          <span className="t-h3 block truncate">{a.patient}</span>
+                          <span className="t-small block truncate">{a.service} · {a.professional}</span>
+                        </span>
+                        {isNext ? <Badge className="bg-acento/15 text-acento">Próxima</Badge> : <span className="flex shrink-0 items-center gap-1.5 text-[12px] text-bone-dim"><Icon size={14} aria-hidden /><span className="hidden sm:inline">{APPOINTMENT_STATUS_LABELS[a.status]}</span></span>}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
+          </Block>
+        )}
+
+        {ctx.role !== "dentista" && (
+          <Block title="Tarefas" hint="O que a automação não consegue fazer sozinha." href="/automacoes" linkLabel="Ver todas">
+            {data.tasks.length === 0 ? <Empty title="Nenhuma tarefa pendente">Tudo em dia por aqui.</Empty> : (
+              <ul className="-mx-2 divide-y divide-line">
+                {data.tasks.map((t) => (
+                  <li key={t.id} className="flex min-h-16 items-center gap-4 px-2 py-2">
+                    <span className="min-w-0 flex-1"><span className="t-h3 block">{t.title}</span>{t.detail && <span className="t-small line-clamp-1 block">{t.detail}</span>}</span>
+                    {t.conversation_id && <Link href={`/conversas?c=${t.conversation_id}`} className={buttonClass("ghost", "sm")}>Abrir</Link>}
+                  </li>
                 ))}
-              </dl>
-            </Section>
-          )}
-        </aside>
+              </ul>
+            )}
+          </Block>
+        )}
+
+        {data.week && (
+          <Block title="Últimos 7 dias" hint="Números da clínica nesta semana." href="/indicadores" linkLabel="Indicadores">
+            <dl className="grid flex-1 grid-cols-2 gap-px overflow-hidden rounded-md bg-line">
+              {[
+                ["Novos contatos", String(data.week.newContacts)],
+                ["Consultas marcadas", String(data.week.appointmentsBooked)],
+                ["Contato → avaliação", data.week.conversion.rate == null ? "—" : `${Math.round(data.week.conversion.rate * 100)}%`],
+                ["Gasto com IA", `US$ ${(data.week.aiCostCents / 100).toFixed(2)}`],
+              ].map(([k, v]) => (
+                <div key={k} className="flex flex-col justify-between gap-3 bg-surface p-5">
+                  <dt className="eyebrow text-bone-mute">{k}</dt>
+                  <dd className="display num text-[32px] leading-none">{v}</dd>
+                </div>
+              ))}
+            </dl>
+          </Block>
+        )}
       </div>
     </div>
   );
