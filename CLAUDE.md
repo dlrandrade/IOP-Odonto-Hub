@@ -54,7 +54,7 @@ app/                      Next.js (App Router)
 src/
   domain/                 regras puras: slots, estados, permissões, automações, alertas
   agent/                  prompt, tools tipadas, orquestrador
-  services/               casos de uso com banco: booking, conversations, jobs, crm, dashboard, webhook, clinic-setup, demo
+  services/               casos de uso com banco: booking, conversations, jobs, automation-rules, crm, dashboard, webhook, clinic-setup, demo
   integrations/           whatsapp/, llm/, transcription/, storage/ (adaptadores)
   auth/                   provedor de auth (Supabase | local) e sessão/contexto
   db/                     cliente Postgres (asUser, inTx)
@@ -62,7 +62,7 @@ src/
 supabase/migrations       schema, RLS, views de indicadores
 supabase/local/shim.sql   só para Postgres puro (papéis e auth.users)
 tests/                    unit, integration e providers (.test.ts)
-docs/                     PRD.md, DECISIONS.md, SETUP.md, RELEASE-CHECKLIST.md
+docs/                     PRD.md, DECISIONS.md, SETUP.md, RELEASE-CHECKLIST.md, IOP-BUSINESS.md (proposta de integração)
 ```
 
 ## Estado das fatias (PRD seção 13)

@@ -39,6 +39,9 @@ Registro das decisões tomadas na construção. Defaults da seção 17 do PRD fo
 | Só Cloud API oficial ("APIs não oficiais proibidas") | Cloud API continua o padrão; **Evolution API v2 (WhatsApp Web por QR code)** fica como alternativa opcional por clínica (`wa_provider = 'evolution'`), com aviso de risco na tela | Decisão do dono do produto: clínicas pequenas sem acesso ao Business Manager. Sem janela de 24 h nem templates (o lembrete vai como texto), mas o número pode ser banido pela Meta e não há garantia de entrega. Integração escrita a partir do código-fonte da Evolution v2; validar com uma instância real antes de usar com pacientes |
 | Só Claude | `LlmProvider` por clínica: padrão da plataforma (Claude via `ANTHROPIC_API_KEY`), chave própria da Anthropic, **OpenRouter** ou qualquer API compatível com OpenAI (Groq, Together, servidor próprio) | Clínica escolhe custo/modelo. Chaves criptografadas (`encryptField`). Guardrails, tools tipadas e detecção de alerta são os mesmos para todos; modelos menores podem errar mais no uso das tools — rode `npm run eval:agent` antes de trocar |
 
+| Automações fixas (follow-ups, lembrete, confirmação) | Além das quatro nativas, a clínica cria as suas no construtor visual (`automation_rules`): antes/depois da consulta, falta e aniversário, enviando mensagem ou criando tarefa | Pedido do dono do produto. As regras passam pelas mesmas checagens (opt-out, horário, limite diário, janela de 24 h); aniversário é varrido pelo worker com idempotência anual |
+| Tema único escuro | Escuro (padrão da marca) e claro, escolhido por usuário em cookie e aplicado no servidor | Pedido do dono do produto; tokens redefinidos para AA nos dois temas |
+
 ## Decisões técnicas complementares
 
 - **Modelo de IA:** `claude-opus-5-5` por padrão (`ANTHROPIC_MODEL`), pensamento adaptativo, `effort: low` (chat), cache do prompt de sistema e fallback de recusa do lado do servidor. Sem chave configurada, a conversa vai para a equipe.

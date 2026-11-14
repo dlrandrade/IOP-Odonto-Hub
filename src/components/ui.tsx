@@ -6,11 +6,11 @@ import { cn } from "@/lib/format";
 
 type ButtonVariant = "primary" | "accent" | "outline" | "ghost" | "danger";
 const BUTTON: Record<ButtonVariant, string> = {
-  primary: "bg-gold text-ink hover:bg-gold-deep",
-  accent: "bg-gold text-ink hover:bg-gold-deep",
+  primary: "bg-gold text-on hover:bg-gold-deep",
+  accent: "bg-gold text-on hover:bg-gold-deep",
   outline: "border border-line bg-surface/40 text-bone hover:border-bone-mute/60 hover:bg-surface-2",
   ghost: "text-bone-dim hover:bg-surface-2 hover:text-bone",
-  danger: "border border-danger/50 text-danger hover:bg-danger hover:text-ink",
+  danger: "border border-danger/50 text-danger hover:bg-danger hover:text-on-danger",
 };
 
 /**
@@ -31,7 +31,10 @@ export function Button({ variant = "primary", size = "md", className, ...props }
 /** Cartão: mesma moldura e o mesmo respiro (24 px) em todo o sistema. Ocupa a altura da linha da grade. */
 export function Card({ className, tone = "white", ...props }: ComponentProps<"div"> & { tone?: "white" | "navy" | "sun" }) {
   const bg = tone === "navy" ? "bg-surface-2/70" : "bg-surface/70";
-  return <div className={cn("flex h-full flex-col rounded-lg border border-line p-6 backdrop-blur-[2px]", bg, className)} {...props} />;
+  // Sem tailwind-merge: o respiro e a altura padrão só entram se a página não definir os seus.
+  const pad = className && /(^|\s)(p|px|py)-/.test(className) ? "" : "p-6";
+  const h = className && /(^|\s)h-/.test(className) ? "" : "h-full";
+  return <div className={cn("flex flex-col rounded-lg border border-line backdrop-blur-[2px]", pad, h, bg, className)} {...props} />;
 }
 
 /** Cabeçalho de cartão/seção: título (h2), apoio opcional e ação alinhada ao topo. */
@@ -66,10 +69,11 @@ export function Grid({ className, ...props }: ComponentProps<"div">) {
   return <div className={cn("grid gap-6", className)} {...props} />;
 }
 
-type Tone = "neutral" | "navy" | "sun" | "ok" | "warn" | "danger";
+type Tone = "neutral" | "navy" | "sun" | "ok" | "warn" | "danger" | "info" | "violet";
 const TONES: Record<Tone, string> = {
-  neutral: "bg-surface-2 text-bone-dim", navy: "bg-bone/10 text-bone", sun: "bg-gold text-ink",
+  neutral: "bg-surface-2 text-bone-dim", navy: "bg-bone/10 text-bone", sun: "bg-gold text-on",
   ok: "bg-ok-soft text-ok", warn: "bg-warn-soft text-warn", danger: "bg-danger-soft text-danger",
+  info: "bg-info-soft text-info", violet: "bg-violet-soft text-violet",
 };
 
 export function Badge({ tone = "neutral", className, ...props }: ComponentProps<"span"> & { tone?: Tone }) {
@@ -82,7 +86,7 @@ export function Segmented({ items, label, className }: { items: { href: string; 
     <nav aria-label={label} className={cn("inline-grid h-10 auto-cols-fr grid-flow-col rounded-sm border border-line bg-surface-2/70 p-1", className)}>
       {items.map((i) => (
         <Link key={i.href} href={i.href} aria-current={i.active ? "page" : undefined}
-          className={cn("flex min-w-[76px] items-center justify-center whitespace-nowrap rounded-[4px] px-3 text-[13px] font-medium transition-colors", i.active ? "bg-acento text-ink" : "text-bone-dim hover:text-bone")}>{i.label}</Link>
+          className={cn("flex min-w-[76px] items-center justify-center whitespace-nowrap rounded-[4px] px-3 text-[13px] font-medium transition-colors", i.active ? "bg-acento text-on" : "text-bone-dim hover:text-bone")}>{i.label}</Link>
       ))}
     </nav>
   );
@@ -99,8 +103,9 @@ export function Input({ className, ...props }: ComponentProps<"input">) {
 export function Select({ className, ...props }: ComponentProps<"select">) {
   return <select className={cn(FIELD, width(className), height(className, "h-10", /(^|\s)h-/), className)} {...props} />;
 }
+/** Cresce com o texto (field-sizing): começa compacto e nunca esconde o que foi escrito. */
 export function Textarea({ className, ...props }: ComponentProps<"textarea">) {
-  return <textarea className={cn(FIELD, width(className), height(className, "min-h-24", /(^|\s)min-h-/), "py-2", className)} {...props} />;
+  return <textarea className={cn(FIELD, width(className), height(className, "min-h-20", /(^|\s)min-h-/), "max-h-[60vh] py-2.5 leading-relaxed [field-sizing:content]", className)} {...props} />;
 }
 
 export function Field({ label, hint, children, className }: { label: string; hint?: string; children: ReactNode; className?: string }) {
@@ -136,7 +141,7 @@ export function Empty({ title, children, action }: { title: string; children?: R
 export function Avatar({ name, color, size = 36 }: { name: string; color?: string; size?: number }) {
   const letters = name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
   return (
-    <span aria-hidden className="inline-flex shrink-0 items-center justify-center rounded-full font-display font-bold text-ink"
+    <span aria-hidden className="inline-flex shrink-0 items-center justify-center rounded-full font-display font-bold text-on"
       style={{ width: size, height: size, fontSize: size * 0.36, background: color ?? "rgb(var(--acento-rgb))" }}>
       {letters || "?"}
     </span>

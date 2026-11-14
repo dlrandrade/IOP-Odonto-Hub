@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Design system — IOP Business (sistema irmão: iopbusiness.com.br). Tema único escuro.
+ * Design system — IOP Business (sistema irmão: iopbusiness.com.br). Escuro (padrão) e claro.
  * Tokens copiados do código do iopbusiness (app/globals.css, tailwind.config.ts, lib/tema.ts).
  * Regras: ouro = dinheiro, CTA e marca; verde/coral = só dados e estados; uma cor de acento por página.
  */
@@ -12,22 +12,30 @@
   --color-surface-2: var(--surface-2);
   --color-line: var(--line);
   /* texto */
-  --color-bone: #f2efe9;
-  --color-bone-dim: #a8b0b9;
-  --color-bone-mute: #8a939d;
+  --color-bone: var(--bone);
+  --color-bone-dim: var(--bone-dim);
+  --color-bone-mute: var(--bone-mute);
+  /* texto sobre cor sólida (ouro, acento): sempre escuro, nos dois temas */
+  --color-on: #0a0e13;
+  /* texto sobre vermelho sólido: escuro no tema escuro, branco no claro (contraste AA nos dois) */
+  --color-on-danger: var(--on-danger);
   /* marca */
-  --color-gold: #e8b54b;
+  --color-gold: var(--gold);
   --color-gold-deep: #b88a2e;
   --color-gold-soft: #f0c569;
   /* acento da página */
   --color-acento: rgb(var(--acento-rgb));
   /* semântica de dados */
-  --color-ok: #3ddc97;
-  --color-ok-soft: #173a30;
-  --color-warn: #e8b54b;
-  --color-warn-soft: #3a3020;
-  --color-danger: #ff6b5a;
-  --color-danger-soft: #3d2326;
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-violet: var(--violet);
+  --color-violet-soft: var(--violet-soft);
 
   --font-display: var(--font-bricolage), system-ui, sans-serif;
   --font-sans: var(--font-inter), system-ui, sans-serif;
@@ -40,22 +48,49 @@
   --shadow-deep: 0 24px 60px -20px rgb(0 0 0 / 0.65);
 }
 
+/* Tema escuro (padrão da marca). */
 :root {
-  --ink: #0a0e13;
-  --surface: #141a21;
-  --surface-2: #1b232c;
-  --line: #232d38;
+  --ink-base: #0a0e13; --surface-base: #141a21; --surface-2-base: #1b232c; --line-base: #232d38;
+  --ink: var(--ink-base); --surface: var(--surface-base); --surface-2: var(--surface-2-base); --line: var(--line-base);
+  --bone: #f2efe9; --bone-dim: #a8b0b9; --bone-mute: #8a939d;
+  --gold: #e8b54b;
+  --ok: #3ddc97; --ok-soft: #173a30;
+  --warn: #e8b54b; --warn-soft: #3a3020;
+  --danger: #ff6b5a; --danger-soft: #3d2326; --on-danger: #0a0e13;
+  --info: #6cb8f5; --info-soft: #172d40;
+  --violet: #b9a3fb; --violet-soft: #2a2442;
+  --grid-rgb: 242 239 233; --grid-alpha: 0.028; --glow-alpha: 0.10;
   --acento-rgb: 232 181 75;
   color-scheme: dark;
+}
+
+/* Tema claro: papel quente, mesmas proporções e contrastes AA. */
+:root[data-theme="light"] {
+  --ink-base: #f5f3ee; --surface-base: #ffffff; --surface-2-base: #f0ede7; --line-base: #e2ddd4;
+  --bone: #15191e; --bone-dim: #48515b; --bone-mute: #66707a;
+  --gold: #e3ab3e;
+  --ok: #17865a; --ok-soft: #dff3e9;
+  --warn: #946312; --warn-soft: #fbefd6;
+  --danger: #c93a2f; --danger-soft: #fde5e2; --on-danger: #ffffff;
+  --info: #1f6fb2; --info-soft: #e2effb;
+  --violet: #6a4fd1; --violet-soft: #ece7fd;
+  --grid-rgb: 21 25 30; --grid-alpha: 0.045; --glow-alpha: 0.14;
+  color-scheme: light;
 }
 
 /* Cada página tinge superfícies e bordas com 4–12% da sua cor: a página muda de temperatura sem trocar o sistema. */
 @supports (background: color-mix(in oklab, red, blue)) {
   [data-tema] {
-    --ink: color-mix(in oklab, #0a0e13 96%, rgb(var(--acento-rgb)));
-    --surface: color-mix(in oklab, #141a21 93%, rgb(var(--acento-rgb)));
-    --surface-2: color-mix(in oklab, #1b232c 91%, rgb(var(--acento-rgb)));
-    --line: color-mix(in oklab, #232d38 88%, rgb(var(--acento-rgb)));
+    --ink: color-mix(in oklab, var(--ink-base) 96%, rgb(var(--acento-rgb)));
+    --surface: color-mix(in oklab, var(--surface-base) 93%, rgb(var(--acento-rgb)));
+    --surface-2: color-mix(in oklab, var(--surface-2-base) 91%, rgb(var(--acento-rgb)));
+    --line: color-mix(in oklab, var(--line-base) 88%, rgb(var(--acento-rgb)));
+  }
+  :root[data-theme="light"] [data-tema] {
+    --ink: color-mix(in oklab, var(--ink-base) 97%, rgb(var(--acento-rgb)));
+    --surface: color-mix(in oklab, var(--surface-base) 98%, rgb(var(--acento-rgb)));
+    --surface-2: color-mix(in oklab, var(--surface-2-base) 95%, rgb(var(--acento-rgb)));
+    --line: color-mix(in oklab, var(--line-base) 90%, rgb(var(--acento-rgb)));
   }
 }
 
@@ -80,9 +115,9 @@
     z-index: -1;
     pointer-events: none;
     background:
-      radial-gradient(70% 38% at 50% -6%, rgb(var(--acento-rgb) / 0.10), transparent 72%),
-      linear-gradient(to right, rgb(242 239 233 / 0.028) 1px, transparent 1px) 0 0 / 64px 64px,
-      linear-gradient(to bottom, rgb(242 239 233 / 0.028) 1px, transparent 1px) 0 0 / 64px 64px;
+      radial-gradient(70% 38% at 50% -6%, rgb(var(--acento-rgb) / var(--glow-alpha)), transparent 72%),
+      linear-gradient(to right, rgb(var(--grid-rgb) / var(--grid-alpha)) 1px, transparent 1px) 0 0 / 64px 64px,
+      linear-gradient(to bottom, rgb(var(--grid-rgb) / var(--grid-alpha)) 1px, transparent 1px) 0 0 / 64px 64px;
     mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 90%);
   }
   /* textura quase imperceptível: evita o aspecto de template chapado */
@@ -95,7 +130,7 @@
     opacity: 0.025;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
   }
-  ::selection { background: var(--color-gold); color: var(--ink); }
+  ::selection { background: var(--color-gold); color: #0a0e13; }
   :focus-visible { outline: 2px solid var(--color-gold); outline-offset: 2px; border-radius: 4px; }
 }
 
@@ -137,6 +172,8 @@
 }
 
 dialog::backdrop { background: rgb(0 0 0 / 0.62); backdrop-filter: blur(3px); }
+:root[data-theme="light"] dialog::backdrop { background: rgb(21 25 30 / 0.38); }
+:root[data-theme="light"] body::before { opacity: 0.015; }
 dialog { margin: auto; color: var(--color-bone); }
 
 /* ── Movimento: só para revelar conteúdo ou responder a uma ação. Tudo desliga com prefers-reduced-motion. ── */

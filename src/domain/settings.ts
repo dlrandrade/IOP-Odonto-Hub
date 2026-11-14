@@ -5,8 +5,14 @@ export const settingsSchema = z.object({
   debounceSeconds: z.coerce.number().int().min(0).max(60).default(6),
   followup1Hours: z.coerce.number().min(0.01).max(23).default(3),
   followup2Hours: z.coerce.number().min(0.02).max(23.5).default(20),
+  /** Follow-up 1 (o 2 tem chave própria). */
   followupsEnabled: z.coerce.boolean().default(true),
+  followup2Enabled: z.coerce.boolean().default(true),
+  /** Lembrete (reminderHours[0]); a confirmação (reminderHours[1]) tem chave própria. */
   remindersEnabled: z.coerce.boolean().default(true),
+  confirmationEnabled: z.coerce.boolean().default(true),
+  /** Ordem dos cartões no construtor de automações (chaves nativas e ids das regras da clínica). */
+  automationOrder: z.array(z.string()).default([]),
   reminderHours: z.array(z.number()).default([48, 24]),
   quietStartHour: z.coerce.number().int().min(0).max(23).default(8),
   quietEndHour: z.coerce.number().int().min(1).max(24).default(20),

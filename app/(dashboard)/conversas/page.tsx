@@ -2,12 +2,13 @@ import Link from "next/link";
 import { AlertTriangle, ArrowLeft, Bot, Check, CheckCheck, Clock, Mic, Plus, Search, Send, StickyNote, UserRound, XCircle } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { db } from "@/db/client";
-import { ActionForm, LiveRefresh, Modal, ScrollToEnd } from "@/components/client";
+import { ActionForm, LiveRefresh, Modal, ScrollToEnd, SubmitOnChange } from "@/components/client";
 import { Avatar, Badge, Button, buttonClass, Card, Checkbox, Empty, Field, Input, Notice, Select, Textarea } from "@/components/ui";
 import { can } from "@/domain/permissions";
 import { CONVERSATION_STATE_LABELS, type ConversationState } from "@/domain/states";
 import { formatFull, formatShort, localTime } from "@/lib/datetime";
 import { cn, formatPhone } from "@/lib/format";
+import { StateTag } from "@/components/tags";
 import { contactFlagsAction, conversationStateAction, editTranscriptAction, killSwitchAction, linkPatientAction, saveSummaryAction, sendMessageAction, sendTemplateAction } from "./actions";
 
 export const metadata = { title: "Conversas" };
@@ -26,11 +27,20 @@ type Message = {
   transcript: string | null; transcript_original: string | null; transcript_status: string | null; delivery_status: string; error: string | null; created_at: Date;
 };
 
-const STATE_TONE: Record<ConversationState, "ok" | "warn" | "navy" | "neutral"> = { ai_active: "ok", awaiting_human: "warn", human_active: "navy", closed: "neutral" };
+/** "Hoje", "Ontem" ou a data, para separar o histórico por dia. */
+function dayLabel(d: Date, tz: string): string {
+  const key = (x: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: tz }).format(x);
+  const today = key(new Date());
+  const yesterday = key(new Date(Date.now() - 86_400_000));
+  const k = key(d);
+  if (k === today) return "Hoje";
+  if (k === yesterday) return "Ontem";
+  return new Intl.DateTimeFormat("pt-BR", { timeZone: tz, weekday: "long", day: "numeric", month: "long" }).format(d);
+}
 
 function DeliveryIcon({ status }: { status: string }) {
   if (status === "failed") return <span className="inline-flex items-center gap-0.5 text-danger"><XCircle size={12} aria-hidden /> falhou</span>;
-  if (status === "read") return <span className="inline-flex items-center gap-0.5"><CheckCheck size={13} className="text-sky-600" aria-hidden /> lida</span>;
+  if (status === "read") return <span className="inline-flex items-center gap-0.5"><CheckCheck size={13} className="text-info" aria-hidden /> lida</span>;
   if (status === "delivered") return <span className="inline-flex items-center gap-0.5"><CheckCheck size={13} aria-hidden /> entregue</span>;
   if (status === "sent") return <span className="inline-flex items-center gap-0.5"><Check size={13} aria-hidden /> enviada</span>;
   return <span className="inline-flex items-center gap-0.5"><Clock size={12} aria-hidden /> na fila</span>;
@@ -102,14 +112,14 @@ export default async function ConversationsPage({ searchParams }: { searchParams
   const canReply = can(ctx.role, "conversations.reply");
 
   return (
-    <div className="grid gap-6 lg:h-[calc(100dvh-9.5rem)] lg:grid-cols-[340px_minmax(0,1fr)_300px]">
+    <div className="grid gap-6 lg:h-[calc(100dvh-9.5rem)] lg:grid-cols-[360px_minmax(0,1fr)_300px]">
       <LiveRefresh seconds={5} clinicId={ctx.clinicId} />
 
       {/* Lista */}
       <Card className={cn("flex min-h-0 flex-col p-0", sel && "hidden lg:flex")}>
-        <div className="space-y-3 border-b border-line p-4">
+        <div className="space-y-4 border-b border-line p-5">
           <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold">Conversas</h1>
+            <h1 className="t-h2">Conversas</h1>
             {can(ctx.role, "ai.kill_switch") && (
               <ActionForm action={killSwitchAction}>
                 <input type="hidden" name="on" value={String(!ctx.clinic.ai_kill_switch)} />
@@ -119,17 +129,15 @@ export default async function ConversationsPage({ searchParams }: { searchParams
               </ActionForm>
             )}
           </div>
-          <form className="relative" action="/conversas">
-            {filter !== "abertas" && <input type="hidden" name="f" value={filter} />}
-            <Search size={15} className="absolute left-3 top-3 text-bone-mute" aria-hidden />
-            <Input name="q" defaultValue={search} placeholder="Nome, telefone ou texto" aria-label="Buscar conversas" className="pl-9" />
-          </form>
-          <div className="flex flex-wrap gap-1.5">
-            {FILTERS.map(([key, label]) => (
-              <Link key={key} href={href({ f: key === "abertas" ? null : key, c: null })}
-                className={cn("btn flex h-8 shrink-0 items-center rounded-sm px-3 text-[12.5px] font-medium", filter === key ? "bg-acento text-ink" : "bg-surface-2/70 text-bone-dim hover:bg-surface-2 hover:text-bone")}>{label}</Link>
-            ))}
-          </div>
+          <SubmitOnChange className="grid grid-cols-[minmax(0,1fr)_150px] gap-2">
+            <div className="relative">
+              <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-bone-mute" aria-hidden />
+              <Input name="q" defaultValue={search} placeholder="Buscar" aria-label="Buscar conversas por nome, telefone ou texto" className="pl-9" />
+            </div>
+            <Select name="f" defaultValue={filter} aria-label="Mostrar conversas">
+              {FILTERS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+            </Select>
+          </SubmitOnChange>
         </div>
         <ul className="scroll-thin min-h-0 flex-1 divide-y divide-line overflow-y-auto">
           {data.rows.length === 0 && <li className="p-4"><Empty title="Nenhuma conversa aqui">Use o Simulador para testar o atendimento sem WhatsApp.</Empty></li>}
@@ -137,19 +145,22 @@ export default async function ConversationsPage({ searchParams }: { searchParams
             const urgent = r.state === "awaiting_human" && r.handoff_priority === "urgente";
             return (
               <li key={r.id}>
-                <Link href={href({ c: r.id })} className={cn("flex gap-3 px-4 py-3 hover:bg-surface-2", r.id === selectedId && "bg-gold/10", urgent && "border-l-4 border-danger")}>
+                <Link href={href({ c: r.id })} aria-current={r.id === selectedId ? "true" : undefined}
+                  className={cn("relative flex gap-3 px-5 py-4 transition-colors hover:bg-surface-2/70", r.id === selectedId && "bg-acento/[0.08]")}>
+                  {(r.id === selectedId || urgent) && <span aria-hidden className={cn("absolute inset-y-3 left-0 w-0.5 rounded-full", urgent ? "bg-danger" : "bg-acento")} />}
                   <Avatar name={displayName(r)} />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate font-semibold">{displayName(r)}</p>
-                      <span className="shrink-0 text-[11px] text-bone-mute">{r.last_message_at ? formatShort(r.last_message_at, ctx.tz) : ""}</span>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className={cn("t-h3 truncate", r.unread_count > 0 && "font-bold")}>{displayName(r)}</p>
+                      <span className="shrink-0 font-mono text-[11px] text-bone-mute">{r.last_message_at ? (dayLabel(r.last_message_at, ctx.tz) === "Hoje" ? localTime(r.last_message_at, ctx.tz) : formatShort(r.last_message_at, ctx.tz).slice(0, 5)) : ""}</span>
                     </div>
-                    <p className="truncate text-xs text-bone-mute">{r.last_message_preview ?? "—"}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-1">
-                      {urgent && <Badge tone="danger"><AlertTriangle size={10} aria-hidden /> Urgente</Badge>}
-                      <Badge tone={STATE_TONE[r.state]}>{CONVERSATION_STATE_LABELS[r.state]}{r.assignee ? ` · ${r.assignee.split(" ")[0]}` : ""}</Badge>
+                    <div className="mt-0.5 flex items-center justify-between gap-3">
+                      <p className={cn("t-small truncate", r.unread_count > 0 && "text-bone-dim")}>{r.last_message_preview ?? "—"}</p>
+                      {r.unread_count > 0 && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-acento px-1.5 font-mono text-[10.5px] font-semibold text-on" aria-label={`${r.unread_count} não lidas`}>{r.unread_count}</span>}
+                    </div>
+                    <div className="mt-2 flex items-center gap-1.5">
+                      <StateTag state={r.state} urgent={urgent} assignee={r.assignee} />
                       {r.channel === "simulator" && <Badge>Simulador</Badge>}
-                      {r.unread_count > 0 && <Badge tone="sun">{r.unread_count} nova{r.unread_count > 1 ? "s" : ""}</Badge>}
                     </div>
                   </div>
                 </Link>
@@ -165,13 +176,13 @@ export default async function ConversationsPage({ searchParams }: { searchParams
       ) : (
         <>
           <Card className="flex min-h-[70dvh] flex-col p-0 lg:min-h-0">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-6 py-4">
               <div className="flex min-w-0 items-center gap-3">
                 <Link href={href({ c: null })} aria-label="Voltar para a lista" className="rounded-full p-1.5 hover:bg-surface-2 lg:hidden"><ArrowLeft size={18} /></Link>
                 <Avatar name={displayName(sel)} />
                 <div className="min-w-0">
-                  <p className="truncate font-semibold">{displayName(sel)}</p>
-                  <p className="text-xs text-bone-mute">{formatPhone(sel.phone_e164)} · <span className="font-medium">{CONVERSATION_STATE_LABELS[sel.state]}</span>{sel.assignee ? ` com ${sel.assignee}` : ""}</p>
+                  <p className="t-h3 truncate">{displayName(sel)}</p>
+                  <div className="mt-1 flex items-center gap-2"><span className="t-small font-mono">{formatPhone(sel.phone_e164)}</span><StateTag state={sel.state} assignee={sel.assignee} /></div>
                 </div>
               </div>
               {canReply && (
@@ -180,7 +191,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     <ActionForm action={conversationStateAction}><input type="hidden" name="conversationId" value={sel.id} /><input type="hidden" name="op" value="take" /><Button size="sm" variant="accent"><UserRound size={13} aria-hidden /> Assumir</Button></ActionForm>
                   ) : null}
                   {(sel.state === "human_active" || sel.state === "awaiting_human") && (
-                    <Modal trigger={<><Bot size={13} aria-hidden /> Devolver à IA</>} title="Devolver à IA" triggerClass={buttonClass("primary", "sm")}>
+                    <Modal trigger={<><Bot size={13} aria-hidden /> Devolver à IA</>} title="Devolver à IA" description="A assistente volta a responder esta conversa." triggerClass={buttonClass("primary", "sm")}>
                       <ActionForm action={conversationStateAction} className="space-y-4">
                         <input type="hidden" name="conversationId" value={sel.id} /><input type="hidden" name="op" value="handback" />
                         <Field label="Pendências para a IA (opcional)" hint="A IA recebe o resumo, as últimas mensagens e este texto, para não repetir perguntas já respondidas.">
@@ -190,7 +201,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                       </ActionForm>
                     </Modal>
                   )}
-                  <Modal trigger="Transferir" title="Transferir conversa" triggerClass={buttonClass("outline", "sm")}>
+                  <Modal trigger="Transferir" title="Transferir conversa" description="A conversa passa para outra pessoa da equipe." triggerClass={buttonClass("outline", "sm")}>
                     <ActionForm action={conversationStateAction} className="space-y-4">
                       <input type="hidden" name="conversationId" value={sel.id} /><input type="hidden" name="op" value="transfer" />
                       <Field label="Para quem?"><Select name="to" required>{data.users.filter((u) => u.id !== ctx.userId).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select></Field>
@@ -204,26 +215,43 @@ export default async function ConversationsPage({ searchParams }: { searchParams
               )}
             </div>
             {sel.state === "awaiting_human" && (
-              <div className={cn("flex items-center gap-2 px-4 py-2 text-sm font-medium", sel.handoff_priority === "urgente" ? "bg-danger text-white" : "bg-warn-soft text-warn")} role="alert">
-                <AlertTriangle size={15} aria-hidden /> {sel.handoff_priority === "urgente" ? "ATENDIMENTO URGENTE — " : "Aguardando a equipe — "}{data.detail.handoff_reason}
+              <div className={cn("flex items-center gap-2 border-b px-6 py-2.5 text-[13px] font-medium", sel.handoff_priority === "urgente" ? "border-danger/30 bg-danger-soft text-danger" : "border-warn/20 bg-warn-soft text-warn")} role="alert">
+                <AlertTriangle size={15} aria-hidden className="shrink-0" /> <span><strong>{sel.handoff_priority === "urgente" ? "Atendimento urgente" : "Aguardando a equipe"}:</strong> {data.detail.handoff_reason}</span>
               </div>
             )}
-            <div className="scroll-thin min-h-0 flex-1 space-y-2 overflow-y-auto bg-surface-2 px-4 py-4">
-              {data.messages.map((m) => {
+            <div className="scroll-thin min-h-0 flex-1 overflow-y-auto bg-surface-2/40">
+              <div className="mx-auto w-full max-w-[820px] space-y-3 px-6 py-6">
+              {data.messages.map((m, i) => {
+                const prev = data.messages[i - 1];
+                const newDay = !prev || dayLabel(prev.created_at, ctx.tz) !== dayLabel(m.created_at, ctx.tz);
+                const separator = newDay && (
+                  <div className="flex items-center gap-3 py-2" aria-hidden>
+                    <span className="h-px flex-1 bg-line" /><span className="eyebrow text-bone-mute first-letter:uppercase">{dayLabel(m.created_at, ctx.tz)}</span><span className="h-px flex-1 bg-line" />
+                  </div>
+                );
                 if (m.type === "note") {
                   return (
-                    <div key={m.id} className="mx-auto flex max-w-[85%] items-start gap-2 rounded-md bg-gold/10 px-3 py-2 text-xs text-bone-dim">
-                      <StickyNote size={13} className="mt-0.5 shrink-0" aria-hidden />
-                      <span><span className="font-semibold">{m.sender_type === "system" ? "Sistema" : `Nota interna${m.sender ? ` · ${m.sender}` : ""}`}:</span> {m.body} <span className="text-bone-mute">· {localTime(m.created_at, ctx.tz)}</span></span>
+                    <div key={m.id}>
+                      {separator}
+                      <div className="flex justify-center">
+                        <p className="flex max-w-[90%] items-start gap-2 rounded-md border border-dashed border-line bg-surface/60 px-3 py-2 text-[12.5px] text-bone-dim">
+                          <StickyNote size={13} className="mt-0.5 shrink-0 text-gold" aria-hidden />
+                          <span><span className="font-medium text-bone">{m.sender_type === "system" ? "Sistema" : `Nota interna${m.sender ? ` · ${m.sender}` : ""}`}</span> — {m.body} <span className="font-mono text-[11px] text-bone-mute">{localTime(m.created_at, ctx.tz)}</span></span>
+                        </p>
+                      </div>
                     </div>
                   );
                 }
                 const out = m.direction === "outbound";
-                const who = m.sender_type === "patient" ? "Paciente" : m.sender_type === "ai" ? ctx.clinic.assistant_name + " (IA)" : m.sender_type === "human" ? m.sender ?? "Equipe" : "Automação";
+                const who = m.sender_type === "patient" ? "Paciente" : m.sender_type === "ai" ? ctx.clinic.assistant_name + " · assistente" : m.sender_type === "human" ? m.sender ?? "Equipe" : "Automação";
+                const tone = !out ? "border-line bg-surface" : m.sender_type === "ai" ? "border-info/25 bg-info-soft" : "border-violet/25 bg-violet-soft";
+                const dot = !out ? "bg-bone-mute" : m.sender_type === "ai" ? "bg-info" : "bg-violet";
                 return (
-                  <div key={m.id} className={cn("flex", out ? "justify-end" : "justify-start")}>
-                    <div className={cn("max-w-[78%] rounded-md px-3.5 py-2.5 shadow-sm", out ? (m.sender_type === "ai" ? "bg-acento text-ink" : "bg-bone text-ink") : "bg-surface")}>
-                      <p className={cn("mb-0.5 text-[10px] font-bold uppercase tracking-wider", out ? "text-gold" : "text-bone-mute")}>{who}</p>
+                  <div key={m.id}>
+                    {separator}
+                    <div className={cn("flex", out ? "justify-end" : "justify-start")}>
+                    <div className={cn("max-w-[80%] rounded-md border px-4 py-3", tone, out ? "rounded-tr-sm" : "rounded-tl-sm")}>
+                      <p className="mb-1 flex items-center gap-1.5 text-[11.5px] font-medium text-bone-dim"><span aria-hidden className={cn("size-1.5 rounded-full", dot)} />{who}</p>
                       {m.type === "audio" && (
                         <div className="space-y-1.5">
                           <p className="flex items-center gap-1 text-xs"><Mic size={12} aria-hidden /> Áudio</p>
@@ -243,21 +271,24 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                         <img src={`/api/media/${m.id}`} alt="Imagem enviada pelo paciente" className="mb-1 max-h-64 rounded-md" loading="lazy" />
                       )}
                       {m.type === "image" && !m.media_path && !m.wa_media_id && <p className="text-xs italic">📷 Imagem (simulada)</p>}
-                      {m.type !== "audio" && m.body && <p className="whitespace-pre-wrap break-words text-sm">{m.body}</p>}
-                      <p className={cn("mt-1 flex items-center justify-end gap-2 text-[10px]", out ? "text-bone-dim" : "text-bone-mute")}>
+                      {m.type !== "audio" && m.body && <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed">{m.body}</p>}
+                      <p className="mt-1.5 flex items-center justify-end gap-2 font-mono text-[10.5px] text-bone-mute">
                         {m.type === "template" && <span>template</span>}
-                        <time dateTime={m.created_at.toISOString()}>{formatShort(m.created_at, ctx.tz)}</time>
+                        <time dateTime={m.created_at.toISOString()}>{localTime(m.created_at, ctx.tz)}</time>
                         {out && <DeliveryIcon status={m.delivery_status} />}
                       </p>
-                      {m.error && m.delivery_status === "failed" && <p className="mt-1 rounded bg-danger-soft px-2 py-1 text-[11px] text-danger">Falha no envio: {m.error}</p>}
+                      {m.error && m.delivery_status === "failed" && <p className="mt-1 rounded-sm bg-danger-soft px-2 py-1 text-[11px] text-danger">Falha no envio: {m.error}</p>}
+                    </div>
                     </div>
                   </div>
                 );
               })}
               <ScrollToEnd dep={data.messages.length} />
+              </div>
             </div>
             {canReply && (
-              <div className="space-y-3 border-t border-line p-4">
+              <div className="border-t border-line">
+              <div className="mx-auto w-full max-w-[820px] space-y-3 px-6 py-5">
                 {sel.state === "ai_active" && (
                   <p className="flex items-center gap-2 rounded-sm bg-ok-soft px-3 py-2 text-[13px] text-ok"><Bot size={15} aria-hidden /> A assistente está cuidando desta conversa. Se você escrever, a conversa passa para você.</p>
                 )}
@@ -267,7 +298,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     {data.hasTemplate && <ActionForm action={sendTemplateAction}><input type="hidden" name="conversationId" value={sel.id} /><Button size="sm" variant="outline">Enviar mensagem pronta</Button></ActionForm>}
                   </div>
                 )}
-                <ActionForm action={sendMessageAction} className="space-y-6">
+                <ActionForm action={sendMessageAction} className="space-y-3">
                   <input type="hidden" name="conversationId" value={sel.id} />
                   <Textarea name="body" required placeholder={inWindow ? "Escreva a mensagem para o paciente…" : "Escreva uma nota interna…"} aria-label="Mensagem" className="min-h-[76px] resize-none" rows={3} />
                   <div className="flex flex-wrap items-center justify-end gap-3">
@@ -276,6 +307,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     <Button type="submit" name="mode" value="message" disabled={!inWindow}><Send aria-hidden /> Enviar ao paciente</Button>
                   </div>
                 </ActionForm>
+              </div>
               </div>
             )}
           </Card>

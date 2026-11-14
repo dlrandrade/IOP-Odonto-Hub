@@ -3,6 +3,7 @@ import { computeSlots, type Slot, type SlotQuery } from "@/domain/slots";
 import { canTransitionAppointment, type AppointmentStatus } from "@/domain/states";
 import { parseSettings } from "@/domain/settings";
 import { addDays, addMinutes, clampToQuietHours, localDate } from "@/lib/datetime";
+import { scheduleRuleJobs } from "./automation-rules";
 import { cancelJobs, enqueueJob } from "./jobs-queue";
 
 export type AvailabilityRequest = {
@@ -119,8 +120,9 @@ async function insertAppointment(tx: Sql, i: BookInput, rescheduledFromId: strin
 
 async function guarded(sql: Sql, fn: (tx: Sql) => Promise<BookResult>): Promise<BookResult> {
   // A constraint EXCLUDE é quem decide a corrida. Quem perde tenta de novo (pode haver outra cadeira livre);
-  // se o horário realmente acabou, a revalidação devolve "unavailable".
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // se o horário realmente acabou, a revalidação devolve "unavailable". Deadlock e falha de serialização entre
+  // reservas simultâneas também são colisões legítimas: a transação inteira foi desfeita, então é seguro repetir.
+  for (let attempt = 0; attempt < 5; attempt++) {
     try {
       let result: BookResult = { ok: false, reason: "invalid", message: "Falha ao gravar." };
       await inTx(sql, async (tx) => {
@@ -129,7 +131,9 @@ async function guarded(sql: Sql, fn: (tx: Sql) => Promise<BookResult>): Promise<
       }).catch((e) => { if (!(e instanceof RollbackSignal)) throw e; });
       return result;
     } catch (e) {
-      if (pgErrorCode(e) !== PG_EXCLUSION_VIOLATION) throw e;
+      const code = pgErrorCode(e);
+      if (code !== PG_EXCLUSION_VIOLATION && code !== "40P01" && code !== "40001") throw e;
+      await new Promise((r) => setTimeout(r, 5 + Math.random() * 20 * (attempt + 1)));
     }
   }
   return { ok: false, reason: "conflict", message: "Esse horário acabou de ser ocupado." };
@@ -170,7 +174,7 @@ export async function cancelAppointment(sql: Sql, clinicId: string, appointmentI
   });
 }
 
-export async function setAppointmentStatus(sql: Sql, clinicId: string, appointmentId: string, to: AppointmentStatus, actor: "ai" | "user" | "system"): Promise<{ ok: boolean; message?: string }> {
+export async function setAppointmentStatus(sql: Sql, clinicId: string, appointmentId: string, to: AppointmentStatus, actor: "ai" | "user" | "system", now = new Date()): Promise<{ ok: boolean; message?: string }> {
   if (to === "cancelled") return cancelAppointment(sql, clinicId, appointmentId, null);
   const [appt] = await sql<{ status: AppointmentStatus }[]>`select status from appointments where id = ${appointmentId} and clinic_id = ${clinicId}`;
   if (!appt) return { ok: false, message: "Consulta não encontrada." };
@@ -180,6 +184,9 @@ export async function setAppointmentStatus(sql: Sql, clinicId: string, appointme
     where id = ${appointmentId} and clinic_id = ${clinicId}`;
   if (to === "confirmed") await cancelJobs(sql, clinicId, { appointmentId, types: ["confirmation_request"] });
   if (to === "no_show") await cancelJobs(sql, clinicId, { appointmentId });
+  // Automações da clínica: depois da consulta (ex.: agradecimento) e depois de uma falta (ex.: convite para remarcar).
+  if (to === "completed") await scheduleRuleJobs(sql, clinicId, "after_appointment", { appointmentId, anchor: now, now });
+  if (to === "no_show") await scheduleRuleJobs(sql, clinicId, "no_show", { appointmentId, anchor: now, now });
   return { ok: true };
 }
 
@@ -187,9 +194,12 @@ export async function setAppointmentStatus(sql: Sql, clinicId: string, appointme
 async function scheduleReminders(sql: Sql, clinicId: string, appointmentId: string, startsAt: Date, now: Date): Promise<void> {
   const [clinic] = await sql<{ timezone: string; settings: unknown }[]>`select timezone, settings from clinics where id = ${clinicId}`;
   const settings = parseSettings(clinic?.settings);
-  if (!settings.remindersEnabled) return;
   const tz = clinic?.timezone ?? "America/Sao_Paulo";
-  for (const hours of settings.reminderHours) {
+  // Automações da clínica com gatilho "antes da consulta" (construtor visual).
+  await scheduleRuleJobs(sql, clinicId, "before_appointment", { appointmentId, anchor: startsAt, now });
+  for (const [i, hours] of settings.reminderHours.entries()) {
+    const enabled = i === 0 ? settings.remindersEnabled : settings.confirmationEnabled;
+    if (!enabled) continue;
     const ideal = addMinutes(startsAt, -hours * 60);
     if (ideal <= now) continue;
     const runAt = clampToQuietHours(ideal, tz, settings.quietStartHour, settings.quietEndHour);

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Bot, LogOut, ShieldCheck, TriangleAlert } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { Logo } from "@/components/brand";
-import { MobileTabs, SearchBox, Sidebar, type NavEntry, type NavGroup } from "@/components/nav";
+import { Frame, MobileTabs, ThemeToggle, SearchBox, Sidebar, type NavEntry, type NavGroup } from "@/components/nav";
 import { Avatar, Badge } from "@/components/ui";
 import { can, ROLE_LABELS } from "@/domain/permissions";
 import { setupSteps } from "@/services/setup-progress";
@@ -88,13 +88,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         <div className="h-[calc(100%-3.5rem)]"><Sidebar groups={groups} settings={settings} footer={footer} /></div>
       </aside>
       <div className="flex min-h-dvh flex-col">
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-line bg-ink/85 px-4 backdrop-blur sm:px-6 lg:px-10">
+        <header className="sticky top-0 z-20 border-b border-line bg-ink/85 backdrop-blur">
+          <Frame className="flex h-14 items-center gap-3">
           <Link href="/" aria-label="Início" className="lg:hidden"><Logo /></Link>
-          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 lg:ml-0 lg:justify-between">
-            <div className="hidden min-w-0 flex-1 lg:block"><SearchBox pages={flat} /></div>
+          <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 lg:ml-0 lg:justify-between lg:gap-6">
+            <div className="hidden min-w-0 max-w-[480px] flex-1 lg:block"><SearchBox pages={flat} /></div>
             <div className="flex items-center gap-2">
               {!!counts?.urgent && (
-                <Link href="/conversas?f=urgentes" className="flex items-center gap-1.5 rounded-sm bg-danger px-2.5 py-1.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.08em] text-ink">
+                <Link href="/conversas?f=urgentes" className="flex items-center gap-1.5 rounded-sm bg-danger px-2.5 py-1.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.08em] text-on-danger">
                   <TriangleAlert size={13} aria-hidden /> {counts.urgent}<span className="hidden sm:inline"> urgente{counts.urgent > 1 ? "s" : ""}</span>
                 </Link>
               )}
@@ -107,11 +108,13 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                   <ShieldCheck size={13} aria-hidden /><span className="hidden md:inline">Plataforma</span>
                 </Link>
               )}
+              <ThemeToggle />
               <span className="lg:hidden"><SearchIconOnly pages={flat} /></span>
             </div>
           </div>
+          </Frame>
         </header>
-        <main className="entrada mx-auto w-full min-w-0 max-w-[1320px] flex-1 px-4 pb-28 pt-8 sm:px-6 lg:px-10 lg:pb-16 lg:pt-12">{children}</main>
+        <main className="entrada flex-1 pb-28 pt-8 lg:pb-16 lg:pt-12"><Frame>{children}</Frame></main>
       </div>
       <MobileTabs primary={primary} more={more} />
     </div>

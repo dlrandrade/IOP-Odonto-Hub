@@ -10,6 +10,7 @@ import { transcriptionProvider } from "@/integrations/transcription";
 import { enforcesWindow, providerFor } from "@/integrations/whatsapp";
 import { deliverMessage, sendOutbound } from "./conversations";
 import { debounceConversationJob, enqueueJob } from "./jobs-queue";
+import { runRuleJob, sweepBirthdays } from "./automation-rules";
 
 type Job = {
   id: string; clinic_id: string; type: string; attempts: number; payload: Record<string, unknown>;
@@ -29,6 +30,8 @@ export async function runDueJobs(opts: { now?: Date; limit?: number; clinicId?: 
   let failed = 0;
   // Jobs presos em "running" (worker morreu) voltam para a fila.
   await sql`update scheduled_jobs set status = 'pending' where status = 'running' and locked_at < now() - interval '5 minutes'`;
+  // Automações de aniversário viram jobs aqui (idempotentes: um envio por paciente por ano).
+  if (!opts.clinicId) await sweepBirthdays(sql, now).catch(() => 0);
   for (let i = 0; i < (opts.limit ?? 25); i++) {
     const [job] = await sql<Job[]>`
       update scheduled_jobs set status = 'running', attempts = attempts + 1, locked_at = now()
@@ -87,6 +90,8 @@ async function execute(sql: Sql, job: Job, now: Date): Promise<string> {
     case "reminder":
     case "confirmation_request":
       return reminder(sql, job, now);
+    case "automation":
+      return runRuleJob(sql, job, now);
     default:
       return "unknown_type";
   }
@@ -145,7 +150,7 @@ async function automatedCount(sql: Sql, conversationId: string, now: Date): Prom
   const [r] = await sql<{ n: number }[]>`
     select count(*)::int as n from scheduled_jobs
     where conversation_id = ${conversationId} and status = 'done' and result in ('sent','sent_template')
-      and type in ('followup_1','followup_2','reminder','confirmation_request') and updated_at > ${addMinutes(now, -24 * 60)}`;
+      and type in ('followup_1','followup_2','reminder','confirmation_request','automation') and updated_at > ${addMinutes(now, -24 * 60)}`;
   return r?.n ?? 0;
 }
 

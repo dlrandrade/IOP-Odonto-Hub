@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Geist_Mono, Inter } from "next/font/google";
+import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 import { TemaPagina } from "@/components/tema";
 import "./globals.css";
@@ -14,9 +15,11 @@ export const metadata: Metadata = {
 };
 export const viewport: Viewport = { themeColor: "#0a0e13", width: "device-width", initialScale: 1 };
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Tema escolhido pelo usuário (cookie): aplicado já no HTML do servidor, sem piscar.
+  const theme = (await cookies()).get("tema")?.value === "light" ? "light" : "dark";
   return (
-    <html lang="pt-BR" className={`${display.variable} ${sans.variable} ${mono.variable}`}>
+    <html lang="pt-BR" data-theme={theme} className={`${display.variable} ${sans.variable} ${mono.variable}`}>
       <body className="min-h-dvh bg-ink text-bone antialiased" data-tema="">
         <TemaPagina />
         {children}

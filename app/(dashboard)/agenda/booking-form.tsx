@@ -74,9 +74,9 @@ export function BookingForm({ services, professionals, patients, defaultDate, re
               const on = picked === value;
               return (
                 <button key={value} type="button" role="radio" aria-checked={on} onClick={() => setPicked(value)}
-                  className={cn("btn flex h-12 flex-col items-center justify-center rounded-sm border text-center", on ? "border-acento bg-acento text-ink" : "border-line bg-surface-2/50 hover:border-bone-mute/60")}>
+                  className={cn("btn flex h-12 flex-col items-center justify-center rounded-sm border text-center", on ? "border-acento bg-acento text-on" : "border-line bg-surface-2/50 hover:border-bone-mute/60")}>
                   <span className="font-mono text-[14px] font-medium leading-none">{s.time}</span>
-                  {!professionalId && <span className={cn("mt-1 max-w-full truncate px-1 text-[10.5px] leading-none", on ? "text-ink/75" : "text-bone-mute")}>{s.professional.split(" ").slice(0, 2).join(" ")}</span>}
+                  {!professionalId && <span className={cn("mt-1 max-w-full truncate px-1 text-[10.5px] leading-none", on ? "text-on/75" : "text-bone-mute")}>{s.professional.split(" ").slice(0, 2).join(" ")}</span>}
                 </button>
               );
             })}

@@ -93,7 +93,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {!allowed && <Notice tone="danger">Apenas administradores acessam esta seção.</Notice>}
 
       {allowed && tab === "clinica" && (
-        <Card className="max-w-3xl">
+        <Card>
           <ActionForm action={saveClinicAction} className="space-y-5" resetOnDone={false}>
             <div className="grid gap-6 sm:grid-cols-2">
               <Field label="Nome da clínica"><Input name="name" defaultValue={ctx.clinic.name} required /></Field>
@@ -122,7 +122,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {allowed && tab === "equipe" && (
         <Card>
           <CardTitle action={
-            <Modal trigger={<><Plus size={14} aria-hidden /> Novo usuário</>} title="Novo usuário" triggerClass={buttonClass("accent", "sm")}>
+            <Modal trigger={<><Plus size={14} aria-hidden /> Novo usuário</>} title="Novo usuário" description="Defina uma senha provisória e entregue por um canal seguro. A pessoa só vê o que o papel permite." triggerClass={buttonClass("accent", "sm")}>
               <ActionForm action={inviteUserAction} className="space-y-4" resetOnDone={false}>
                 <Field label="Nome"><Input name="name" required /></Field>
                 <Field label="E-mail"><Input type="email" name="email" required /></Field>
@@ -131,6 +131,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Criar usuário</Button></div>
               </ActionForm>
             </Modal>} hint="Recepção atende e agenda; gestor publica conteúdo e vê indicadores; dentista vê só o que é dele; comercial cuida do funil; financeiro só o cadastro.">Usuários e papéis</CardTitle>
+          {data.users.length === 0 ? <Empty title="Nenhum usuário nesta clínica ainda">Crie um acesso para cada pessoa da equipe. Cada uma só vê o que o papel dela permite.</Empty> : (
           <Table head={["Nome", "E-mail", "Papel", "Situação", ""]}>
             {data.users.map((u) => (
               <tr key={u.id} className={cn(!u.active && "opacity-60")}>
@@ -138,7 +139,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <td><Badge tone={u.role === "admin" ? "navy" : "neutral"}>{ROLE_LABELS[u.role]}</Badge></td>
                 <td>{u.active ? <Badge tone="ok">Ativo</Badge> : <Badge tone="danger">Desativado</Badge>}</td>
                 <td className="text-right">
-                  <Modal trigger="Editar" title={u.name} triggerClass={buttonClass("outline", "sm")}>
+                  <Modal trigger="Editar" title="Editar usuário" description={u.name} triggerClass={buttonClass("outline", "sm")}>
                     <ActionForm action={updateUserAction} className="space-y-4" resetOnDone={false}>
                       <input type="hidden" name="userId" value={u.id} />
                       <Field label="Papel"><Select name="role" defaultValue={u.role}>{ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</Select></Field>
@@ -151,26 +152,27 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </tr>
             ))}
           </Table>
+          )}
         </Card>
       )}
 
       {allowed && tab === "agenda" && (
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
           <Card>
-            <CardTitle action={<Modal trigger={<><Plus size={14} aria-hidden /> Novo dentista</>} title="Novo dentista" wide triggerClass={buttonClass("accent", "sm")}><ProfessionalForm /></Modal>}
-              hint="A disponibilidade é: expediente do dentista ∩ habilitado para o serviço ∩ recursos livres ∩ sem bloqueio.">Dentistas e expediente</CardTitle>
+            <CardTitle action={<Modal trigger={<><Plus size={14} aria-hidden /> Novo dentista</>} title="Novo dentista" description="O expediente define os horários livres na agenda." wide triggerClass={buttonClass("accent", "sm")}><ProfessionalForm /></Modal>}
+              hint="Um horário aparece livre quando o dentista está no expediente, atende o serviço, há cadeira livre e não há bloqueio.">Dentistas e expediente</CardTitle>
             {data.professionals.length === 0 ? <Empty title="Nenhum dentista cadastrado">Sem dentistas com expediente, a agenda não oferece horários.</Empty> : (
               <ul className="divide-y divide-line">
                 {data.professionals.map((p) => {
                   const count = data.rules.filter((r) => r.professional_id === p.id).length;
                   return (
-                    <li key={p.id} className={cn("flex items-center justify-between gap-3 py-3", !p.active && "opacity-60")}>
+                    <li key={p.id} className={cn("flex min-h-16 items-center justify-between gap-3 py-3", !p.active && "opacity-60")}>
                       <div className="flex min-w-0 items-center gap-3">
                         <span className="size-3 shrink-0 rounded-full" style={{ background: p.color }} aria-hidden />
-                        <div className="min-w-0"><p className="truncate font-semibold">{p.name}</p><p className="truncate text-xs text-bone-mute">{p.specialty ?? "—"}{p.council_number ? ` · ${p.council_number}` : ""} · {count ? `${count} período(s) por semana` : "sem expediente"}</p></div>
+                        <div className="min-w-0"><p className="t-h3 truncate">{p.name}</p><p className="t-small truncate">{p.specialty ?? "—"}{p.council_number ? ` · ${p.council_number}` : ""} · {count ? `${count} período(s) por semana` : "sem expediente"}</p></div>
                       </div>
                       <div className="flex items-center gap-2">{!p.active && <Badge>inativo</Badge>}{count === 0 && p.active && <Badge tone="warn">sem horários</Badge>}
-                        <Modal trigger="Editar" title={p.name} wide triggerClass={buttonClass("outline", "sm")}><ProfessionalForm p={p} /></Modal></div>
+                        <Modal trigger="Editar" title="Editar dentista" description={p.name} wide triggerClass={buttonClass("outline", "sm")}><ProfessionalForm p={p} /></Modal></div>
                     </li>
                   );
                 })}
@@ -179,23 +181,28 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           </Card>
           <Card>
             <CardTitle hint="Cada consulta ocupa o dentista e os recursos exigidos pelo serviço. Dois agendamentos nunca dividem a mesma cadeira no mesmo horário.">Cadeiras e recursos</CardTitle>
-            <ul className="mb-4 divide-y divide-line">
+            <ul className="divide-y divide-line">
               {data.resources.map((r) => (
-                <li key={r.id} className="py-2">
-                  <ActionForm action={saveResourceAction} className="flex items-center gap-2" resetOnDone={false}>
+                <li key={r.id} className="py-3 first:pt-0">
+                  <ActionForm action={saveResourceAction} className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-3" resetOnDone={false}>
                     <input type="hidden" name="resourceId" value={r.id} /><input type="hidden" name="kind" value={r.kind} />
-                    <Input name="name" defaultValue={r.name} aria-label="Nome do recurso" className="h-8 flex-1 text-sm" />
-                    <Badge>{{ chair: "cadeira", equipment: "equipamento", assistant: "auxiliar" }[r.kind]}</Badge>
-                    <Checkbox name="active" defaultChecked={r.active} label="ativo" />
-                    <Button size="sm" variant="ghost">Salvar</Button>
+                    <div className="min-w-0">
+                      <Input name="name" defaultValue={r.name} aria-label="Nome do recurso" />
+                      <span className="t-small mt-1 block">{{ chair: "Cadeira", equipment: "Equipamento", assistant: "Auxiliar" }[r.kind]}</span>
+                    </div>
+                    <Checkbox name="active" defaultChecked={r.active} label="Ativo" />
+                    <Button size="sm" variant="outline">Salvar</Button>
                   </ActionForm>
                 </li>
               ))}
             </ul>
-            <ActionForm action={saveResourceAction} className="flex flex-wrap items-end gap-2">
-              <Field label="Novo recurso" className="flex-1"><Input name="name" placeholder="Cadeira 4" required /></Field>
-              <Field label="Tipo"><Select name="kind" className="w-auto"><option value="chair">Cadeira</option><option value="equipment">Equipamento</option><option value="assistant">Auxiliar</option></Select></Field>
-              <div className="flex justify-end border-t border-line pt-5"><Button type="submit" variant="outline">Adicionar</Button></div>
+            <ActionForm action={saveResourceAction} className="mt-auto space-y-4 border-t border-line pt-5">
+              <p className="t-h3">Adicionar recurso</p>
+              <div className="grid grid-cols-[minmax(0,1fr)_150px] gap-3">
+                <Field label="Nome"><Input name="name" placeholder="Ex.: Cadeira 4" required /></Field>
+                <Field label="Tipo"><Select name="kind"><option value="chair">Cadeira</option><option value="equipment">Equipamento</option><option value="assistant">Auxiliar</option></Select></Field>
+              </div>
+              <div className="flex justify-end"><Button type="submit" variant="outline"><Plus aria-hidden /> Adicionar</Button></div>
             </ActionForm>
           </Card>
         </div>

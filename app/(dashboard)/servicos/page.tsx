@@ -40,42 +40,59 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
   }));
   const evaluations = data.services.filter((s) => s.kind === "evaluation");
 
+  /** Seção numerada do formulário: título e explicação à esquerda do conteúdo, sempre na mesma grade. */
+  const Part = ({ n, title, hint, children }: { n: number; title: string; hint?: string; children: React.ReactNode }) => (
+    <section className="grid gap-4 border-t border-line pt-6 first:border-t-0 first:pt-0 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-6">
+      <div>
+        <p className="eyebrow text-bone-mute">Passo {n}</p>
+        <h3 className="t-h3 mt-1">{title}</h3>
+        {hint && <p className="t-small mt-1">{hint}</p>}
+      </div>
+      <div className="min-w-0 space-y-4">{children}</div>
+    </section>
+  );
+
   const ServiceForm = ({ s }: { s?: Service }) => (
-    <ActionForm action={saveServiceAction} className="space-y-4" resetOnDone={!s}>
+    <ActionForm action={saveServiceAction} className="space-y-6" resetOnDone={!s}>
       {s && <input type="hidden" name="serviceId" value={s.id} />}
-      <div className="grid gap-6 sm:grid-cols-2">
-        <Field label="Nome"><Input name="name" defaultValue={s?.name} required /></Field>
-        <Field label="Especialidade"><Input name="specialty" defaultValue={s?.specialty ?? ""} /></Field>
-        <Field label="Tipo"><Select name="kind" defaultValue={s?.kind ?? "procedure"}>{Object.entries(KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Duração (min)"><Input type="number" name="duration" min={5} defaultValue={s?.duration_min ?? 30} required /></Field>
-          <Field label="Intervalo (min)"><Input type="number" name="buffer" min={0} defaultValue={s?.buffer_min ?? 0} /></Field>
+      <Part n={1} title="Identificação" hint="Como o serviço aparece na agenda e nas conversas.">
+        <Field label="Nome do serviço"><Input name="name" defaultValue={s?.name} required /></Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Especialidade"><Input name="specialty" defaultValue={s?.specialty ?? ""} /></Field>
+          <Field label="Tipo"><Select name="kind" defaultValue={s?.kind ?? "procedure"}>{Object.entries(KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select></Field>
         </div>
-      </div>
-      <fieldset className="rounded-md border border-line p-4">
-        <legend className="px-1 text-xs font-semibold">Preço que a assistente pode informar</legend>
-        <div className="grid gap-6 sm:grid-cols-3">
-          <Field label="Modo"><Select name="priceMode" defaultValue={s?.price_mode ?? "on_evaluation"}><option value="on_evaluation">Sob avaliação</option><option value="fixed">Valor fixo</option><option value="range">Faixa</option></Select></Field>
-          <Field label="Valor / mínimo (R$)"><Input name="priceMin" inputMode="decimal" defaultValue={money(s?.price_min_cents ?? null)} placeholder="0,00" /></Field>
-          <Field label="Máximo (R$)"><Input name="priceMax" inputMode="decimal" defaultValue={money(s?.price_max_cents ?? null)} placeholder="só para faixa" /></Field>
+      </Part>
+      <Part n={2} title="Tempo na agenda" hint="O intervalo é o tempo de limpeza da sala depois do atendimento.">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Duração (minutos)"><Input type="number" name="duration" min={5} defaultValue={s?.duration_min ?? 30} required /></Field>
+          <Field label="Intervalo depois (minutos)"><Input type="number" name="buffer" min={0} defaultValue={s?.buffer_min ?? 0} /></Field>
         </div>
-        <p className="mt-2 text-[11px] text-bone-mute">Sem preço cadastrado, a assistente diz que depende de avaliação. Ela nunca inventa valor nem oferece desconto.</p>
-      </fieldset>
-      <div className="grid gap-6 sm:grid-cols-2">
-        <Checkbox name="bookable" defaultChecked={s?.bookable_directly ?? false} label="Agenda direto pela assistente" hint="Indicado para avaliação, limpeza e retorno." />
-        <Field label="Se não agenda direto, leva à avaliação"><Select name="leadsTo" defaultValue={s?.leads_to_evaluation_service_id ?? evaluations[0]?.id ?? ""}><option value="">—</option>{evaluations.filter((e) => e.id !== s?.id).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</Select></Field>
-      </div>
-      <Field label="Descrição para o paciente (texto aprovado)" hint="É o único texto que a assistente usa para explicar o serviço. Não prometa resultado nem ausência de dor."><Textarea name="description" defaultValue={s?.patient_description ?? ""} /></Field>
-      <Field label="Preparo / orientações administrativas"><Textarea name="preparation" defaultValue={s?.preparation ?? ""} className="min-h-16" /></Field>
-      <fieldset>
-        <legend className="mb-1 text-xs font-semibold text-bone-dim">Dentistas habilitados</legend>
-        <div className="grid gap-1.5 sm:grid-cols-2">
+      </Part>
+      <Part n={3} title="Preço" hint="O que a assistente pode informar. Ela nunca inventa valor nem oferece desconto.">
+        <Field label="Como informar o preço"><Select name="priceMode" defaultValue={s?.price_mode ?? "on_evaluation"}><option value="on_evaluation">Depende de avaliação</option><option value="fixed">Valor fixo</option><option value="range">Faixa de valores</option></Select></Field>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Valor ou mínimo (R$)"><Input name="priceMin" inputMode="decimal" defaultValue={money(s?.price_min_cents ?? null)} placeholder="0,00" /></Field>
+          <Field label="Máximo (R$)" hint="Só para faixa."><Input name="priceMax" inputMode="decimal" defaultValue={money(s?.price_max_cents ?? null)} placeholder="0,00" /></Field>
+        </div>
+      </Part>
+      <Part n={4} title="Agendamento" hint="Serviços maiores costumam passar antes por uma avaliação.">
+        <Checkbox name="bookable" defaultChecked={s?.bookable_directly ?? false} label="A assistente pode agendar direto" hint="Indicado para avaliação, limpeza e retorno." />
+        <Field label="Se não agenda direto, leva para"><Select name="leadsTo" defaultValue={s?.leads_to_evaluation_service_id ?? evaluations[0]?.id ?? ""}><option value="">—</option>{evaluations.filter((e) => e.id !== s?.id).map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</Select></Field>
+      </Part>
+      <Part n={5} title="Texto para o paciente" hint="É o único texto que a assistente usa para explicar o serviço.">
+        <Field label="Descrição aprovada" hint="Não prometa resultado nem ausência de dor."><Textarea name="description" defaultValue={s?.patient_description ?? ""} /></Field>
+        <Field label="Preparo e orientações administrativas"><Textarea name="preparation" defaultValue={s?.preparation ?? ""} className="min-h-16" /></Field>
+      </Part>
+      <Part n={6} title="Quem atende" hint="Só estes dentistas recebem o serviço na agenda.">
+        <div className="grid gap-2 sm:grid-cols-2">
           {data.professionals.map((p) => <Checkbox key={p.id} name="professionals" value={p.id} label={p.name} defaultChecked={s ? s.professional_ids.includes(p.id) : true} />)}
-          {data.professionals.length === 0 && <p className="text-xs text-bone-mute">Cadastre dentistas em Configurações → Agenda.</p>}
+          {data.professionals.length === 0 && <p className="t-small">Cadastre dentistas em Configurações → Agenda.</p>}
         </div>
-      </fieldset>
-      <Field label="Situação" hint="Publicado vale já na próxima resposta da assistente, sem retreinar."><Select name="status" defaultValue={s?.status ?? "draft"}><option value="draft">Rascunho</option><option value="published">Publicado</option></Select></Field>
-      <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>
+      </Part>
+      <div className="flex flex-wrap items-end justify-between gap-4 border-t border-line pt-5">
+        <Field label="Situação" hint="Publicado vale já na próxima resposta."><Select name="status" defaultValue={s?.status ?? "draft"} className="w-56"><option value="draft">Rascunho</option><option value="published">Publicado</option></Select></Field>
+        <Button type="submit">Salvar serviço</Button>
+      </div>
     </ActionForm>
   );
 
@@ -83,9 +100,9 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Serviços e conhecimento" subtitle="Tudo o que a assistente pode dizer sai daqui: catálogo, preços e textos aprovados.">
         {tab === "servicos" ? (
-          <Modal trigger={<><Plus size={15} aria-hidden /> Novo serviço</>} title="Novo serviço" wide triggerClass={buttonClass("accent")}><ServiceForm /></Modal>
+          <Modal trigger={<><Plus size={15} aria-hidden /> Novo serviço</>} title="Novo serviço" description="Começa como rascunho. A assistente só usa depois de publicado." wide triggerClass={buttonClass("accent")}><ServiceForm /></Modal>
         ) : (
-          <Modal trigger={<><Plus size={15} aria-hidden /> Novo documento</>} title="Novo documento" wide triggerClass={buttonClass("accent")}>
+          <Modal trigger={<><Plus size={15} aria-hidden /> Novo documento</>} title="Novo documento" description="Informações que a assistente pode usar nas respostas, como formas de pagamento e estacionamento." wide triggerClass={buttonClass("accent")}>
             <ActionForm action={saveDocAction} className="space-y-4">
               <Field label="Título"><Input name="title" required placeholder="Ex.: Formas de pagamento" /></Field>
               <Field label="Conteúdo"><Textarea name="body" className="min-h-40" /></Field>
@@ -113,7 +130,7 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
                   <td>{price(s)}</td>
                   <td>{s.bookable_directly ? <Badge tone="ok">direto</Badge> : <Badge>via avaliação</Badge>}</td>
                   <td><Badge tone={s.status === "published" ? "navy" : "warn"}>{s.status === "published" ? "Publicado" : "Rascunho"}</Badge><p className="t-small mt-1">v{s.version}{s.approver ? ` · ${s.approver.split(" ")[0]}` : ""}</p></td>
-                  <td className="text-right"><Modal trigger="Editar" title={`Editar: ${s.name}`} wide triggerClass={buttonClass("outline", "sm")}><ServiceForm s={s} /></Modal></td>
+                  <td className="text-right"><Modal trigger="Editar" title="Editar serviço" description={`${s.name} · versão ${s.version}. Ao salvar publicado, a assistente usa a nova versão na próxima resposta.`} wide triggerClass={buttonClass("outline", "sm")}><ServiceForm s={s} /></Modal></td>
                 </tr>
               ))}
             </Table>
@@ -131,7 +148,7 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
               <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm text-bone-dim">{d.body || <span className="text-bone-mute">Sem conteúdo ainda. A assistente não responde sobre este tema até você publicar.</span>}</p>
               <div className="mt-3 flex items-center justify-between text-[11px] text-bone-mute">
                 <span>v{d.version} · {d.versions} versão(ões) no histórico · {formatShort(d.updated_at, ctx.tz)}{d.approver ? ` · aprovado por ${d.approver.split(" ")[0]}` : ""}</span>
-                <Modal trigger="Editar" title={`Editar: ${d.title}`} wide triggerClass={buttonClass("outline", "sm")}>
+                <Modal trigger="Editar" title="Editar documento" description={d.title} wide triggerClass={buttonClass("outline", "sm")}>
                   <ActionForm action={saveDocAction} className="space-y-4" resetOnDone={false}>
                     <input type="hidden" name="docId" value={d.id} />
                     <Field label="Título"><Input name="title" defaultValue={d.title} required /></Field>

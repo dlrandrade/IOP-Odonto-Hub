@@ -8,7 +8,7 @@ import { getIdentity } from "@/auth/session";
 import type { ActionState } from "@/components/client";
 import { db } from "@/db/client";
 import { createClinic } from "@/services/clinic-setup";
-import { seedDemoClinic } from "@/services/demo";
+import { seedDemoActivity, seedDemoClinic } from "@/services/demo";
 
 async function platform() {
   const me = await getIdentity();
@@ -23,6 +23,14 @@ export async function enterClinicAction(form: FormData): Promise<void> {
   await db()`update platform_admins set acting_clinic_id = ${clinicId} where auth_user_id = ${me.authUserId}`;
   await db()`insert into audit_events (clinic_id, actor_label, action, entity, entity_id) values (${clinicId}, ${`Plataforma (${me.email})`}, 'platform.enter', 'clinics', ${clinicId})`;
   redirect("/");
+}
+
+/** Recria o movimento do dia (conversas, tarefas, consultas de hoje) numa clínica de demonstração. */
+export async function demoActivityAction(form: FormData): Promise<void> {
+  await platform();
+  const clinicId = z.string().uuid().parse(form.get("clinicId"));
+  await seedDemoActivity(db(), clinicId);
+  revalidatePath("/admin");
 }
 
 export async function leaveClinicAction(): Promise<void> {

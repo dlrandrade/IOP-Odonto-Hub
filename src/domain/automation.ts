@@ -51,3 +51,7 @@ export function decideAutomation(c: AutomationCheck): AutomationDecision {
 export function backoffMinutes(attempt: number): number {
   return Math.min(60, 2 ** attempt);
 }
+
+/** As quatro automações nativas (configuradas em clinics.settings), na ordem padrão do construtor. */
+export const BUILTIN_KEYS = ["followup_1", "followup_2", "reminder", "confirmation"] as const;
+export type BuiltinKey = (typeof BUILTIN_KEYS)[number];

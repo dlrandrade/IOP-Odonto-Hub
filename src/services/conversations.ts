@@ -316,12 +316,14 @@ export async function addNote(sql: Sql, clinicId: string, conversationId: string
 export async function scheduleFollowups(sql: Sql, clinicId: string, conversationId: string, lastInboundAt: Date, now: Date): Promise<void> {
   const [clinic] = await sql<{ settings: unknown }[]>`select settings from clinics where id = ${clinicId}`;
   const s = parseSettings(clinic?.settings);
-  if (!s.followupsEnabled) return;
+  if (!s.followupsEnabled && !s.followup2Enabled) return;
   await cancelJobs(sql, clinicId, { conversationId, types: ["followup_1", "followup_2"] });
   const anchor = now.toISOString();
-  await enqueueJob(sql, { clinicId, type: "followup_1", runAt: addMinutes(now, s.followup1Hours * 60), conversationId, idempotencyKey: `fu1:${conversationId}:${now.getTime()}`, payload: { scheduledAfter: anchor } });
+  if (s.followupsEnabled) {
+    await enqueueJob(sql, { clinicId, type: "followup_1", runAt: addMinutes(now, s.followup1Hours * 60), conversationId, idempotencyKey: `fu1:${conversationId}:${now.getTime()}`, payload: { scheduledAfter: anchor } });
+  }
   const second = addMinutes(lastInboundAt, s.followup2Hours * 60);
-  if (second > addMinutes(now, s.followup1Hours * 60)) {
+  if (s.followup2Enabled && second > addMinutes(now, s.followup1Hours * 60)) {
     await enqueueJob(sql, { clinicId, type: "followup_2", runAt: second, conversationId, idempotencyKey: `fu2:${conversationId}:${lastInboundAt.getTime()}`, payload: { scheduledAfter: anchor } });
   }
 }

@@ -1,13 +1,14 @@
 import { redirect } from "next/navigation";
 import { getIdentity } from "@/auth/session";
 import { Logo } from "@/components/brand";
+import { ThemeToggle } from "@/components/nav";
 import { Stat } from "@/components/charts";
 import { ActionForm, Modal } from "@/components/client";
 import { Badge, Button, buttonClass, Card, CardTitle, Checkbox, Empty, Field, Input, Select, Table } from "@/components/ui";
 import { db } from "@/db/client";
 import { missingEnv } from "@/lib/env";
 import { logoutAction } from "../(auth)/actions";
-import { clinicStatusAction, createClientClinicAction, enterClinicAction, leaveClinicAction } from "./actions";
+import { clinicStatusAction, createClientClinicAction, demoActivityAction, enterClinicAction, leaveClinicAction } from "./actions";
 
 export const metadata = { title: "Plataforma" };
 export const dynamic = "force-dynamic";
@@ -38,6 +39,7 @@ export default async function PlatformPage() {
         <div className="flex items-center gap-2">
           <span className="hidden text-xs text-bone-mute sm:inline">{me.email}</span>
           {acting && <form action={leaveClinicAction}><Button size="sm" variant="outline">Sair de “{acting.name}”</Button></form>}
+          <ThemeToggle />
           <form action={logoutAction}><Button size="sm" variant="ghost">Sair</Button></form>
         </div>
       </div>
@@ -46,7 +48,7 @@ export default async function PlatformPage() {
           <p className="eyebrow mb-2 text-bone-mute">Operador da plataforma</p>
           <h1 className="display text-[40px] leading-none">Suas clínicas</h1>
         </div>
-        <Modal trigger="Nova clínica cliente" title="Nova clínica cliente" triggerClass={buttonClass("accent")}>
+        <Modal trigger="Nova clínica cliente" title="Nova clínica cliente" description="Cria a clínica com o responsável como administrador e uma senha provisória para você entregar a ele." triggerClass={buttonClass("accent")}>
           <ActionForm action={createClientClinicAction} className="space-y-4" resetOnDone={false}>
             <Field label="Nome da clínica"><Input name="clinicName" required /></Field>
             <div className="grid gap-6 sm:grid-cols-2">
@@ -82,7 +84,12 @@ export default async function PlatformPage() {
                 <td>{c.users}</td><td>{c.conversations_30d}</td><td>{c.appointments_30d}</td>
                 <td><Badge tone={c.wa ? "ok" : "neutral"}>{c.wa ? "conectado" : "pendente"}</Badge></td>
                 <td><Badge tone={c.ai_enabled ? "ok" : "neutral"}>{c.ai_enabled ? "ativa" : "desligada"}</Badge></td>
-                <td><form action={enterClinicAction}><input type="hidden" name="clinicId" value={c.id} /><Button size="sm">Entrar</Button></form></td>
+                <td>
+                  <div className="flex items-center justify-end gap-2">
+                    {c.is_demo && <form action={demoActivityAction}><input type="hidden" name="clinicId" value={c.id} /><Button size="sm" variant="outline" title="Cria conversas, tarefas e consultas de hoje (fictícias)">Movimentar demo</Button></form>}
+                    <form action={enterClinicAction}><input type="hidden" name="clinicId" value={c.id} /><Button size="sm">Entrar</Button></form>
+                  </div>
+                </td>
               </tr>
             ))}
           </Table>

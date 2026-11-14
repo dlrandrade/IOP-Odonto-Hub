@@ -1,4 +1,5 @@
 import { cn } from "@/lib/format";
+import { ThemeToggle } from "@/components/nav";
 
 /** Marca só em texto, como no iopbusiness: o nome da escola ao lado do nome do produto. */
 export function Logo({ className }: { light?: boolean; className?: string }) {
@@ -12,7 +13,7 @@ export function Logo({ className }: { light?: boolean; className?: string }) {
 }
 
 const FATOS = [
-  ["WhatsApp oficial", "Cada clínica conecta o próprio número, sem API não oficial."],
+  ["WhatsApp da clínica", "Cada clínica conecta o próprio número: pela Meta (recomendado) ou por QR Code."],
   ["Agenda sem conflito", "O banco recusa dois pacientes na mesma cadeira e no mesmo horário."],
   ["Assistente com limites", "Nunca diagnostica, não inventa preço e chama a equipe quando precisa."],
 ];
@@ -37,7 +38,8 @@ export function AuthFrame({ title, subtitle, children }: { title: string; highli
           ))}
         </dl>
       </section>
-      <section className="flex items-center justify-center p-5 sm:p-10">
+      <section className="relative flex items-center justify-center p-5 sm:p-10">
+        <ThemeToggle className="absolute right-5 top-5" />
         <div className="w-full max-w-md">
           <Logo className="mb-10 lg:hidden" />
           {children}

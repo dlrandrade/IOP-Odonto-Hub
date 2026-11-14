@@ -7,7 +7,7 @@ import { Avatar, Badge, Button, buttonClass, Card, CardTitle, Empty, Field, Inpu
 import { can } from "@/domain/permissions";
 import { APPOINTMENT_STATUS_LABELS, OPPORTUNITY_STAGE_LABELS, type AppointmentStatus, type OpportunityStage } from "@/domain/states";
 import { formatFull, formatShort } from "@/lib/datetime";
-import { formatPhone } from "@/lib/format";
+import { cn, formatPhone } from "@/lib/format";
 import { maskPhone } from "@/lib/crypto";
 import { mergePatientsAction, savePatientAction, unlinkContactAction } from "../actions";
 
@@ -46,87 +46,121 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
   const p = data.patient;
   const fullPhone = ctx.role !== "dentista";
 
+  const age = (() => {
+    if (!p.birth_date) return null;
+    const [y, m, d] = p.birth_date.split("-").map(Number) as [number, number, number];
+    const now = new Date();
+    let years = now.getFullYear() - y;
+    if (now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)) years--;
+    return years;
+  })();
+  const next = data.appointments.filter((a) => a.starts_at > new Date() && ["scheduled", "confirmed"].includes(a.status)).at(-1);
+  const last = data.appointments.find((a) => a.starts_at <= new Date() && a.status === "completed");
+  const mainPhone = data.links[0];
+
   return (
     <>
-      <Link href="/pacientes" className="mb-3 inline-flex items-center gap-1 text-sm font-semibold"><ArrowLeft size={15} aria-hidden /> Pacientes</Link>
-      {p.merged_into_patient_id && <div className="mb-3"><Notice tone="sun">Este cadastro foi mesclado. <Link className="font-semibold underline" href={`/pacientes/${p.merged_into_patient_id}`}>Abrir o cadastro principal</Link></Notice></div>}
-      <div className="grid gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+      <Link href="/pacientes" className={cn(buttonClass("ghost", "sm"), "-ml-3 mb-4")}><ArrowLeft aria-hidden /> Pacientes</Link>
+      {p.merged_into_patient_id && <div className="mb-6"><Notice tone="sun">Este cadastro foi mesclado. <Link className="font-semibold underline" href={`/pacientes/${p.merged_into_patient_id}`}>Abrir o cadastro principal</Link></Notice></div>}
+
+      {/* Cabeçalho da ficha: identidade e os fatos que a recepção mais consulta, numa linha só. */}
+      <Card className="mb-6">
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+          <Avatar name={p.full_name} size={56} />
+          <div className="min-w-0 flex-1">
+            <h1 className="t-h1 text-[28px] lg:text-[30px]">{p.full_name}</h1>
+            <p className="t-small mt-1">Cadastro desde {new Intl.DateTimeFormat("pt-BR").format(p.created_at)} · CPF {p.has_cpf ? "cadastrado (criptografado)" : "não informado"}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {canWrite && (
+              <Modal trigger="Editar cadastro" title="Editar cadastro" description="Dados administrativos. Não registre informação clínica." triggerClass={buttonClass("outline")}>
+                <ActionForm action={savePatientAction} className="space-y-5" resetOnDone={false}>
+                  <input type="hidden" name="patientId" value={p.id} />
+                  <Field label="Nome completo"><Input name="fullName" defaultValue={p.full_name} required /></Field>
+                  <div className="grid gap-6 sm:grid-cols-2">
+                    <Field label="Data de nascimento"><Input type="date" name="birthDate" defaultValue={p.birth_date ?? ""} /></Field>
+                    <Field label="CPF (opcional)" hint="Fica criptografado e nunca vai para a IA. Em branco mantém o atual."><Input name="cpf" inputMode="numeric" autoComplete="off" /></Field>
+                  </div>
+                  <Field label="Observações administrativas"><Textarea name="notes" defaultValue={p.notes ?? ""} className="min-h-16" /></Field>
+                  <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>
+                </ActionForm>
+              </Modal>
+            )}
+            {data.others.length > 0 && !p.merged_into_patient_id && (
+              <Modal trigger="Mesclar duplicado" title="Mesclar cadastro duplicado" description="Use quando o mesmo paciente foi cadastrado duas vezes. Consultas e contatos passam para este cadastro e a ação fica na auditoria." triggerClass={buttonClass("ghost")}>
+                <ActionForm action={mergePatientsAction} className="space-y-5">
+                  <input type="hidden" name="keepId" value={p.id} />
+                  <Field label="Cadastro duplicado (será incorporado a este)">
+                    <Select name="duplicateId" required defaultValue=""><option value="" disabled>Escolha…</option>{data.others.map((o) => <option key={o.id} value={o.id}>{o.full_name}{o.birth_date ? ` (${o.birth_date.split("-").reverse().join("/")})` : ""}</option>)}</Select>
+                  </Field>
+                  <div className="flex justify-end border-t border-line pt-5"><Button type="submit" variant="danger">Mesclar neste cadastro</Button></div>
+                </ActionForm>
+              </Modal>
+            )}
+            {can(ctx.role, "agenda.write") && <Link href="/agenda?nova=1" className={buttonClass("primary")}>Agendar</Link>}
+          </div>
+        </div>
+        <dl className="mt-6 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line lg:grid-cols-4">
+          {[
+            ["Idade", age != null ? `${age} anos` : "—", p.birth_date ? `Nasceu em ${p.birth_date.split("-").reverse().join("/")}` : "Nascimento não informado"],
+            ["WhatsApp", mainPhone ? (fullPhone ? formatPhone(mainPhone.phone_e164) : maskPhone(mainPhone.phone_e164)) : "—", data.links.length > 1 ? `+${data.links.length - 1} contato(s)` : mainPhone ? (mainPhone.relationship === "self" ? "do próprio paciente" : "de um responsável") : "sem telefone"],
+            ["Última consulta", last ? formatShort(last.starts_at, ctx.tz) : "—", last ? last.service : "nenhuma concluída"],
+            ["Próxima consulta", next ? formatShort(next.starts_at, ctx.tz) : "—", next ? next.service : "nada marcado"],
+          ].map(([k, v, hint]) => (
+            <div key={k} className="bg-surface px-5 py-4">
+              <dt className="eyebrow text-bone-mute">{k}</dt>
+              <dd className="mt-1.5 text-[17px] font-semibold">{v}</dd>
+              <dd className="t-small truncate">{hint}</dd>
+            </div>
+          ))}
+        </dl>
+        {p.notes && <p className="mt-4 rounded-sm border-l-2 border-gold/70 bg-gold/[0.07] px-4 py-2.5 text-[13.5px]"><span className="font-medium">Observação:</span> {p.notes}</p>}
+        {data.tasks.length > 0 && <div className="mt-4"><Notice tone="sun"><strong>Tarefas abertas:</strong> {data.tasks.map((t) => t.title).join(" · ")}</Notice></div>}
+      </Card>
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <Card>
+          <CardTitle hint={`${data.appointments.length} registro${data.appointments.length === 1 ? "" : "s"}, do mais recente ao mais antigo.`}>Consultas</CardTitle>
+          {data.appointments.length === 0 ? <p className="t-small">Nenhuma consulta ainda.</p> : (
+            <Table head={["Quando", "Serviço", "Dentista", "Situação"]}>
+              {data.appointments.map((a) => (
+                <tr key={a.id}><td className="whitespace-nowrap">{formatShort(a.starts_at, ctx.tz)}</td><td>{a.service}<span className="t-small block">{a.created_by_type === "ai" ? "marcada pela assistente" : "marcada pela equipe"}</span></td><td>{a.professional}</td>
+                  <td><Badge tone={a.status === "completed" ? "ok" : a.status === "no_show" ? "danger" : a.status === "cancelled" ? "neutral" : "info"}>{APPOINTMENT_STATUS_LABELS[a.status]}</Badge></td></tr>
+              ))}
+            </Table>
+          )}
+        </Card>
+
         <div className="space-y-6">
           <Card>
-            <div className="flex items-center gap-3"><Avatar name={p.full_name} size={52} /><div><h1 className="text-xl font-bold leading-tight">{p.full_name}</h1><p className="text-xs text-bone-mute">Cadastro desde {new Intl.DateTimeFormat("pt-BR").format(p.created_at)}</p></div></div>
-            <dl className="mt-4 space-y-2 text-sm">
-              <div className="flex justify-between"><dt className="text-bone-mute">Nascimento</dt><dd>{p.birth_date ? p.birth_date.split("-").reverse().join("/") : "—"}</dd></div>
-              <div className="flex justify-between"><dt className="text-bone-mute">CPF</dt><dd>{p.has_cpf ? "cadastrado (criptografado)" : "não informado"}</dd></div>
-            </dl>
-            {p.notes && <p className="mt-3 rounded-md bg-surface-2 px-3 py-2 text-sm">{p.notes}</p>}
-            {canWrite && (
-              <div className="mt-4">
-                <Modal trigger="Editar cadastro" title="Editar cadastro" triggerClass={buttonClass("outline", "sm")}>
-                  <ActionForm action={savePatientAction} className="space-y-4" resetOnDone={false}>
-                    <input type="hidden" name="patientId" value={p.id} />
-                    <Field label="Nome completo"><Input name="fullName" defaultValue={p.full_name} required /></Field>
-                    <Field label="Data de nascimento"><Input type="date" name="birthDate" defaultValue={p.birth_date ?? ""} /></Field>
-                    <Field label="CPF (opcional)" hint="Peça apenas com finalidade definida (ex.: nota fiscal). Fica criptografado e nunca é enviado à IA. Deixe em branco para manter."><Input name="cpf" inputMode="numeric" autoComplete="off" /></Field>
-                    <Field label="Observações administrativas"><Textarea name="notes" defaultValue={p.notes ?? ""} className="min-h-16" /></Field>
-                    <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>
-                  </ActionForm>
-                </Modal>
-              </div>
-            )}
-          </Card>
-          <Card>
-            <CardTitle hint="Quem fala por este paciente no WhatsApp">Contatos e responsáveis</CardTitle>
-            {data.links.length === 0 ? <p className="text-sm text-bone-mute">Sem telefone vinculado. Vincule pela tela de Conversas.</p> : (
-              <ul className="space-y-6">
+            <CardTitle hint="Quem fala por este paciente no WhatsApp.">Contatos e responsáveis</CardTitle>
+            {data.links.length === 0 ? <p className="t-small">Sem telefone vinculado. Vincule pela tela de Conversas.</p> : (
+              <ul className="divide-y divide-line">
                 {data.links.map((l) => (
-                  <li key={l.id} className="text-sm">
-                    <p className="font-medium">{fullPhone ? formatPhone(l.phone_e164) : maskPhone(l.phone_e164)} {l.wa_profile_name && <span className="font-normal text-bone-mute">· {l.wa_profile_name}</span>}</p>
-                    <div className="mt-1 flex flex-wrap items-center gap-1">
-                      <Badge>{l.relationship === "self" ? "o próprio paciente" : `é ${l.relationship} do titular do telefone`}</Badge>
+                  <li key={l.id} className="py-3 first:pt-0 last:pb-0">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="t-h3 font-mono text-[14px]">{fullPhone ? formatPhone(l.phone_e164) : maskPhone(l.phone_e164)}</p>
+                      {canWrite && <ActionForm action={unlinkContactAction}><input type="hidden" name="linkId" value={l.id} /><button className={buttonClass("ghost", "sm")}>Desvincular</button></ActionForm>}
+                    </div>
+                    {l.wa_profile_name && <p className="t-small">{l.wa_profile_name}</p>}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <Badge>{l.relationship === "self" ? "o próprio paciente" : `${l.relationship} do titular`}</Badge>
                       {l.is_guardian && <Badge tone="sun">responsável</Badge>}
                       {l.is_payer && <Badge>pagador</Badge>}
-                      {l.verified_at && <Badge tone="ok">identidade verificada</Badge>}
+                      {l.verified_at && <Badge tone="ok">verificado</Badge>}
                       {l.opted_out_at && <Badge tone="danger">não receber mensagens</Badge>}
-                      {canWrite && <ActionForm action={unlinkContactAction}><input type="hidden" name="linkId" value={l.id} /><button className={buttonClass("ghost", "sm")}>Desvincular</button></ActionForm>}
                     </div>
                   </li>
                 ))}
               </ul>
             )}
           </Card>
-          {data.others.length > 0 && !p.merged_into_patient_id && (
-            <Card>
-              <CardTitle hint="Use quando o mesmo paciente foi cadastrado duas vezes. A ação fica registrada na auditoria.">Mesclar duplicado</CardTitle>
-              <ActionForm action={mergePatientsAction} className="space-y-6">
-                <input type="hidden" name="keepId" value={p.id} />
-                <Field label="Cadastro duplicado (será incorporado a este)">
-                  <Select name="duplicateId" required defaultValue=""><option value="" disabled>Escolha…</option>{data.others.map((o) => <option key={o.id} value={o.id}>{o.full_name}{o.birth_date ? ` (${o.birth_date.split("-").reverse().join("/")})` : ""}</option>)}</Select>
-                </Field>
-                <Button size="sm" variant="outline">Mesclar neste cadastro</Button>
-              </ActionForm>
-            </Card>
-          )}
-        </div>
-        <div className="space-y-6">
-          {data.tasks.length > 0 && <Notice tone="sun"><strong>Tarefas abertas:</strong> {data.tasks.map((t) => t.title).join(" · ")}</Notice>}
-          <Card>
-            <CardTitle action={can(ctx.role, "agenda.write") ? <Link href="/agenda" className={buttonClass("outline", "sm")}>Agendar</Link> : undefined}>Consultas</CardTitle>
-            {data.appointments.length === 0 ? <Empty title="Nenhuma consulta" /> : (
-              <Table head={["Quando", "Serviço", "Dentista", "Status", "Origem"]}>
-                {data.appointments.map((a) => (
-                  <tr key={a.id}><td>{formatFull(a.starts_at, ctx.tz)}</td><td>{a.service}</td><td>{a.professional}</td>
-                    <td><Badge tone={a.status === "completed" ? "ok" : a.status === "no_show" ? "danger" : a.status === "cancelled" ? "neutral" : "sun"}>{APPOINTMENT_STATUS_LABELS[a.status]}</Badge></td>
-                    <td className="text-xs text-bone-mute">{a.created_by_type === "ai" ? "IA" : "Equipe"}</td></tr>
-                ))}
-              </Table>
-            )}
-          </Card>
           {can(ctx.role, "crm.view") && (
             <Card>
               <CardTitle action={<Link href="/crm" className={buttonClass("outline", "sm")}>Abrir CRM</Link>}>Interesses</CardTitle>
-              {data.opportunities.length === 0 ? <Empty title="Nenhum interesse registrado" /> : (
+              {data.opportunities.length === 0 ? <p className="t-small">Nenhum interesse registrado.</p> : (
                 <ul className="divide-y divide-line">{data.opportunities.map((o) => (
-                  <li key={o.id} className="flex items-center justify-between gap-2 py-2 text-sm"><span>{o.service_interest}</span><Badge>{OPPORTUNITY_STAGE_LABELS[o.stage]}</Badge></li>
+                  <li key={o.id} className="flex h-11 items-center justify-between gap-3"><span className="truncate text-[14px]">{o.service_interest}</span><Badge tone="violet">{OPPORTUNITY_STAGE_LABELS[o.stage]}</Badge></li>
                 ))}</ul>
               )}
             </Card>
@@ -134,18 +168,16 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
           {seesConversations && (
             <Card>
               <CardTitle hint="Resumos são apoio administrativo, não evolução clínica.">Conversas</CardTitle>
-              {data.conversations.length === 0 ? <Empty title="Nenhuma conversa" /> : (
-                <ul className="space-y-6">{data.conversations.map((c) => (
-                  <li key={c.id} className="rounded-md border border-line p-3 text-sm">
-                    <div className="flex items-center justify-between gap-2"><span className="text-xs text-bone-mute">{c.last_message_at ? formatShort(c.last_message_at, ctx.tz) : "—"}</span><Link href={`/conversas?c=${c.id}`} className={buttonClass("outline", "sm")}>Abrir conversa</Link></div>
-                    <p className="mt-1">{c.summary ?? <span className="text-bone-mute">Sem resumo.</span>}</p>
-                    {c.summary && <p className="mt-1 text-[11px] text-bone-mute">{c.summary_by === "ai" ? "Resumo gerado por IA" : "Resumo editado pela equipe"}</p>}
+              {data.conversations.length === 0 ? <p className="t-small">Nenhuma conversa.</p> : (
+                <ul className="divide-y divide-line">{data.conversations.map((c) => (
+                  <li key={c.id} className="py-3 first:pt-0 last:pb-0">
+                    <div className="flex items-center justify-between gap-3"><span className="t-small font-mono">{c.last_message_at ? formatShort(c.last_message_at, ctx.tz) : "—"}</span><Link href={`/conversas?c=${c.id}`} className={buttonClass("ghost", "sm")}>Abrir</Link></div>
+                    <p className="mt-1 text-[13.5px] text-bone-dim">{c.summary ?? "Sem resumo."}</p>
                   </li>
                 ))}</ul>
               )}
             </Card>
           )}
-          <Card><CardTitle>Propostas e pagamentos</CardTitle><p className="text-sm text-bone-mute">Disponíveis no módulo P1 (propostas versionadas e registro de pagamentos).</p></Card>
         </div>
       </div>
     </>

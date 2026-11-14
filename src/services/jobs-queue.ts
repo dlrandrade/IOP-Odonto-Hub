@@ -2,7 +2,7 @@ import type { Sql } from "@/db/client";
 
 export type JobType =
   | "process_conversation" | "transcribe" | "fetch_media" | "send_message"
-  | "followup_1" | "followup_2" | "reminder" | "confirmation_request";
+  | "followup_1" | "followup_2" | "reminder" | "confirmation_request" | "automation";
 
 export type EnqueueInput = {
   clinicId: string;

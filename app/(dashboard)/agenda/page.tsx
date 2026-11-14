@@ -21,7 +21,7 @@ type Appt = {
 const STATUS: Record<AppointmentStatus, { icon: LucideIcon; cls: string }> = {
   scheduled: { icon: CircleDashed, cls: "bg-surface-2 border-bone-mute text-bone" },
   confirmed: { icon: CalendarCheck, cls: "bg-gold/15 border-gold text-bone" },
-  arrived: { icon: DoorOpen, cls: "bg-sky-400/15 border-sky-400 text-bone" },
+  arrived: { icon: DoorOpen, cls: "bg-info-soft border-info text-bone" },
   in_service: { icon: Stethoscope, cls: "bg-acento/15 border-acento text-bone" },
   completed: { icon: Check, cls: "bg-ok-soft border-ok text-ok" },
   no_show: { icon: UserX, cls: "bg-danger-soft border-danger text-danger" },
@@ -92,44 +92,58 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     const S = STATUS[a.status];
     const Icon = S.icon;
     return (
-      <Modal title={`${a.service} · ${a.patient}`} wide
-        triggerClass={cn("block w-full overflow-hidden rounded-sm border-l-2 px-2 py-1 text-left text-xs shadow-sm hover:brightness-95", S.cls, compact ? "" : "h-full")}
+      <Modal title={a.patient} description={`${a.service} · ${formatFull(a.starts_at, ctx.tz)} às ${localTime(a.ends_at, ctx.tz)}`} wide triggerTitle="Clique para ver e alterar a consulta"
+        triggerClass={cn("group block w-full cursor-pointer overflow-hidden rounded-sm border-l-2 px-2 py-1 text-left text-xs transition-[box-shadow,filter] hover:shadow-[0_0_0_1px_rgb(var(--acento-rgb)/0.7)] hover:brightness-110 focus-visible:shadow-[0_0_0_2px_rgb(var(--acento-rgb))]", S.cls, compact ? "" : "h-full")}
         trigger={<>
-          <span className="flex items-center gap-1 font-semibold"><Icon size={11} aria-hidden className="shrink-0" /><span className="truncate">{localTime(a.starts_at, ctx.tz)} {a.patient}</span></span>
+          <span className="flex items-center gap-1 font-semibold"><Icon size={11} aria-hidden className="shrink-0" /><span className="truncate">{localTime(a.starts_at, ctx.tz)} {a.patient}</span><ChevronRight size={11} aria-hidden className="ml-auto shrink-0 opacity-0 transition-opacity group-hover:opacity-80" /></span>
           <span className="block truncate opacity-80">{a.service} · {APPOINTMENT_STATUS_LABELS[a.status]}</span>
         </>}>
-        <dl className="grid grid-cols-2 gap-3 text-sm">
-          <div><dt className="text-xs text-bone-mute">Quando</dt><dd className="font-medium">{formatFull(a.starts_at, ctx.tz)} – {localTime(a.ends_at, ctx.tz)}</dd></div>
-          <div><dt className="text-xs text-bone-mute">Status</dt><dd><Badge tone={a.status === "no_show" ? "danger" : a.status === "completed" ? "ok" : "neutral"}><Icon size={11} aria-hidden /> {APPOINTMENT_STATUS_LABELS[a.status]}</Badge></dd></div>
-          <div><dt className="text-xs text-bone-mute">Paciente</dt><dd><Link className="font-medium underline" href={`/pacientes/${a.patient_id}`}>{a.patient}</Link></dd></div>
-          <div><dt className="text-xs text-bone-mute">Dentista / cadeira</dt><dd className="font-medium">{data.allProfessionals.find((p) => p.id === a.professional_id)?.name} · {a.chair ?? "—"}</dd></div>
-          <div><dt className="text-xs text-bone-mute">Marcada por</dt><dd>{a.created_by_type === "ai" ? "Assistente virtual" : a.created_by_type === "user" ? "Equipe" : "Sistema"}</dd></div>
-          {a.notes && <div className="col-span-2"><dt className="text-xs text-bone-mute">Observação</dt><dd>{a.notes}</dd></div>}
-        </dl>
-        {canWrite && NEXT[a.status].length > 0 && (
-          <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
-            {NEXT[a.status].map((s) => (
-              <ActionForm key={s} action={appointmentStatusAction}>
-                <input type="hidden" name="appointmentId" value={a.id} /><input type="hidden" name="status" value={s} />
-                <Button size="sm" variant={s === "no_show" ? "outline" : "primary"}>{{ confirmed: "Confirmar", arrived: "Registrar chegada", in_service: "Iniciar atendimento", completed: "Concluir", no_show: "Registrar falta" }[s as string] ?? s}</Button>
-              </ActionForm>
+        <div className="space-y-6">
+          <div className={cn("flex items-center justify-between gap-3 rounded-md border-l-2 px-4 py-3", S.cls)}>
+            <span className="flex items-center gap-2 text-[14px] font-medium"><Icon size={15} aria-hidden /> {APPOINTMENT_STATUS_LABELS[a.status]}</span>
+            <span className="t-small">Marcada por {a.created_by_type === "ai" ? "assistente virtual" : a.created_by_type === "user" ? "equipe" : "sistema"}</span>
+          </div>
+          <dl className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line">
+            {[
+              ["Paciente", <Link key="p" className="underline-offset-2 hover:underline" href={`/pacientes/${a.patient_id}`}>{a.patient}</Link>],
+              ["Serviço", a.service],
+              ["Dentista", data.allProfessionals.find((p) => p.id === a.professional_id)?.name ?? "—"],
+              ["Cadeira", a.chair ?? "—"],
+            ].map(([k, v]) => (
+              <div key={String(k)} className="bg-surface px-4 py-3"><dt className="eyebrow text-bone-mute">{k}</dt><dd className="mt-1 text-[14px] font-medium">{v}</dd></div>
             ))}
-          </div>
-        )}
-        {canWrite && (a.status === "scheduled" || a.status === "confirmed") && (
-          <div className="mt-4 grid gap-4 border-t border-line pt-4 sm:grid-cols-2">
-            <details><summary className="cursor-pointer text-sm font-semibold">Reagendar</summary>
-              <div className="mt-3"><BookingForm {...bookingProps} reschedule={{ appointmentId: a.id, serviceId: a.service_id, patientName: a.patient }} /></div>
-            </details>
-            <details><summary className="cursor-pointer text-sm font-semibold text-danger">Cancelar consulta</summary>
-              <ActionForm action={appointmentStatusAction} className="mt-3 space-y-3">
-                <input type="hidden" name="appointmentId" value={a.id} /><input type="hidden" name="status" value="cancelled" />
-                <Field label="Motivo"><Input name="reason" placeholder="Ex.: paciente pediu" /></Field>
-                <Button size="sm" variant="danger">Cancelar e remover lembretes</Button>
-              </ActionForm>
-            </details>
-          </div>
-        )}
+            {a.notes && <div className="col-span-2 bg-surface px-4 py-3"><dt className="eyebrow text-bone-mute">Observação</dt><dd className="mt-1 text-[14px]">{a.notes}</dd></div>}
+          </dl>
+          {canWrite && NEXT[a.status].length > 0 && (
+            <section>
+              <h3 className="t-h3 mb-3">Próximo passo</h3>
+              <div className="flex flex-wrap gap-2">
+                {NEXT[a.status].map((s, i) => (
+                  <ActionForm key={s} action={appointmentStatusAction}>
+                    <input type="hidden" name="appointmentId" value={a.id} /><input type="hidden" name="status" value={s} />
+                    <Button variant={s === "no_show" ? "outline" : i === 0 ? "primary" : "outline"}>{{ confirmed: "Confirmar presença", arrived: "Registrar chegada", in_service: "Iniciar atendimento", completed: "Concluir consulta", no_show: "Registrar falta" }[s as string] ?? s}</Button>
+                  </ActionForm>
+                ))}
+              </div>
+            </section>
+          )}
+          {canWrite && (a.status === "scheduled" || a.status === "confirmed") && (
+            <section className="divide-y divide-line rounded-md border border-line">
+              <details className="group/d">
+                <summary className="flex h-12 cursor-pointer list-none items-center justify-between px-4 text-[14px] font-medium">Reagendar para outro horário<ChevronRight size={15} aria-hidden className="text-bone-mute transition-transform group-open/d:rotate-90" /></summary>
+                <div className="border-t border-line p-4"><BookingForm {...bookingProps} reschedule={{ appointmentId: a.id, serviceId: a.service_id, patientName: a.patient }} /></div>
+              </details>
+              <details className="group/d">
+                <summary className="flex h-12 cursor-pointer list-none items-center justify-between px-4 text-[14px] font-medium text-danger">Cancelar consulta<ChevronRight size={15} aria-hidden className="transition-transform group-open/d:rotate-90" /></summary>
+                <ActionForm action={appointmentStatusAction} className="space-y-4 border-t border-line p-4">
+                  <input type="hidden" name="appointmentId" value={a.id} /><input type="hidden" name="status" value="cancelled" />
+                  <Field label="Motivo"><Input name="reason" placeholder="Ex.: paciente pediu" /></Field>
+                  <div className="flex justify-end"><Button variant="danger">Cancelar e remover lembretes</Button></div>
+                </ActionForm>
+              </details>
+            </section>
+          )}
+        </div>
       </Modal>
     );
   };
@@ -139,7 +153,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       <PageHeader title="Agenda" subtitle={view === "dia" ? `${formatDay(day)}${day === today ? " · hoje" : ""}` : view === "semana" ? `Semana de ${formatDay(weekStart)}` : new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${monthStart}T00:00:00Z`))}>
         {canWrite && (
           <>
-            <Modal trigger={<><Lock size={14} aria-hidden /> Bloquear horário</>} title="Bloqueio, folga ou feriado" triggerClass={buttonClass("outline")}>
+            <Modal trigger={<><Lock size={14} aria-hidden /> Bloquear horário</>} title="Bloqueio, folga ou feriado" description="Horários bloqueados não aparecem para a assistente nem para a recepção." triggerClass={buttonClass("outline")}>
               <ActionForm action={createBlockAction} className="space-y-4">
                 <Field label="Quem"><Select name="professionalId" defaultValue=""><option value="">Clínica toda (feriado)</option>{data.allProfessionals.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
                 <Field label="Dia"><Input type="date" name="date" defaultValue={day} required /></Field>

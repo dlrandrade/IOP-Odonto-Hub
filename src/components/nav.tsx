@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import {
-  BarChart3, Bot, CalendarDays, KanbanSquare, MessageCircle, Search, Settings, Sparkles, Sun, Users, Zap, X, MoreHorizontal, CornerDownLeft,
+  BarChart3, Bot, Moon, CalendarDays, KanbanSquare, MessageCircle, Search, Settings, Sparkles, Sun, Users, Zap, X, MoreHorizontal, CornerDownLeft,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/format";
@@ -31,7 +31,7 @@ function Item({ item, onNavigate }: { item: NavEntry; onNavigate?: () => void })
       <span aria-hidden className={cn("absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-acento transition-opacity", active ? "opacity-100" : "opacity-0")} />
       <Icon size={16} aria-hidden className={cn("shrink-0 transition-colors", active ? "text-acento" : "text-bone-mute group-hover:text-bone-dim")} />
       <span className="flex-1 truncate">{item.label}</span>
-      {!!item.badge && <span className="rounded-sm bg-acento px-1.5 py-px font-mono text-[10px] font-medium text-ink">{item.badge}</span>}
+      {!!item.badge && <span className="rounded-sm bg-acento px-1.5 py-px font-mono text-[10px] font-medium text-on">{item.badge}</span>}
     </Link>
   );
 }
@@ -75,7 +75,7 @@ export function MobileTabs({ primary, more }: { primary: NavEntry[]; more: NavGr
               className={cn("relative flex flex-col items-center gap-1 py-2.5 text-[10.5px] font-medium", active ? "text-bone" : "text-bone-mute")}>
               <span className={cn("absolute inset-x-5 top-0 h-0.5 rounded-full bg-acento transition-opacity", active ? "opacity-100" : "opacity-0")} aria-hidden />
               <span className="relative"><Icon size={19} aria-hidden className={active ? "text-acento" : ""} />
-                {!!item.badge && <span className="absolute -right-2.5 -top-1.5 rounded-sm bg-acento px-1 font-mono text-[9px] font-medium text-ink">{item.badge}</span>}
+                {!!item.badge && <span className="absolute -right-2.5 -top-1.5 rounded-sm bg-acento px-1 font-mono text-[9px] font-medium text-on">{item.badge}</span>}
               </span>
               {item.label}
             </Link>
@@ -174,5 +174,33 @@ export function SearchBox({ pages, compact }: { pages: NavEntry[]; compact?: boo
         </ul>
       </dialog>
     </>
+  );
+}
+
+/** Páginas que usam toda a largura da janela (quadros largos, como o funil). */
+const FULL_WIDTH = ["/crm"];
+
+/** Moldura de largura: topo e conteúdo compartilham exatamente a mesma coluna, em qualquer tamanho de tela. */
+export function Frame({ className, children }: { className?: string; children: ReactNode }) {
+  const path = usePathname();
+  const full = FULL_WIDTH.some((p) => path === p || path.startsWith(p + "/"));
+  return <div className={cn("mx-auto w-full min-w-0 px-4 sm:px-6 lg:px-10", full ? "max-w-none" : "max-w-[1320px]", className)}>{children}</div>;
+}
+
+/** Alterna entre tema escuro e claro. Salva a escolha em cookie (1 ano) para o servidor já renderizar certo. */
+export function ThemeToggle({ className }: { className?: string }) {
+  const [light, setLight] = useState(false);
+  useEffect(() => { setLight(document.documentElement.dataset.theme === "light"); }, []);
+  const toggle = () => {
+    const next = light ? "dark" : "light";
+    document.documentElement.dataset.theme = next;
+    document.cookie = `tema=${next}; path=/; max-age=31536000; samesite=lax`;
+    setLight(!light);
+  };
+  return (
+    <button type="button" onClick={toggle} aria-label={light ? "Usar tema escuro" : "Usar tema claro"} title={light ? "Tema escuro" : "Tema claro"}
+      className={cn("flex size-8 items-center justify-center rounded-sm border border-line text-bone-dim transition-colors hover:border-bone-mute/50 hover:text-bone", className)}>
+      {light ? <Moon size={15} aria-hidden /> : <Sun size={15} aria-hidden />}
+    </button>
   );
 }

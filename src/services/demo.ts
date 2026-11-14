@@ -119,6 +119,114 @@ export async function seedDemoClinic(sql: Sql, owner: { authUserId: string; emai
         returning id`;
       await tx`insert into opportunity_events (clinic_id, opportunity_id, from_stage, to_stage, actor) values (${clinicId}, ${o!.id}, null, ${stage}, 'system')`;
     }
+    await seedDemoActivity(tx, clinicId);
     return clinicId;
+  });
+}
+
+/**
+ * Movimento do dia para a demonstração: conversas em cada situação, consultas de hoje e tarefas.
+ * Só roda se a clínica é demo e ainda não tem conversas de WhatsApp. Tudo fictício.
+ */
+export async function seedDemoActivity(sql: Sql, clinicId: string): Promise<boolean> {
+  return inTx(sql, async (tx) => {
+    const [clinic] = await tx<{ is_demo: boolean; timezone: string }[]>`select is_demo, timezone from clinics where id = ${clinicId}`;
+    if (!clinic?.is_demo) return false;
+    const [{ n } = { n: 0 }] = await tx<{ n: number }[]>`select count(*)::int as n from conversations where clinic_id = ${clinicId} and channel = 'whatsapp'`;
+    if (n > 0) return false;
+    const tz = clinic.timezone;
+    const now = new Date();
+    const today = localDate(now, tz);
+    const people = await tx<{ contact_id: string; patient_id: string; name: string }[]>`
+      select l.contact_id, p.id as patient_id, p.full_name as name from contact_patient_links l join patients p on p.id = l.patient_id
+      where l.clinic_id = ${clinicId} and l.relationship = 'self' order by p.full_name limit 12`;
+    const pros = await tx<{ id: string; resource_id: string }[]>`
+      select p.id, r.id as resource_id from professionals p join resources r on r.professional_id = p.id where p.clinic_id = ${clinicId} and p.active order by p.created_at`;
+    const services = await tx<{ id: string; kind: string; name: string; duration_min: number }[]>`select id, kind, name, duration_min from services where clinic_id = ${clinicId} and status = 'published'`;
+    if (people.length < 8 || pros.length === 0 || services.length === 0) return false;
+    const min = (m: number) => addMinutes(now, -m);
+
+    // Consultas de hoje: o status acompanha o relógio (passadas concluídas, a atual em atendimento).
+    const slots = ["08:00", "09:30", "11:00", "13:30", "15:00", "16:30", "17:30"];
+    for (const [i, time] of slots.entries()) {
+      const who = people[(i + 4) % people.length]!;
+      const pro = pros[i % pros.length]!;
+      const service = services[i % services.length]!;
+      const startsAt = zonedToUtc(today, time, tz);
+      const endsAt = addMinutes(startsAt, service.duration_min);
+      const status = endsAt <= now ? (i === 1 ? "no_show" : "completed") : startsAt <= now ? "in_service" : i % 2 ? "confirmed" : "scheduled";
+      await tx.savepoint(async (sp) => {
+        const [a] = await sp<{ id: string }[]>`
+          insert into appointments (clinic_id, patient_id, contact_id, service_id, professional_id, starts_at, ends_at, status, created_by_type, created_at, confirmed_at)
+          values (${clinicId}, ${who.patient_id}, ${who.contact_id}, ${service.id}, ${pro.id}, ${startsAt}, ${endsAt}, ${status}, ${i % 2 ? "ai" : "user"}, ${min(3 * 1440)}, ${status === "confirmed" ? now : null})
+          returning id`;
+        await sp`insert into appointment_resources (clinic_id, appointment_id, resource_id, during, active)
+                 values (${clinicId}, ${a!.id}, ${pro.resource_id}, tstzrange(${startsAt}, ${endsAt}), true)`;
+      }).catch(() => undefined);
+    }
+
+    // Conversas em cada situação da fila.
+    type Msg = [direction: "inbound" | "outbound" | "internal", sender: "patient" | "ai" | "human" | "system", body: string, minutesAgo: number];
+    const convs: { who: number; state: string; priority?: "normal" | "urgente"; reason?: string; unread: number; msgs: Msg[] }[] = [
+      { who: 0, state: "awaiting_human", priority: "urgente", reason: "Sinal de alerta relatado: dor forte e inchaço", unread: 2, msgs: [
+        ["inbound", "patient", "Oi, estou com muita dor no dente desde ontem", 14],
+        ["inbound", "patient", "e o rosto está ficando inchado", 13],
+        ["outbound", "ai", "[DEMO] Sinto muito que esteja passando por isso. Vou chamar nossa equipe agora para falar com você.", 13],
+        ["internal", "system", "Encaminhada com urgência para a equipe: sinal de alerta.", 13],
+      ] },
+      { who: 1, state: "awaiting_human", priority: "normal", reason: "Pergunta sobre convênio, que não está na base de conhecimento", unread: 1, msgs: [
+        ["inbound", "patient", "Boa tarde! Vocês atendem pelo meu convênio?", 42],
+        ["outbound", "ai", "Boa tarde! Sou a Sol, assistente virtual da clínica. Sobre convênios, vou confirmar com a equipe e já te retornamos, tudo bem?", 41],
+        ["internal", "system", "Encaminhada para a equipe: assunto fora da base de conhecimento.", 41],
+      ] },
+      { who: 2, state: "human_active", unread: 0, msgs: [
+        ["inbound", "patient", "Preciso remarcar minha consulta de quinta", 95],
+        ["outbound", "human", "Claro! Tenho sexta às 10h30 ou segunda às 14h. Qual fica melhor?", 80],
+        ["inbound", "patient", "Sexta às 10h30, por favor", 22],
+      ] },
+      { who: 3, state: "ai_active", unread: 0, msgs: [
+        ["inbound", "patient", "Oi! Quero marcar uma avaliação", 180],
+        ["outbound", "ai", "Olá! Sou a Sol, assistente virtual da clínica. Posso ver os horários livres para avaliação. Prefere manhã ou tarde?", 179],
+        ["inbound", "patient", "De manhã", 170],
+        ["outbound", "ai", "Tenho amanhã às 9h ou às 10h30. Qual prefere?", 169],
+      ] },
+      { who: 5, state: "ai_active", unread: 0, msgs: [
+        ["inbound", "patient", "Quanto custa a limpeza?", 260],
+        ["outbound", "ai", "A limpeza (profilaxia) custa R$ 250,00 (valor de demonstração). Quer que eu veja um horário?", 259],
+      ] },
+      { who: 6, state: "closed", unread: 0, msgs: [
+        ["inbound", "patient", "Confirmo minha consulta de amanhã", 1500],
+        ["outbound", "ai", "Consulta confirmada! Até amanhã.", 1499],
+      ] },
+    ];
+    const convIds: string[] = [];
+    for (const c of convs) {
+      const who = people[c.who]!;
+      const last = c.msgs[c.msgs.length - 1]!;
+      const lastVisible = [...c.msgs].reverse().find((m) => m[0] !== "internal")!;
+      const firstIn = c.msgs.find((m) => m[0] === "inbound")!;
+      const firstOut = c.msgs.find((m) => m[0] === "outbound");
+      const lastIn = [...c.msgs].reverse().find((m) => m[0] === "inbound")!;
+      const [conv] = await tx<{ id: string }[]>`
+        insert into conversations (clinic_id, contact_id, channel, state, last_inbound_at, window_expires_at, last_message_at, last_message_preview, last_message_direction,
+                                   first_inbound_at, first_response_at, first_response_by, unread_count, handoff_reason, handoff_priority, closed_at, created_at)
+        values (${clinicId}, ${who.contact_id}, 'whatsapp', ${c.state}, ${min(lastIn[3])}, ${addMinutes(min(lastIn[3]), 1440)}, ${min(last[3])}, ${lastVisible[2].slice(0, 120)}, ${lastVisible[0]},
+                ${min(firstIn[3])}, ${firstOut ? min(firstOut[3]) : null}, ${firstOut ? (firstOut[1] === "ai" ? "ai" : "human") : null}, ${c.unread},
+                ${c.reason ?? null}, ${c.priority ?? null}, ${c.state === "closed" ? min(last[3]) : null}, ${min(firstIn[3])})
+        returning id`;
+      convIds.push(conv!.id);
+      for (const [direction, sender, body, ago] of c.msgs) {
+        await tx`insert into messages (clinic_id, conversation_id, direction, sender_type, type, body, delivery_status, created_at)
+                 values (${clinicId}, ${conv!.id}, ${direction}, ${sender}, ${direction === "internal" ? "note" : "text"}, ${body},
+                         ${direction === "inbound" ? "received" : direction === "outbound" ? "read" : "received"}, ${min(ago)})`;
+      }
+    }
+
+    // Tarefas que a automação deixou para a equipe.
+    await tx`insert into tasks (clinic_id, title, detail, kind, conversation_id, contact_id, created_at) values
+      (${clinicId}, 'Retornar sobre convênio', ${`${people[1]!.name}: a assistente não tem essa informação.`}, 'handoff', ${convIds[1]!}, ${people[1]!.contact_id}, ${min(41)}),
+      (${clinicId}, 'Ligar para confirmar presença', ${`${people[7]!.name}: lembrete fora da janela de 24 h sem template aprovado.`}, 'automation', null, ${people[7]!.contact_id}, ${min(120)}),
+      (${clinicId}, 'Registrar falta da manhã', 'Consulta das 9h30 passou sem registro de presença.', 'manual', null, null, ${min(60)})`;
+    return true;
   });
 }

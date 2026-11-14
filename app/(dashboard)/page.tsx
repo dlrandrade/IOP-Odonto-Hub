@@ -99,7 +99,7 @@ export default async function TodayPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {seesChats && ctx.role !== "dentista" && (
-          <Block title="Esperando você" hint="A assistente passou estas conversas para a equipe. Urgentes primeiro." href="/conversas?f=nao-atribuidas" linkLabel="Ver todas">
+          <Block title="Esperando você" hint="Conversas que a assistente passou para a equipe responder. Urgentes no topo; clique para abrir." href="/conversas?f=nao-atribuidas" linkLabel="Ver todas">
             {data.waiting.length === 0 ? (
               <Empty title="Ninguém esperando">Quando a assistente precisar da equipe, a conversa aparece aqui.</Empty>
             ) : (
@@ -123,7 +123,7 @@ export default async function TodayPage() {
         )}
 
         {seesAgenda && (
-          <Block title="Agenda de hoje" hint={`${data.appts.length} consulta${data.appts.length === 1 ? "" : "s"} marcada${data.appts.length === 1 ? "" : "s"}`} href={`/agenda?d=${today}`} linkLabel="Abrir agenda">
+          <Block title="Agenda de hoje" hint={`${data.appts.length} consulta${data.appts.length === 1 ? "" : "s"} hoje, por horário. A próxima fica destacada; clique para abrir a ficha.`} href={`/agenda?d=${today}`} linkLabel="Abrir agenda">
             {data.appts.length === 0 ? (
               <Empty title="Nenhuma consulta hoje" action={can(ctx.role, "agenda.write") ? <Link href="/agenda?nova=1" className={buttonClass("outline", "sm")}>Agendar consulta</Link> : undefined}>A agenda está livre.</Empty>
             ) : (
@@ -151,7 +151,7 @@ export default async function TodayPage() {
         )}
 
         {ctx.role !== "dentista" && (
-          <Block title="Tarefas" hint="O que a automação não consegue fazer sozinha." href="/automacoes" linkLabel="Ver todas">
+          <Block title="Tarefas" hint="Pendências que a automação não resolveu sozinha, como ligar para confirmar presença." href="/automacoes" linkLabel="Ver todas">
             {data.tasks.length === 0 ? <Empty title="Nenhuma tarefa pendente">Tudo em dia por aqui.</Empty> : (
               <ul className="-mx-2 divide-y divide-line">
                 {data.tasks.map((t) => (
@@ -166,13 +166,13 @@ export default async function TodayPage() {
         )}
 
         {data.week && (
-          <Block title="Últimos 7 dias" hint="Números da clínica nesta semana." href="/indicadores" linkLabel="Indicadores">
+          <Block title="Últimos 7 dias" hint="Resumo da semana. Os números completos e como cada um é calculado ficam em Indicadores." href="/indicadores" linkLabel="Indicadores">
             <dl className="grid flex-1 grid-cols-2 gap-px overflow-hidden rounded-md bg-line">
               {[
                 ["Novos contatos", String(data.week.newContacts)],
                 ["Consultas marcadas", String(data.week.appointmentsBooked)],
                 ["Contato → avaliação", data.week.conversion.rate == null ? "—" : `${Math.round(data.week.conversion.rate * 100)}%`],
-                ["Gasto com IA", `US$ ${(data.week.aiCostCents / 100).toFixed(2)}`],
+                ["Gasto com IA", `US$ ${(data.week.aiCostCents / 100).toFixed(2).replace(".", ",")}`],
               ].map(([k, v]) => (
                 <div key={k} className="flex flex-col justify-between gap-3 bg-surface p-5">
                   <dt className="eyebrow text-bone-mute">{k}</dt>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DragCard, DropColumn } from "@/components/kanban";
 import { Bot, CalendarClock, Plus, UserRound } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal } from "@/components/client";
@@ -44,7 +45,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       <PageHeader title="CRM" subtitle="Interesses por estágio. Interesse não é tratamento contratado; consulta e relacionamento têm registros próprios.">
         <Link href={showClosed ? "/crm" : "/crm?fechadas=1"} className={buttonClass("outline")}>{showClosed ? "Ocultar antigas" : "Mostrar todas as finalizadas"}</Link>
         {canWrite && (
-          <Modal trigger={<><Plus size={15} aria-hidden /> Nova oportunidade</>} title="Nova oportunidade" triggerClass={buttonClass("accent")}>
+          <Modal trigger={<><Plus size={15} aria-hidden /> Nova oportunidade</>} title="Nova oportunidade" description="Registre o interesse de um contato em um serviço. Entra na coluna “Novo”." triggerClass={buttonClass("accent")}>
             <ActionForm action={createOpportunityAction} className="space-y-4">
               <Field label="Contato existente"><Select name="contactId" defaultValue=""><option value="">— novo contato —</option>{data.contacts.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</Select></Field>
               <div className="grid gap-6 sm:grid-cols-2"><Field label="Ou telefone (com DDD)"><Input name="phone" inputMode="tel" /></Field><Field label="Nome"><Input name="name" /></Field></div>
@@ -56,26 +57,31 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         )}
       </PageHeader>
 
-      <div className="scroll-thin -mx-3 overflow-x-auto px-3 pb-3 sm:-mx-5 sm:px-5">
-        <div className="flex gap-3" style={{ minWidth: OPPORTUNITY_STAGES.length * 276 }}>
+      <p className="t-small -mt-6 mb-6">Arraste um cartão para outra coluna para mudar o estágio, ou use “Mover / editar”.</p>
+      {/* Funil em largura total: as colunas dividem a tela igualmente, sem rolagem lateral escondida. */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 min-[1760px]:grid-cols-8">
           {OPPORTUNITY_STAGES.map((stage) => {
             const list = data.opps.filter((o) => o.stage === stage);
-            const tone = stage === "accepted" ? "bg-ok-soft" : stage === "lost" ? "bg-line" : "bg-surface/70";
+            const tone = stage === "accepted" ? "bg-ok-soft/60 border-ok/20" : stage === "lost" ? "bg-surface-2/40 border-line" : "bg-surface/70 border-line";
             return (
-              <section key={stage} aria-label={OPPORTUNITY_STAGE_LABELS[stage]} className={cn("w-[264px] shrink-0 rounded-[var(--radius-card)] p-2.5", tone)}>
-                <h2 className="flex items-center justify-between px-2 py-1.5 text-sm font-semibold">{OPPORTUNITY_STAGE_LABELS[stage]}<span className="rounded-full bg-surface-2 px-2 text-[11px] text-white">{list.length}</span></h2>
-                <ul className="mt-1 space-y-2">
-                  {list.length === 0 && <li className="rounded-md border border-dashed border-line px-3 py-5 text-center text-xs text-bone-mute">Vazio</li>}
+              <DropColumn key={stage} stage={stage} label={OPPORTUNITY_STAGE_LABELS[stage]} move={moveOpportunityAction} enabled={canWrite}
+                className={cn("flex min-h-[220px] min-w-0 flex-col rounded-lg border p-3", tone)}>
+                <h2 className="flex h-9 items-center justify-between gap-2 px-1.5">
+                  <span className="t-h3 truncate text-[14px]">{OPPORTUNITY_STAGE_LABELS[stage]}</span>
+                  <span className="flex h-6 min-w-6 items-center justify-center rounded-sm bg-surface-2 px-1.5 font-mono text-[11px] text-bone-dim">{list.length}</span>
+                </h2>
+                <ul className="mt-2 flex-1 space-y-2">
+                  {list.length === 0 && <li className="flex h-20 items-center justify-center rounded-md border border-dashed border-line text-[12px] text-bone-mute">Solte aqui</li>}
                   {list.map((o) => {
                     const overdue = o.next_step_due && o.next_step_due < new Date() && !["accepted", "lost"].includes(o.stage);
                     return (
-                      <li key={o.id} className="rounded-md bg-surface p-3 border border-line">
-                        <p className="truncate text-sm font-semibold">{o.patient ?? o.wa_profile_name ?? formatPhone(o.phone_e164)}</p>
-                        <p className="truncate text-xs text-bone-mute">{o.service_interest}</p>
-                        <div className="mt-2 flex flex-wrap gap-1">
+                      <DragCard key={o.id} id={o.id} enabled={canWrite} className="rounded-md border border-line bg-surface p-3.5 transition-colors hover:border-bone-mute/50">
+                        <p className="t-h3 truncate text-[14px]">{o.patient ?? o.wa_profile_name ?? formatPhone(o.phone_e164)}</p>
+                        <p className="t-small truncate">{o.service_interest}</p>
+                        <div className="mt-2.5 flex flex-wrap gap-1">
                           {o.intent && <Badge>{INTENT[o.intent]}</Badge>}
-                          {o.last_actor === "ai" && <Badge tone="ok"><Bot size={10} aria-hidden /> movido pela IA</Badge>}
-                          {o.owner && <Badge><UserRound size={10} aria-hidden /> {o.owner.split(" ")[0]}</Badge>}
+                          {o.last_actor === "ai" && <Badge tone="info"><Bot aria-hidden /> pela IA</Badge>}
+                          {o.owner && <Badge tone="violet"><UserRound aria-hidden /> {o.owner.split(" ")[0]}</Badge>}
                         </div>
                         {(o.next_step || o.next_step_due) && (
                           <p className={cn("mt-2 flex items-center gap-1 text-[11px]", overdue ? "font-semibold text-danger" : "text-bone-dim")}>
@@ -83,19 +89,20 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
                           </p>
                         )}
                         {o.lost_reason && <p className="mt-2 text-[11px] text-bone-mute">Motivo: {o.lost_reason}</p>}
-                        <div className="mt-2 flex items-center justify-between border-t border-line pt-2">
+                        <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-3">
                           {o.conversation_id && can(ctx.role, "conversations.view") ? <Link href={`/conversas?c=${o.conversation_id}`} className={buttonClass("ghost", "sm")}>Conversa</Link> : <span />}
                           {canWrite && (
-                            <Modal trigger="Mover / editar" title={`${o.service_interest} — ${OPPORTUNITY_STAGE_LABELS[o.stage]}`} triggerClass={buttonClass("outline", "sm")}>
-                              <ActionForm action={moveOpportunityAction} className="space-y-6">
+                            <Modal trigger="Mover / editar" title={o.patient ?? o.wa_profile_name ?? formatPhone(o.phone_e164)} description={`${o.service_interest} · hoje em “${OPPORTUNITY_STAGE_LABELS[o.stage]}”`} triggerClass={buttonClass("outline", "sm")}>
+                              <h3 className="t-h3 mb-4">Mudar de estágio</h3>
+                              <ActionForm action={moveOpportunityAction} className="space-y-5">
                                 <input type="hidden" name="opportunityId" value={o.id} />
                                 <Field label="Mover para"><Select name="to" defaultValue="">{OPPORTUNITY_STAGES.filter((s) => s !== o.stage).map((s) => <option key={s} value={s}>{OPPORTUNITY_STAGE_LABELS[s]}</option>)}</Select></Field>
                                 <Field label="Evidência do aceite" hint="Obrigatória para “Aceito”: o que comprova (mensagem, assinatura, registro)."><Input name="evidence" /></Field>
                                 <Field label="Motivo da perda" hint="Obrigatório para “Perdido”."><Input name="lostReason" /></Field>
                                 <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Mover</Button></div>
                               </ActionForm>
-                              <hr className="my-5 border-line" />
-                              <ActionForm action={updateOpportunityAction} className="space-y-6">
+                              <h3 className="t-h3 mb-4 mt-8 border-t border-line pt-6">Responsável e próximo passo</h3>
+                              <ActionForm action={updateOpportunityAction} className="space-y-5">
                                 <input type="hidden" name="opportunityId" value={o.id} />
                                 <Field label="Responsável"><Select name="ownerId" defaultValue={o.owner_id ?? ""}><option value="">Sem responsável</option>{data.users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</Select></Field>
                                 <div className="grid gap-6 sm:grid-cols-2">
@@ -107,14 +114,13 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
                             </Modal>
                           )}
                         </div>
-                      </li>
+                      </DragCard>
                     );
                   })}
                 </ul>
-              </section>
+              </DropColumn>
             );
           })}
-        </div>
       </div>
     </>
   );

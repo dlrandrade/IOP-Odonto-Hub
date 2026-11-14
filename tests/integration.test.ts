@@ -6,6 +6,7 @@ import { bookAppointment, cancelAppointment, findSlots, rescheduleAppointment, s
 import { handBack, ingestInbound, sendOutbound, takeOver } from "@/services/conversations";
 import { moveOpportunity, registerInterest } from "@/services/crm";
 import { runDueJobs } from "@/services/jobs";
+import { renderRuleText, sweepBirthdays } from "@/services/automation-rules";
 import { handleWhatsAppWebhook } from "@/services/webhook";
 import { loadDashboard } from "@/services/dashboard";
 import { ScriptedProvider, setLlmOverride, type LlmBlock, type LlmRequest } from "@/integrations/llm";
@@ -621,5 +622,66 @@ describe("S8 — dashboard concilia com os registros (teste 1)", () => {
     expect(d.byProfessional[0]?.total).toBe(1);
     const [raw] = await sql<{ n: number }[]>`select count(*)::int as n from contacts where clinic_id = ${c.clinicId} and not is_test`;
     expect(raw?.n).toBe(d.newContacts);
+  });
+});
+
+describe("Automações da clínica (construtor visual)", () => {
+  async function patientWithOpenWindow(c: TestClinic, name: string, phone: string, birth: string | null = null) {
+    await sql`update clinics set ai_enabled = false where id = ${c.clinicId}`;
+    const patientId = await makePatient(c.clinicId, name, birth);
+    await ingestInbound(sql, c.clinicId, "whatsapp", inbound("Oi", phone), NOW);
+    const conv = await conversationOf(c.clinicId, phone);
+    await sql`insert into contact_patient_links (clinic_id, contact_id, patient_id) values (${c.clinicId}, ${conv.contact_id}, ${patientId})`;
+    return { patientId, conv };
+  }
+  const rule = (clinicId: string, r: { trigger: string; offset: number; action: "message" | "task"; body?: string; task?: string; enabled?: boolean }) => sql`
+    insert into automation_rules (clinic_id, name, trigger, offset_minutes, action, body, task_title, enabled)
+    values (${clinicId}, 'Regra de teste', ${r.trigger}, ${r.offset}, ${r.action}, ${r.body ?? null}, ${r.task ?? null}, ${r.enabled ?? true})`;
+
+  it("texto aceita variáveis do paciente, da consulta e da clínica", () => {
+    expect(renderRuleText("Oi, {primeiro_nome}! {servico} com {dentista} em {data} na {clinica}.", { patient: "Lia Prado", service: "Limpeza", professional: "Dra. Ana", when: "seg, 10:00", clinic: "Sorriso" }))
+      .toBe("Oi, Lia! Limpeza com Dra. Ana em seg, 10:00 na Sorriso.");
+  });
+
+  it("depois da consulta concluída: envia a mensagem na hora programada; regra pausada não envia", async () => {
+    const c = await makeClinic();
+    await rule(c.clinicId, { trigger: "after_appointment", offset: 120, action: "message", body: "Obrigado pela visita, {primeiro_nome}!" });
+    await rule(c.clinicId, { trigger: "after_appointment", offset: 120, action: "message", body: "Não deveria sair", enabled: false });
+    const { patientId, conv } = await patientWithOpenWindow(c, "Lia Prado", "+5511955550001");
+    const booked = await bookAppointment(sql, { clinicId: c.clinicId, patientId, contactId: conv.contact_id, serviceId: c.evaluationId, professionalId: c.professionalIds[0]!, startsAt: at("08:00", 0), createdByType: "user", now: addMinutes(NOW, -3 * 60) });
+    if (!booked.ok) throw new Error("setup");
+    await sql`update appointments set status = 'in_service' where id = ${booked.appointmentId}`;
+    expect((await setAppointmentStatus(sql, c.clinicId, booked.appointmentId, "completed", "user", NOW)).ok).toBe(true);
+    await runDueJobs({ now: addMinutes(NOW, 60), clinicId: c.clinicId });
+    expect((await outboundMessages(conv.id)).map((m) => m.body)).not.toContain("Obrigado pela visita, Lia!");
+    await runDueJobs({ now: addMinutes(NOW, 125), clinicId: c.clinicId });
+    const bodies = (await outboundMessages(conv.id)).map((m) => m.body);
+    expect(bodies).toContain("Obrigado pela visita, Lia!");
+    expect(bodies).not.toContain("Não deveria sair");
+  });
+
+  it("falta registrada com regra de tarefa cria a tarefa para a equipe", async () => {
+    const c = await makeClinic();
+    await rule(c.clinicId, { trigger: "no_show", offset: 0, action: "task", task: "Ligar para {paciente}" });
+    const patientId = await makePatient(c.clinicId, "Rui Gomes");
+    const booked = await bookAppointment(sql, { clinicId: c.clinicId, patientId, contactId: null, serviceId: c.evaluationId, professionalId: c.professionalIds[0]!, startsAt: at("08:00", 0), createdByType: "user", now: addMinutes(NOW, -3 * 60) });
+    if (!booked.ok) throw new Error("setup");
+    expect((await setAppointmentStatus(sql, c.clinicId, booked.appointmentId, "no_show", "user", NOW)).ok).toBe(true);
+    await runDueJobs({ now: addMinutes(NOW, 1), clinicId: c.clinicId });
+    const tasks = await sql<{ title: string }[]>`select title from tasks where clinic_id = ${c.clinicId}`;
+    expect(tasks.map((t) => t.title)).toContain("Ligar para Rui Gomes");
+  });
+
+  it("aniversário: um envio por paciente por ano, só depois do horário escolhido", async () => {
+    const c = await makeClinic();
+    await rule(c.clinicId, { trigger: "birthday", offset: 9 * 60, action: "message", body: "Feliz aniversário, {primeiro_nome}!" });
+    const { conv } = await patientWithOpenWindow(c, "Bia Lima", "+5511955550003", `1990-${DAY.slice(5)}`);
+    await sweepBirthdays(sql, at("08:00", 0));
+    expect(await sql`select 1 from scheduled_jobs where clinic_id = ${c.clinicId} and type = 'automation'`).toHaveLength(0);
+    await sweepBirthdays(sql, NOW);
+    await sweepBirthdays(sql, addMinutes(NOW, 30));
+    expect(await sql`select 1 from scheduled_jobs where clinic_id = ${c.clinicId} and type = 'automation'`).toHaveLength(1);
+    await runDueJobs({ now: addMinutes(NOW, 1), clinicId: c.clinicId });
+    expect((await outboundMessages(conv.id)).map((m) => m.body)).toContain("Feliz aniversário, Bia!");
   });
 });

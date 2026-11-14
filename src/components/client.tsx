@@ -46,8 +46,8 @@ export function ActionForm({ action, children, className, resetOnDone = true }: 
  * Janela sobreposta padrão. `defaultOpen` abre sozinha (links como /agenda?nova=1 levam direto ao formulário).
  * Fecha com Esc, com o X ou clicando fora, e também quando o formulário dentro dela conclui.
  */
-export function Modal({ trigger, title, children, triggerClass, wide, defaultOpen, description }: {
-  trigger: ReactNode; title: string; children: ReactNode; triggerClass?: string; wide?: boolean; defaultOpen?: boolean; description?: string;
+export function Modal({ trigger, title, children, triggerClass, wide, defaultOpen, description, triggerTitle }: {
+  trigger: ReactNode; title: string; children: ReactNode; triggerClass?: string; wide?: boolean; defaultOpen?: boolean; description?: string; triggerTitle?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -60,14 +60,16 @@ export function Modal({ trigger, title, children, triggerClass, wide, defaultOpe
   }, [defaultOpen]);
   return (
     <>
-      <button type="button" className={triggerClass ?? buttonClass("primary")} onClick={() => ref.current?.showModal()}>{trigger}</button>
-      <dialog ref={ref} className={cn("relative w-[calc(100vw-2rem)] rounded-lg border border-line bg-surface p-0 text-bone shadow-deep", wide ? "max-w-2xl" : "max-w-lg")}
+      <button type="button" title={triggerTitle} className={triggerClass ?? buttonClass("primary")} onClick={() => ref.current?.showModal()}>{trigger}</button>
+      {/* Padrão único de pop-up: texto sempre à esquerda (não herda o alinhamento de onde o botão está),
+          cabeçalho com título e apoio, corpo com rolagem e o rodapé de ação definido em cada formulário. */}
+      <dialog ref={ref} className={cn("relative w-[calc(100vw-2rem)] rounded-lg border border-line bg-surface p-0 text-left text-[14px] font-normal normal-case tracking-normal text-bone shadow-deep", wide ? "max-w-3xl" : "max-w-lg")}
         onClick={(e) => { if (e.target === ref.current) ref.current?.close(); }}>
         <div className="border-b border-line py-5 pl-6 pr-16">
           <h2 className="t-h2">{title}</h2>
           {description && <p className="t-small mt-1">{description}</p>}
         </div>
-        <div className="max-h-[75vh] overflow-y-auto px-6 py-6">{children}</div>
+        <div className="scroll-thin max-h-[75vh] overflow-y-auto px-6 py-6">{children}</div>
         {/* o botão de fechar vem depois do conteúdo: ao abrir, o foco cai no primeiro campo, não no X */}
         <button type="button" aria-label="Fechar" className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-sm text-bone-mute transition-colors hover:bg-surface-2 hover:text-bone" onClick={() => ref.current?.close()}><X size={18} /></button>
       </dialog>

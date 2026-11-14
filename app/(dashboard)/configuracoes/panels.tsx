@@ -20,7 +20,7 @@ export function ChoiceCards<T extends string>({ name, value, onChange, options }
             <input type="radio" name={name} value={o.value} checked={on} onChange={() => onChange(o.value)} className="sr-only" />
             <span className="flex items-center justify-between gap-3">
               <span className="t-h3">{o.title}</span>
-              <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border", on ? "border-acento bg-acento text-ink" : "border-line")}>{on && <Check size={12} strokeWidth={3} aria-hidden />}</span>
+              <span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full border", on ? "border-acento bg-acento text-on" : "border-line")}>{on && <Check size={12} strokeWidth={3} aria-hidden />}</span>
             </span>
             <span className="t-small">{o.text}</span>
             {o.tag && <span className="mt-auto pt-1">{o.tag}</span>}
