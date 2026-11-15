@@ -10,8 +10,9 @@ import { transcriptionProvider } from "@/integrations/transcription";
 import { enforcesWindow, providerFor } from "@/integrations/whatsapp";
 import { deliverMessage, sendOutbound } from "./conversations";
 import { debounceConversationJob, enqueueJob } from "./jobs-queue";
-import { runRuleJob, sweepBirthdays } from "./automation-rules";
+import { createClickTask, runRuleJob, sweepBirthdays } from "./automation-rules";
 import { sweepGoogleReviews } from "./google-reviews";
+import { sweepCalendarImports } from "./calendar-sync";
 
 type Job = {
   id: string; clinic_id: string; type: string; attempts: number; payload: Record<string, unknown>;
@@ -35,6 +36,8 @@ export async function runDueJobs(opts: { now?: Date; limit?: number; clinicId?: 
   if (!opts.clinicId) await sweepBirthdays(sql, now).catch(() => 0);
   // Avaliações do Google: uma foto por clínica por dia (só com GOOGLE_PLACES_API_KEY).
   if (!opts.clinicId) await sweepGoogleReviews(sql, now).catch(() => 0);
+  // Agendas externas (Google Agenda): bloqueios atualizados a cada 15 minutos.
+  if (!opts.clinicId) await sweepCalendarImports(sql, now).catch(() => 0);
   for (let i = 0; i < (opts.limit ?? 25); i++) {
     const [job] = await sql<Job[]>`
       update scheduled_jobs set status = 'running', attempts = attempts + 1, locked_at = now()
@@ -221,14 +224,24 @@ async function reminder(sql: Sql, job: Job, now: Date): Promise<string> {
   if (!a || !["scheduled", "confirmed"].includes(a.status) || a.starts_at <= now) return "skipped:consulta_indisponivel";
   const isConfirmation = job.type === "confirmation_request" && a.status === "scheduled";
   // Contato para avisar: o da consulta ou, na falta, o responsável vinculado ao paciente.
-  const [contact] = await sql<{ id: string; opted_out_at: Date | null; service_messages_allowed: boolean; is_test: boolean }[]>`
-    select ct.id, ct.opted_out_at, ct.service_messages_allowed, ct.is_test from contacts ct
+  const [contact] = await sql<{ id: string; phone_e164: string; opted_out_at: Date | null; service_messages_allowed: boolean; is_test: boolean }[]>`
+    select ct.id, ct.phone_e164, ct.opted_out_at, ct.service_messages_allowed, ct.is_test from contacts ct
     where ct.clinic_id = ${job.clinic_id} and ct.id = coalesce(${a.contact_id}, (
       select l.contact_id from contact_patient_links l join appointments ap on ap.patient_id = l.patient_id
       where ap.id = ${job.appointment_id} order by l.is_guardian desc, l.created_at limit 1))`;
   if (!contact) {
     await humanTask(sql, job.clinic_id, "Lembrar paciente da consulta", `${a.patient} não tem contato de WhatsApp vinculado.`, { appointmentId: job.appointment_id });
     return "human_task";
+  }
+  // Sem WhatsApp conectado: o lembrete vira um botão "Enviar no WhatsApp" na hora certa, com o texto pronto.
+  if (!contact.is_test && !(await providerFor(sql, job.clinic_id, "whatsapp"))) {
+    if (contact.opted_out_at || !contact.service_messages_allowed) return "skipped:opt_out";
+    const whenText = formatFull(a.starts_at, a.timezone);
+    const text = isConfirmation
+      ? `Olá! Lembrete da ${a.clinic}: ${a.patient} tem ${a.service} com ${a.professional} em ${whenText}. Responda 1 para confirmar ou 2 para remarcar.`
+      : `Olá! Lembrete da ${a.clinic}: ${a.patient} tem ${a.service} com ${a.professional} em ${whenText}.`;
+    await createClickTask(sql, { clinicId: job.clinic_id, title: isConfirmation ? "Confirmar consulta no WhatsApp" : "Lembrete de consulta no WhatsApp", patient: a.patient, phone: contact.phone_e164, text, appointmentId: job.appointment_id, contactId: contact.id });
+    return "human_task:clique";
   }
   const channel = contact.is_test ? "simulator" : "whatsapp";
   let [conv] = await sql<{ id: string; state: ConversationState; window_expires_at: Date | null; last_inbound_at: Date | null }[]>`

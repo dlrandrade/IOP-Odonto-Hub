@@ -1,5 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
+import { mapsUrlFor, reviewUrlFor } from "@/integrations/google/places";
+import { originFromAnswer } from "@/domain/contact";
 import type { Sql } from "@/db/client";
 import { pickOffers } from "@/domain/slots";
 import { addDays, formatFull, localDate, WEEKDAY_KEYS, WEEKDAY_LABELS, type BusinessHours } from "@/lib/datetime";
@@ -152,8 +154,8 @@ export const TOOLS = [
     schema: z.object({}).passthrough(),
     jsonSchema: { type: "object", properties: {}, required: [] },
     run: async (_input, ctx) => {
-      const [clinic] = await ctx.sql<{ name: string; business_hours: BusinessHours; contact_phone: string | null; contact_email: string | null; website_url: string | null; instagram_handle: string | null }[]>`
-        select name, business_hours, contact_phone, contact_email, website_url, instagram_handle from clinics where id = ${ctx.clinicId}`;
+      const [clinic] = await ctx.sql<{ name: string; business_hours: BusinessHours; contact_phone: string | null; contact_email: string | null; website_url: string | null; instagram_handle: string | null; google_review_url: string | null; google_business_url: string | null; google_place_id: string | null }[]>`
+        select name, business_hours, contact_phone, contact_email, website_url, instagram_handle, google_review_url, google_business_url, google_place_id from clinics where id = ${ctx.clinicId}`;
       const units = await ctx.sql<{ name: string; address: string | null; accessibility_info: string | null }[]>`
         select name, address, accessibility_info from units where clinic_id = ${ctx.clinicId} order by created_at`;
       const pros = await ctx.sql<{ id: string; name: string; specialty: string | null }[]>`
@@ -170,6 +172,8 @@ export const TOOLS = [
         contatos: {
           telefone: clinic?.contact_phone ?? "não cadastrado", email: clinic?.contact_email ?? "não cadastrado",
           instagram: clinic?.instagram_handle ? `@${clinic.instagram_handle}` : "não cadastrado", site: clinic?.website_url ?? "não cadastrado",
+          link_para_avaliar_no_google: clinic?.google_review_url ?? (clinic?.google_place_id ? reviewUrlFor(clinic.google_place_id) : "não cadastrado"),
+          como_chegar_google_maps: clinic?.google_business_url ?? (clinic?.google_place_id ? mapsUrlFor(clinic.google_place_id) : "não cadastrado"),
         },
         unidades: units.map((u) => ({ nome: u.name, endereco: u.address || "não cadastrado", acessibilidade: u.accessibility_info || "não cadastrada" })),
         horario_de_atendimento_da_recepcao: WEEKDAY_KEYS.map((k, i) => `${WEEKDAY_LABELS[i]}: ${formatRanges(hours[k])}`),
@@ -229,16 +233,21 @@ export const TOOLS = [
   def({
     name: "criar_paciente",
     description: "Cadastra um novo paciente vinculado a este telefone. relacao_com_contato diz quem o paciente é para a pessoa que está escrevendo: 'self' (ela mesma), 'filho', 'conjuge', 'dependente' ou 'outro'.",
-    schema: z.object({ nome: z.string().min(3).max(120), relacao_com_contato: z.enum(["self", "filho", "conjuge", "dependente", "outro"]), data_nascimento: dateStr.nullish() }),
-    jsonSchema: { type: "object", properties: { nome: { type: "string" }, relacao_com_contato: { type: "string", enum: ["self", "filho", "conjuge", "dependente", "outro"] }, data_nascimento: { type: "string", description: "AAAA-MM-DD, opcional" } }, required: ["nome", "relacao_com_contato"] },
-    run: async ({ nome, relacao_com_contato, data_nascimento }, ctx) => {
+    schema: z.object({ nome: z.string().min(3).max(120), relacao_com_contato: z.enum(["self", "filho", "conjuge", "dependente", "outro"]), data_nascimento: dateStr.nullish(), como_conheceu: z.string().max(200).nullish() }),
+    jsonSchema: { type: "object", properties: { nome: { type: "string" }, relacao_com_contato: { type: "string", enum: ["self", "filho", "conjuge", "dependente", "outro"] }, data_nascimento: { type: "string", description: "AAAA-MM-DD, opcional" }, como_conheceu: { type: "string", description: "Opcional: como a pessoa disse que conheceu a clínica (ex.: Instagram, indicação, Google), com as palavras dela." } }, required: ["nome", "relacao_com_contato"] },
+    run: async ({ nome, relacao_com_contato, data_nascimento, como_conheceu }, ctx) => {
       const existing = await ctx.sql<{ id: string; full_name: string }[]>`
         select p.id, p.full_name from patients p join contact_patient_links l on l.patient_id = p.id and l.contact_id = ${ctx.contactId}
         where p.clinic_id = ${ctx.clinicId} and p.merged_into_patient_id is null`;
       const same = existing.find((p) => normalizeText(p.full_name) === normalizeText(nome));
       if (same) return { patient_id: same.id, ja_existia: true };
+      // Origem: a resposta do paciente ou o que já foi detectado no contato (anúncio, "vi no Instagram"...).
+      const told = originFromAnswer(como_conheceu);
+      const [contactOrigin] = await ctx.sql<{ origin: string | null; origin_detail: string | null }[]>`select origin, origin_detail from contacts where id = ${ctx.contactId}`;
+      const source = told ?? contactOrigin?.origin ?? null;
+      const sourceDetail = told ? `Informado na conversa: “${(como_conheceu ?? "").slice(0, 80)}”` : contactOrigin?.origin ? `Detectado: ${contactOrigin.origin_detail ?? ""}` : null;
       const [p] = await ctx.sql<{ id: string }[]>`
-        insert into patients (clinic_id, full_name, birth_date) values (${ctx.clinicId}, ${nome.trim()}, ${data_nascimento ?? null}) returning id`;
+        insert into patients (clinic_id, full_name, birth_date, source, source_detail) values (${ctx.clinicId}, ${nome.trim()}, ${data_nascimento ?? null}, ${source}, ${sourceDetail}) returning id`;
       if (!p) return { erro: "Não foi possível cadastrar." };
       const guardian = relacao_com_contato === "filho" || relacao_com_contato === "dependente";
       await ctx.sql`

@@ -26,6 +26,8 @@ export type InboundMessage = {
   mediaId: string | null;
   mediaMime: string | null;
   rawType: string;
+  /** Mensagem que veio de um anúncio "clique para conversar" (Instagram/Facebook): origem do contato. */
+  referral?: { sourceUrl: string | null; sourceType: string | null; headline: string | null } | null;
 };
 
 export type StatusUpdate = {

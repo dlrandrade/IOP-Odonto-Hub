@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, Ban, BarChart3, CalendarCheck, CalendarDays, CalendarPlus, Check, CircleDashed, DoorOpen, KanbanSquare, MessageCircle, Stethoscope, UserPlus, Users, UserX, type LucideIcon } from "lucide-react";
+import { ArrowRight, Ban, BarChart3, CalendarCheck, CalendarDays, CalendarPlus, Check, CircleDashed, DoorOpen, KanbanSquare, MessageCircle, Send, Stethoscope, UserPlus, Users, UserX, type LucideIcon } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { Badge, buttonClass, Card, CardTitle, Empty, Tile } from "@/components/ui";
+import { ClickToSend } from "@/components/click-to-send";
 import { temaDaRota } from "@/lib/tema";
 import { can } from "@/domain/permissions";
 import { APPOINTMENT_STATUS_LABELS, type AppointmentStatus } from "@/domain/states";
@@ -53,10 +54,14 @@ export default async function TodayPage() {
         ${ctx.role === "dentista" ? tx`and a.professional_id = ${own?.id ?? null}` : tx``}
       order by a.starts_at` : [];
     const tasks = ctx.role === "dentista" ? [] : await tx<{ id: string; title: string; detail: string | null; conversation_id: string | null }[]>`
-      select id, title, detail, conversation_id from tasks where status = 'open' order by created_at desc limit 5`;
+      select id, title, detail, conversation_id from tasks where status = 'open' and wa_phone is null order by created_at desc limit 5`;
+    // Envios por clique que já chegaram na hora: ficam em destaque no topo.
+    const toSend = ctx.role === "dentista" ? [] : await tx<{ id: string; title: string; detail: string | null; wa_phone: string; message_text: string }[]>`
+      select id, title, detail, wa_phone, message_text from tasks where status = 'open' and wa_phone is not null and message_text is not null
+      order by coalesce(due_at, created_at) limit 8`;
     const week = can(ctx.role, "dashboard.view") && ctx.role !== "financeiro" && ctx.role !== "dentista"
       ? await loadDashboard(tx, { clinicId: ctx.clinicId, tz: ctx.tz, from: addDays(today, -6), to: today, professionalId: null }) : null;
-    return { waiting, mine, appts, tasks, week };
+    return { waiting, mine, appts, tasks, week, toSend };
   });
 
   const nowMs = now.getTime();
@@ -88,6 +93,29 @@ export default async function TodayPage() {
       <nav aria-label="Atalhos" className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 xl:grid-cols-6">
         {tiles.map((t) => <Tile key={t.href} href={t.href} icon={t.icon} title={t.title} text={t.text} rgb={t.rgb} badge={t.badge} />)}
       </nav>
+
+      {data.toSend.length > 0 && (
+        <section aria-labelledby="enviar" className="vidro rounded-lg border-[#25D366]/40 p-5 sm:p-6">
+          <div className="mb-4 flex items-center gap-3">
+            <span className="icone-app size-10 rounded-[12px]" style={{ "--icone-rgb": "37 211 102" } as React.CSSProperties}><Send size={18} aria-hidden /></span>
+            <div>
+              <h2 id="enviar" className="t-h2">Mensagens para enviar agora</h2>
+              <p className="t-small">Um clique abre o WhatsApp com o paciente e o texto prontos. Confira e envie.</p>
+            </div>
+          </div>
+          <ul className="divide-y divide-line">
+            {data.toSend.map((t) => (
+              <li key={t.id} className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="t-h3 truncate">{t.detail?.replace(/^Para /, "") ?? t.title} <span className="t-small font-normal">· {t.title.replace(/: enviar no WhatsApp$/, "")}</span></p>
+                  <p className="t-small line-clamp-1">{t.message_text}</p>
+                </div>
+                <ClickToSend taskId={t.id} phone={t.wa_phone} text={t.message_text} compact />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-2">
         {seesChats && ctx.role !== "dentista" && (

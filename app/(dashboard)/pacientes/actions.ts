@@ -24,15 +24,16 @@ export async function savePatientAction(_: ActionState, form: FormData): Promise
     const source = z.enum(PATIENT_SOURCES).nullable().catch(null).parse(optStr(form, "source"));
     await q(ctx, async (tx) => {
       if (patientId) {
-        await tx`update patients set full_name = ${fullName}, birth_date = ${birth}, notes = ${optStr(form, "notes")}, email = ${email}, source = ${source} where id = ${id.parse(patientId)}`;
+        await tx`update patients set full_name = ${fullName}, birth_date = ${birth}, notes = ${optStr(form, "notes")}, email = ${email}, source = ${source},
+          source_detail = case when source is distinct from ${source} then ${source ? "Informado pela equipe" : null} else source_detail end where id = ${id.parse(patientId)}`;
         // CPF é opcional e só gravado criptografado; campo vazio mantém o valor atual.
         if (cpf) await tx`update patients set cpf_encrypted = ${encryptField(cpf.replace(/\D/g, ""))} where id = ${patientId}`;
         await audit(tx, actorOf(ctx), "patient.update", "patients", patientId, null, { full_name: fullName, cpf_changed: !!cpf });
         return;
       }
       const [p] = await tx<{ id: string }[]>`
-        insert into patients (clinic_id, full_name, birth_date, notes, cpf_encrypted, email, source)
-        values (${ctx.clinicId}, ${fullName}, ${birth}, ${optStr(form, "notes")}, ${cpf ? encryptField(cpf.replace(/\D/g, "")) : null}, ${email}, ${source}) returning id`;
+        insert into patients (clinic_id, full_name, birth_date, notes, cpf_encrypted, email, source, source_detail)
+        values (${ctx.clinicId}, ${fullName}, ${birth}, ${optStr(form, "notes")}, ${cpf ? encryptField(cpf.replace(/\D/g, "")) : null}, ${email}, ${source}, ${source ? "Informado pela equipe" : null}) returning id`;
       const phone = optStr(form, "phone");
       if (p && phone) {
         const [c] = await tx<{ id: string }[]>`

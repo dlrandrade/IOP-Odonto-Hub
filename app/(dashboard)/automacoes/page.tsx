@@ -1,16 +1,18 @@
 import Link from "next/link";
-import { ArrowRight, Check, Plus } from "lucide-react";
+import { ArrowRight, Check, FlaskConical, Plus } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal } from "@/components/client";
 import { Badge, Button, Card, CardTitle, Checkbox, Empty, Field, Input, Notice, PageHeader, Select, Table, Textarea, buttonClass } from "@/components/ui";
-import { formatShort } from "@/lib/datetime";
+import { addDays, formatFull, formatShort, localDate, zonedToUtc } from "@/lib/datetime";
 import { cn } from "@/lib/format";
 import { db } from "@/db/client";
 import { env } from "@/lib/env";
 import { emailConfigured } from "@/integrations/email";
-import { completeTaskAction, deleteRuleAction, reorderAutomationsAction, saveBuiltinAction, saveLimitsAction, saveRuleAction, saveTemplateAction, toggleAutomationAction } from "./actions";
-import { FlowList, RuleForm, Switch } from "./builder";
-import type { AutomationRule } from "@/services/automation-rules";
+import { ClickToSend } from "@/components/click-to-send";
+import { completeTaskAction, deleteRuleAction, reorderAutomationsAction, saveBuiltinAction, saveLimitsAction, saveRuleAction, saveTemplateAction, testAutomationAction, toggleAutomationAction } from "./actions";
+import { AutomationTester, FlowList, RuleForm, Switch } from "./builder";
+import { renderRuleText, type AutomationRule } from "@/services/automation-rules";
+import { reviewLink } from "@/services/google-reviews";
 
 export const metadata = { title: "Automações" };
 
@@ -26,8 +28,8 @@ const TEMPLATE_USE: Record<string, string> = {
 };
 
 type FlowItem = {
-  key: string; name: string; builtin: boolean; on: boolean; trigger: string; wait: string; action: "message" | "task" | "confirmation"; channel?: "whatsapp" | "email" | "instagram";
-  preview: string; purpose: string; edit: React.ReactNode;
+  key: string; name: string; builtin: boolean; on: boolean; trigger: string; wait: string; action: "message" | "task" | "confirmation"; channel?: "whatsapp" | "whatsapp_click" | "email" | "instagram";
+  preview: string; purpose: string; edit: React.ReactNode; test?: string;
 };
 
 const TRIGGER_LABEL: Record<string, string> = {
@@ -44,11 +46,14 @@ export default async function AutomationsPage() {
     templates: await tx<{ id: string; name: string; body: string; wa_template_status: string }[]>`select id, name, body, wa_template_status from message_templates order by name`,
     jobs: await tx<{ id: string; type: string; run_at: Date; status: string; result: string | null; last_error: string | null; attempts: number }[]>`
       select id, type, run_at, status, result, last_error, attempts from scheduled_jobs order by run_at desc limit 40`,
-    tasks: await tx<{ id: string; title: string; detail: string | null; conversation_id: string | null; created_at: Date }[]>`
-      select id, title, detail, conversation_id, created_at from tasks where status = 'open' order by created_at desc limit 30`,
+    tasks: await tx<{ id: string; title: string; detail: string | null; conversation_id: string | null; created_at: Date; wa_phone: string | null; message_text: string | null }[]>`
+      select id, title, detail, conversation_id, created_at, wa_phone, message_text from tasks where status = 'open' order by created_at desc limit 30`,
     counts: (await tx<{ pending: number; failed: number }[]>`
       select count(*) filter (where status = 'pending')::int as pending, count(*) filter (where status = 'failed' and updated_at > now() - interval '7 days')::int as failed from scheduled_jobs`)[0],
     rules: await tx<AutomationRule[]>`select * from automation_rules order by position, created_at`,
+    sample: (await tx<{ service: string | null; professional: string | null }[]>`
+      select (select name from services where status = 'published' order by kind = 'evaluation' desc, name limit 1) as service,
+             (select name from professionals where active order by name limit 1) as professional`)[0] ?? { service: null, professional: null },
   }));
   const templateNames = data.templates.map((t) => t.name);
   // A tabela de integrações só é legível pelo admin (RLS); aqui basta saber se há canal ligado.
@@ -70,15 +75,19 @@ export default async function AutomationsPage() {
     </Modal>
   );
 
+  // Dados de exemplo para o botão Testar (nenhum paciente real).
+  const sampleWhen = formatFull(zonedToUtc(addDays(localDate(new Date(), ctx.tz), 1), "10:00", ctx.tz), ctx.tz);
+  const sample = { patient: "Maria Exemplo", service: data.sample.service ?? "Avaliação inicial", professional: data.sample.professional ?? "Dra. Ana", when: sampleWhen, clinic: ctx.clinic.name, reviewUrl: reviewLink(ctx.clinic), instagram: ctx.clinic.instagram_handle };
+  const reminderText = (confirm: boolean) => `Olá! Lembrete da ${sample.clinic}: ${sample.patient} tem ${sample.service} com ${sample.professional} em ${sample.when}.${confirm ? " Responda 1 para confirmar ou 2 para remarcar." : ""}`;
   const builtins: FlowItem[] = [
     { key: "followup_1", name: "Follow-up 1", builtin: true, on: s.followupsEnabled, trigger: "no_reply", wait: `${hoursLabel(s.followup1Hours)} depois`, action: "message",
-      preview: s.followup1Text, purpose: "Retoma quem parou de responder durante o atendimento da assistente.", edit: <BuiltinEdit k="followup_1" hours={s.followup1Hours} text={s.followup1Text} /> },
+      preview: s.followup1Text, test: s.followup1Text, purpose: "Retoma quem parou de responder durante o atendimento da assistente.", edit: <BuiltinEdit k="followup_1" hours={s.followup1Hours} text={s.followup1Text} /> },
     { key: "followup_2", name: "Follow-up 2", builtin: true, on: s.followup2Enabled, trigger: "no_reply", wait: `${hoursLabel(s.followup2Hours)} depois`, action: "message",
-      preview: s.followup2Text, purpose: "Última tentativa, ainda dentro da janela gratuita de 24 h.", edit: <BuiltinEdit k="followup_2" hours={s.followup2Hours} text={s.followup2Text} /> },
+      preview: s.followup2Text, test: s.followup2Text, purpose: "Última tentativa, ainda dentro da janela gratuita de 24 h.", edit: <BuiltinEdit k="followup_2" hours={s.followup2Hours} text={s.followup2Text} /> },
     { key: "reminder", name: "Lembrete de consulta", builtin: true, on: s.remindersEnabled, trigger: "before_appointment", wait: `${hoursLabel(s.reminderHours[0] ?? 48)} antes`, action: "message",
-      preview: "Olá! Lembrete da {clínica}: {paciente} tem {serviço} com {dentista} em {data}.", purpose: "Reduz faltas. Não envia se a consulta foi marcada em cima da hora.", edit: <BuiltinEdit k="reminder" hours={s.reminderHours[0] ?? 48} /> },
+      preview: "Olá! Lembrete da {clínica}: {paciente} tem {serviço} com {dentista} em {data}.", test: reminderText(false), purpose: "Reduz faltas. Não envia se a consulta foi marcada em cima da hora.", edit: <BuiltinEdit k="reminder" hours={s.reminderHours[0] ?? 48} /> },
     { key: "confirmation", name: "Pedido de confirmação", builtin: true, on: s.confirmationEnabled, trigger: "before_appointment", wait: `${hoursLabel(s.reminderHours[1] ?? 24)} antes`, action: "confirmation",
-      preview: "… Responda 1 para confirmar ou 2 para remarcar.", purpose: "A resposta “1” confirma sozinha; “2” abre a remarcação.", edit: <BuiltinEdit k="confirmation" hours={s.reminderHours[1] ?? 24} /> },
+      preview: "… Responda 1 para confirmar ou 2 para remarcar.", test: reminderText(true), purpose: "A resposta “1” confirma sozinha; “2” abre a remarcação.", edit: <BuiltinEdit k="confirmation" hours={s.reminderHours[1] ?? 24} /> },
   ];
   const customs: FlowItem[] = data.rules.map((r) => {
     const draft = {
@@ -88,6 +97,7 @@ export default async function AutomationsPage() {
     };
     return {
       key: r.id, name: r.name, builtin: false, on: r.enabled, trigger: r.trigger, action: r.action, channel: r.channel,
+      test: r.action === "message" ? renderRuleText(r.body ?? "", sample) : undefined,
       wait: r.trigger === "birthday" ? `às ${draft.time}` : r.offset_minutes === 0 ? "na hora" : `${minutesLabel(r.offset_minutes)} ${r.trigger === "before_appointment" ? "antes" : "depois"}`,
       preview: (r.action === "message" ? r.body : r.task_title) ?? "", purpose: r.action === "task" ? "Cria uma tarefa para a equipe." : "Mensagem automática criada pela clínica.",
       edit: (
@@ -153,6 +163,11 @@ export default async function AutomationsPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     <Switch name={f.key} on={f.on} action={toggleAutomationAction} label={`${f.on ? "Pausar" : "Ativar"} ${f.name}`} />
+                    {f.test !== undefined && (
+                      <Modal trigger={<><FlaskConical size={13} aria-hidden /> Testar</>} title={`Testar: ${f.name}`} description="Veja a mensagem pronta e envie um teste sem atingir pacientes." wide triggerClass={buttonClass("ghost", "sm")}>
+                        <AutomationTester preview={f.test} channel={f.channel ?? "whatsapp"} test={testAutomationAction} />
+                      </Modal>
+                    )}
                     {f.edit}
                   </div>
                 </div>
@@ -161,7 +176,7 @@ export default async function AutomationsPage() {
                   <ArrowRight size={14} aria-hidden className="hidden text-bone-mute sm:block" />
                   <Chip eyebrow="Espera" tone="border-line bg-surface-2/60">{f.wait}</Chip>
                   <ArrowRight size={14} aria-hidden className="hidden text-bone-mute sm:block" />
-                  <Chip eyebrow="Faz" tone={f.action === "task" ? "border-warn/30 bg-warn-soft/60" : "border-ok/30 bg-ok-soft/60"}>{f.action === "task" ? "Cria tarefa" : f.action === "confirmation" ? "Pede confirmação" : f.channel === "email" ? "Envia e-mail" : f.channel === "instagram" ? "Envia no Instagram" : "Envia no WhatsApp"}</Chip>
+                  <Chip eyebrow="Faz" tone={f.action === "task" ? "border-warn/30 bg-warn-soft/60" : "border-ok/30 bg-ok-soft/60"}>{f.action === "task" ? "Cria tarefa" : f.action === "confirmation" ? "Pede confirmação" : f.channel === "email" ? "Envia e-mail" : f.channel === "instagram" ? "Envia no Instagram" : f.channel === "whatsapp_click" ? "WhatsApp por clique" : "Envia no WhatsApp"}</Chip>
                 </div>
                 {f.preview && <p className="mt-3 line-clamp-2 border-l-2 border-line pl-3 text-[13px] italic text-bone-dim">“{f.preview}”</p>}
               </div>
@@ -220,9 +235,10 @@ export default async function AutomationsPage() {
           {data.tasks.length === 0 ? <Empty title="Nada pendente" /> : (
             <ul className="divide-y divide-line">
               {data.tasks.map((t) => (
-                <li key={t.id} className="flex min-h-14 items-center justify-between gap-4 py-3">
+                <li key={t.id} className="flex min-h-14 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
                   <div className="min-w-0"><p className="t-h3 truncate">{t.title}</p><p className="t-small truncate">{t.detail} · {formatShort(t.created_at, ctx.tz)}</p></div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {t.wa_phone && t.message_text && <ClickToSend taskId={t.id} phone={t.wa_phone} text={t.message_text} compact />}
                     {t.conversation_id && <Link href={`/conversas?c=${t.conversation_id}`} className={buttonClass("outline", "sm")}>Conversa</Link>}
                     <ActionForm action={completeTaskAction}><input type="hidden" name="taskId" value={t.id} /><Button size="sm" variant="outline">Concluir</Button></ActionForm>
                   </div>

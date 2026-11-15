@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
-import { PATIENT_SOURCE_LABELS, PATIENT_SOURCES, type PatientSource } from "@/domain/contact";
+import { PATIENT_SOURCE_LABELS, PATIENT_SOURCES, whatsappLink, type PatientSource } from "@/domain/contact";
+import { Compass } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal } from "@/components/client";
 import { Avatar, Badge, Button, buttonClass, Card, CardTitle, Empty, Field, Input, Notice, Select, Table, Textarea } from "@/components/ui";
@@ -22,8 +23,8 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
   const seesConversations = can(ctx.role, "conversations.view");
   const data = await q(ctx, async (tx) => {
     const [own] = ctx.role === "dentista" && ctx.userId ? await tx<{ id: string }[]>`select id from professionals where app_user_id = ${ctx.userId}` : [];
-    const [patient] = await tx<{ id: string; full_name: string; birth_date: string | null; notes: string | null; has_cpf: boolean; merged_into_patient_id: string | null; created_at: Date; email: string | null; source: PatientSource | null }[]>`
-      select id, full_name, birth_date::text, notes, cpf_encrypted is not null as has_cpf, merged_into_patient_id, created_at, email, source from patients where id = ${id}
+    const [patient] = await tx<{ id: string; full_name: string; birth_date: string | null; notes: string | null; has_cpf: boolean; merged_into_patient_id: string | null; created_at: Date; email: string | null; source: PatientSource | null; source_detail: string | null }[]>`
+      select id, full_name, birth_date::text, notes, cpf_encrypted is not null as has_cpf, merged_into_patient_id, created_at, email, source, source_detail from patients where id = ${id}
         ${ctx.role === "dentista" ? tx`and exists (select 1 from appointments a where a.patient_id = patients.id and a.professional_id = ${own?.id ?? null})` : tx``}`;
     if (!patient) return null;
     const links = await tx<{ id: string; contact_id: string; phone_e164: string; wa_profile_name: string | null; relationship: string; is_guardian: boolean; is_payer: boolean; verified_at: Date | null; opted_out_at: Date | null }[]>`
@@ -70,7 +71,13 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
           <Avatar name={p.full_name} size={56} />
           <div className="min-w-0 flex-1">
             <h1 className="t-h1 text-[28px] lg:text-[30px]">{p.full_name}</h1>
-            <p className="t-small mt-1">Cadastro desde {new Intl.DateTimeFormat("pt-BR").format(p.created_at)}{p.source ? ` · veio por ${PATIENT_SOURCE_LABELS[p.source]}` : ""}{p.email ? ` · ${p.email}` : ""}<span className="simples:hidden"> · CPF {p.has_cpf ? "cadastrado (criptografado)" : "não informado"}</span></p>
+            {p.source && (
+              <p className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full bg-acento/12 py-1 pl-1.5 pr-3 text-[13px]" title={p.source_detail ?? undefined}>
+                <span className="icone-app size-6 rounded-full"><Compass size={13} aria-hidden /></span>
+                <span className="truncate">Veio por <strong>{PATIENT_SOURCE_LABELS[p.source]}</strong>{p.source_detail ? <span className="text-bone-dim"> · {p.source_detail}</span> : null}</span>
+              </p>
+            )}
+            <p className="t-small mt-1">Cadastro desde {new Intl.DateTimeFormat("pt-BR").format(p.created_at)}{p.email ? ` · ${p.email}` : ""}<span className="simples:hidden"> · CPF {p.has_cpf ? "cadastrado (criptografado)" : "não informado"}</span></p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {canWrite && (
@@ -143,6 +150,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
                   <li key={l.id} className="py-3 first:pt-0 last:pb-0">
                     <div className="flex items-center justify-between gap-3">
                       <p className="t-h3 font-mono text-[14px]">{fullPhone ? formatPhone(l.phone_e164) : maskPhone(l.phone_e164)}</p>
+                      {fullPhone && <a href={whatsappLink(l.phone_e164)} target="_blank" rel="noopener noreferrer" className={buttonClass("ghost", "sm") + " text-[#25D366]"} title="Abre o WhatsApp (Web ou app) com este número">WhatsApp</a>}
                       {canWrite && <ActionForm action={unlinkContactAction}><input type="hidden" name="linkId" value={l.id} /><button className={buttonClass("ghost", "sm")}>Desvincular</button></ActionForm>}
                     </div>
                     {l.wa_profile_name && <p className="t-small">{l.wa_profile_name}</p>}

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition, type ReactNode } from "react";
-import { Cake, CalendarCheck, CalendarClock, ClipboardList, GripVertical, Camera as Instagram, Mail, MessageCircle, MessageSquareText, UserX } from "lucide-react";
+import { Cake, CalendarCheck, CalendarClock, ClipboardList, GripVertical, Camera as Instagram, Mail, MousePointerClick, MessageCircle, MessageSquareText, UserX } from "lucide-react";
 import { ActionForm, type FormAction } from "@/components/client";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { cn } from "@/lib/format";
@@ -83,14 +83,15 @@ export function Switch({ name, on, action, label }: { name: string; on: boolean;
 
 export type RuleDraft = {
   id?: string; name: string; trigger: string; amount: number; unit: "minutes" | "hours" | "days"; time: string;
-  action: "message" | "task"; body: string; taskTitle: string; templateName: string; channel: "whatsapp" | "email" | "instagram";
+  action: "message" | "task"; body: string; taskTitle: string; templateName: string; channel: "whatsapp" | "whatsapp_click" | "email" | "instagram";
 };
 
 /** O que já está pronto para cada canal (mostrado no formulário, sem esconder a opção). */
 export type ChannelStatus = { whatsapp: boolean; email: boolean; googleLink: boolean };
 
 const CHANNELS = [
-  { key: "whatsapp", label: "WhatsApp", icon: MessageCircle, rgb: "47 199 159" },
+  { key: "whatsapp", label: "WhatsApp automático", icon: MessageCircle, rgb: "47 199 159" },
+  { key: "whatsapp_click", label: "WhatsApp por clique", icon: MousePointerClick, rgb: "47 199 159" },
   { key: "email", label: "E-mail", icon: Mail, rgb: "74 157 240" },
   { key: "instagram", label: "Instagram", icon: Instagram, rgb: "238 110 157" },
 ] as const;
@@ -200,7 +201,7 @@ export function RuleForm({ rule, templates, action, status }: { rule?: RuleDraft
           {d.action === "message" && (
             <div className="mt-4">
               <p className="mb-2 text-[13px] font-medium">Por onde enviar</p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {CHANNELS.map((c) => (
                   <button key={c.key} type="button" aria-pressed={d.channel === c.key} onClick={() => set({ channel: c.key })} style={{ "--icone-rgb": c.rgb } as React.CSSProperties}
                     className={cn("bloco flex flex-col items-center justify-center gap-2 rounded-lg border p-3 text-[13px] font-medium sm:aspect-[4/3]", d.channel === c.key ? "border-acento bg-acento/10" : "border-line hover:border-bone-mute/50")}>
@@ -209,7 +210,8 @@ export function RuleForm({ rule, templates, action, status }: { rule?: RuleDraft
                 ))}
               </div>
               <p className="t-small mt-2">
-                {d.channel === "whatsapp" && (status.whatsapp ? "Sai pelo WhatsApp conectado da clínica." : "O WhatsApp ainda não está conectado: até lá, a mensagem fica como não entregue.")}
+                {d.channel === "whatsapp" && (status.whatsapp ? "Sai sozinha pelo WhatsApp conectado da clínica." : "O WhatsApp ainda não está conectado: até lá, na hora certa aparece um botão “Enviar no WhatsApp” com a mensagem pronta.")}
+                {d.channel === "whatsapp_click" && "Na hora certa, aparece em Hoje um botão “Enviar no WhatsApp”: um clique abre o WhatsApp (Web ou app) com o paciente e a mensagem já preenchidos. Você só confere e envia."}
                 {d.channel === "email" && (status.email ? "Vai para o e-mail cadastrado na ficha do paciente; respostas chegam no e-mail da clínica. Sem e-mail na ficha, vira tarefa." : "O envio de e-mail da plataforma ainda não foi ativado: por enquanto, cada envio vira uma tarefa com o texto pronto.")}
                 {d.channel === "instagram" && "Enquanto o Instagram Direct não estiver conectado, cada envio vira uma tarefa com o texto pronto para a equipe mandar pelo Instagram."}
               </p>
@@ -244,6 +246,49 @@ export function RuleForm({ rule, templates, action, status }: { rule?: RuleDraft
           <Button type="submit">{rule ? "Salvar automação" : "Criar automação"}</Button>
         </div>
       </ActionForm>
+    </div>
+  );
+}
+
+/**
+ * Testar uma automação: mostra a mensagem com dados de exemplo e deixa enviar para o Simulador,
+ * abrir no próprio WhatsApp (sem enviar a ninguém) ou receber por e-mail.
+ */
+export function AutomationTester({ preview, channel, test }: { preview: string; channel: string; test: (i: { text: string; channel: string }) => Promise<{ ok: boolean; message: string; href?: string }> }) {
+  const [pending, start] = useTransition();
+  const [result, setResult] = useState<{ ok: boolean; message: string; href?: string } | null>(null);
+  const [mine, setMine] = useState(() => { try { return localStorage.getItem("meu-whatsapp") ?? ""; } catch { return ""; } });
+  const isEmail = channel === "email";
+  return (
+    <div className="space-y-5">
+      <div>
+        <p className="t-small mb-2">Como o paciente vai receber (com dados de exemplo):</p>
+        <div className="rounded-[18px] rounded-tl-md border border-line bg-bone/[0.04] px-4 py-3 text-[14px] leading-relaxed whitespace-pre-wrap">{preview || "—"}</div>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <button type="button" disabled={pending} onClick={() => start(async () => setResult(await test({ text: preview, channel: isEmail ? "email" : "simulator" })))}
+          className="bloco flex flex-col items-start gap-1 rounded-lg border border-line p-4 text-left hover:border-acento">
+          <span className="t-h3">{isEmail ? "Enviar e-mail de teste para mim" : "Enviar para o Simulador"}</span>
+          <span className="t-small">{isEmail ? "Chega no e-mail do seu login." : "A mensagem aparece na conversa de teste do Simulador."}</span>
+        </button>
+        <div className="flex flex-col gap-2 rounded-lg border border-line p-4">
+          <span className="t-h3">Abrir no meu WhatsApp</span>
+          <div className="flex gap-2">
+            <Input value={mine} onChange={(e) => setMine(e.target.value)} inputMode="tel" placeholder="Seu número com DDD" aria-label="Seu WhatsApp" className="h-9" />
+            <Button type="button" size="sm" variant="outline" disabled={mine.replace(/\D/g, "").length < 10} onClick={() => {
+              try { localStorage.setItem("meu-whatsapp", mine); } catch { /* ignora */ }
+              const digits = mine.replace(/\D/g, "");
+              window.open(`https://wa.me/${digits.length <= 11 ? `55${digits}` : digits}?text=${encodeURIComponent(preview)}`, "_blank", "noopener,noreferrer");
+            }}>Abrir</Button>
+          </div>
+          <span className="t-small">Abre o WhatsApp com a mensagem para você mesmo. Nada vai para pacientes.</span>
+        </div>
+      </div>
+      {result && (
+        <p role="status" className={cn("rounded-sm border-l-2 px-4 py-3 text-[14px]", result.ok ? "border-ok bg-ok-soft text-ok" : "border-gold/70 bg-gold/[0.07]")}>
+          {result.message}{result.href && <> <a href={result.href} className="font-semibold underline underline-offset-2">Abrir o Simulador</a></>}
+        </p>
+      )}
     </div>
   );
 }

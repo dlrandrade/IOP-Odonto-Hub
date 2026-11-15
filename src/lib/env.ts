@@ -25,6 +25,8 @@ export const env = {
     get gatewayUrl() { return opt("WACLI_GATEWAY_URL"); },
     get gatewayToken() { return opt("WACLI_GATEWAY_TOKEN"); },
   },
+  /** WhatsApp do suporte da plataforma (botão flutuante). Só números com DDI, ex.: 5511999990000. */
+  get supportWhatsApp() { return opt("SUPPORT_WHATSAPP"); },
   /** Google Places API (nota e total de avaliações do Perfil da Empresa). Opcional: sem ela, a clínica registra à mão. */
   get googlePlacesKey() { return opt("GOOGLE_PLACES_API_KEY"); },
   /** E-mail transacional das automações (Resend). Remetente verificado no Resend, ex.: "Clínica <avisos@seudominio.com.br>". */

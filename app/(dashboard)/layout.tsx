@@ -7,6 +7,8 @@ import { Frame, MobileTabs, ThemeToggle, SearchBox, Sidebar, type NavEntry, type
 import { Avatar, Badge } from "@/components/ui";
 import { VerComoCliente } from "@/components/vista";
 import { InstallHint } from "@/components/pwa";
+import { SupportButton } from "@/components/support-button";
+import { env } from "@/lib/env";
 import { can, ROLE_LABELS } from "@/domain/permissions";
 import { setupSteps } from "@/services/setup-progress";
 import { logoutAction } from "../(auth)/actions";
@@ -128,6 +130,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       </div>
       <MobileTabs primary={primary} more={more} />
       <InstallHint />
+      {env.supportWhatsApp && <SupportButton phone={env.supportWhatsApp} clinic={ctx.clinic.name} name={ctx.name} />}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bot, Building2, CalendarDays, Eye, MessageCircle, Plus, ScrollText, Star, Users, type LucideIcon } from "lucide-react";
+import { Bot, Building2, CalendarDays, Download, Eye, MessageCircle, MousePointerClick, Plus, Upload, ScrollText, Star, Users, type LucideIcon } from "lucide-react";
 import { CORES } from "@/lib/tema";
 import type { CSSProperties } from "react";
 import { VistaSwitch } from "@/components/vista";
@@ -13,8 +13,9 @@ import { cn } from "@/lib/format";
 import { LlmPanel, WhatsAppPanel } from "./panels";
 import { GooglePlaceSearch } from "./google-search";
 import { GoogleShare } from "@/components/google-share";
+import { CopyField } from "@/components/copy-field";
 import { qrDataUrl, reviewLink } from "@/services/google-reviews";
-import { inviteUserAction, saveAiAction, saveClinicAction, saveGoogleAction, saveProfessionalAction, saveResourceAction, saveWhatsAppAction, updateUserAction } from "./actions";
+import { addCalendarImportAction, removeCalendarImportAction, saveCalendarFeedAction, syncCalendarNowAction, inviteUserAction, saveAiAction, saveClinicAction, saveGoogleAction, saveIrritationAction, saveProfessionalAction, saveResourceAction, saveWhatsAppAction, updateUserAction } from "./actions";
 
 export const metadata = { title: "Configurações" };
 
@@ -32,6 +33,7 @@ const TAB_ICON: Record<TabKey, { icon: LucideIcon; rgb: string; text: string }> 
   visualizacao: { icon: Eye, rgb: CORES.ajustes.rgb, text: "Simples ou com detalhes" },
   auditoria: { icon: ScrollText, rgb: "110 120 135", text: "Quem alterou o quê" },
 };
+const Step = ({ n }: { n: number }) => <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-acento/15 text-[11px] font-bold text-acento">{n}</span>;
 const ranges = (list?: [string, string][]) => (list ?? []).map(([a, b]) => `${a}-${b}`).join(", ");
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
@@ -49,6 +51,11 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     professionals: tab === "agenda" ? await tx<{ id: string; name: string; specialty: string | null; council_number: string | null; color: string; app_user_id: string | null; active: boolean }[]>`
       select id, name, specialty, council_number, color, app_user_id, active from professionals order by active desc, name` : [],
     rules: tab === "agenda" ? await tx<{ professional_id: string; weekday: number; start_time: string; end_time: string }[]>`select professional_id, weekday, start_time::text, end_time::text from availability_rules order by start_time` : [],
+    calendar: tab === "agenda" && isAdmin ? {
+      feed: (await tx<{ token: string; privacy: "busy" | "service" | "name_service" }[]>`select calendar_feed_token as token, calendar_feed_privacy as privacy from clinic_integrations`)[0],
+      imports: await tx<{ id: string; label: string; professional: string | null; last_synced_at: Date | null; last_error: string | null; events_count: number }[]>`
+        select i.id, i.label, p.name as professional, i.last_synced_at, i.last_error, i.events_count from calendar_imports i left join professionals p on p.id = i.professional_id order by i.created_at`,
+    } : null,
     resources: tab === "agenda" ? await tx<{ id: string; name: string; kind: string; active: boolean }[]>`select id, name, kind, active from resources where kind <> 'professional' order by kind, name` : [],
     wa: (tab === "whatsapp" || tab === "ia") && isAdmin ? (await tx<{
       wa_provider: "cloud" | "evolution" | "wacli"; wacli_gateway_url: string | null; has_wacli_token: boolean; wacli_connected_at: Date | null; wa_phone_number_id: string | null; wa_business_account_id: string | null; wa_display_phone: string | null; has_token: boolean; has_secret: boolean;
@@ -253,9 +260,86 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </div>
       )}
 
+      {allowed && tab === "agenda" && data.calendar?.feed && (
+        <Card className="h-auto">
+          <CardTitle hint="Funciona com o Google Agenda (e também Outlook e Apple). Não precisa de senha nem login do Google aqui.">Google Agenda</CardTitle>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="flex flex-col gap-4 rounded-lg border border-line p-5">
+              <div className="flex items-center gap-3">
+                <span className="icone-app size-10 rounded-[12px]" style={{ "--icone-rgb": CORES.agenda.rgb } as CSSProperties}><Upload size={18} aria-hidden /></span>
+                <div><p className="t-h3">Espelhar no Google Agenda</p><p className="t-small">As consultas daqui aparecem no Google Agenda da clínica.</p></div>
+              </div>
+              <ol className="space-y-2 text-[13.5px]">
+                <li className="flex gap-2"><Step n={1} /><span>Copie o link abaixo.</span></li>
+                <li className="flex gap-2"><Step n={2} /><span>No Google Agenda, abra <a className="font-semibold underline underline-offset-2" href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl" target="_blank" rel="noopener noreferrer">Adicionar agenda → Do URL</a>, cole e confirme.</span></li>
+                <li className="flex gap-2"><Step n={3} /><span>Pronto. O Google atualiza sozinho a cada poucas horas.</span></li>
+              </ol>
+              <CopyField value={`${env.appUrl}/api/agenda/${data.calendar.feed.token}.ics`} />
+              <ActionForm action={saveCalendarFeedAction} className="flex flex-wrap items-end gap-3" resetOnDone={false}>
+                <Field label="O que aparece no Google" className="min-w-0 flex-1">
+                  <Select name="privacy" defaultValue={data.calendar.feed.privacy}>
+                    <option value="name_service">Primeiro nome e serviço</option>
+                    <option value="service">Só serviço e dentista</option>
+                    <option value="busy">Só “Ocupado”</option>
+                  </Select>
+                </Field>
+                <Button type="submit" variant="outline">Salvar</Button>
+              </ActionForm>
+              <ActionForm action={saveCalendarFeedAction} className="mt-auto border-t border-line pt-4" resetOnDone={false}>
+                <input type="hidden" name="privacy" value={data.calendar.feed.privacy} /><input type="hidden" name="rotate" value="1" />
+                <p className="t-small">O link é secreto: quem tiver o link vê a agenda. Se ele vazar, gere outro.</p>
+                <Button type="submit" size="sm" variant="ghost" className="mt-2">Gerar novo link</Button>
+              </ActionForm>
+            </section>
+            <section className="flex flex-col gap-4 rounded-lg border border-line p-5">
+              <div className="flex items-center gap-3">
+                <span className="icone-app size-10 rounded-[12px]" style={{ "--icone-rgb": CORES.agenda.rgb } as CSSProperties}><Download size={18} aria-hidden /></span>
+                <div><p className="t-h3">Puxar do Google Agenda</p><p className="t-small">Compromissos do Google viram bloqueios aqui: ninguém marca em cima.</p></div>
+              </div>
+              <ol className="space-y-2 text-[13.5px]">
+                <li className="flex gap-2"><Step n={1} /><span>Abra as <a className="font-semibold underline underline-offset-2" href="https://calendar.google.com/calendar/u/0/r/settings" target="_blank" rel="noopener noreferrer">configurações do Google Agenda</a> e clique na agenda da clínica (à esquerda).</span></li>
+                <li className="flex gap-2"><Step n={2} /><span>Em <strong>Integrar agenda</strong>, copie o <strong>Endereço secreto no formato iCal</strong>.</span></li>
+                <li className="flex gap-2"><Step n={3} /><span>Cole abaixo e escolha quem fica bloqueado. Atualiza a cada 15 minutos.</span></li>
+              </ol>
+              <ActionForm action={addCalendarImportAction} className="space-y-4">
+                <Field label="Endereço secreto no formato iCal"><Input name="url" required placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" autoComplete="off" /></Field>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <Field label="Bloquear"><Select name="professionalId" defaultValue=""><option value="">A clínica toda</option>{data.professionals.filter((p) => p.active).map((p) => <option key={p.id} value={p.id}>Só {p.name}</option>)}</Select></Field>
+                  <Field label="Nome (opcional)"><Input name="label" placeholder="Agenda pessoal da Dra. Ana" /></Field>
+                </div>
+                <div className="flex justify-end"><Button type="submit">Conectar agenda</Button></div>
+              </ActionForm>
+              {data.calendar.imports.length > 0 && (
+                <ul className="divide-y divide-line border-t border-line">
+                  {data.calendar.imports.map((i) => (
+                    <li key={i.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                      <div className="min-w-0">
+                        <p className="t-h3 truncate">{i.label} <span className="t-small font-normal">· {i.professional ? `bloqueia ${i.professional}` : "bloqueia a clínica toda"}</span></p>
+                        <p className={cn("t-small", i.last_error && "text-danger")}>{i.last_error ?? (i.last_synced_at ? `${i.events_count} compromisso(s) · atualizado ${formatShort(i.last_synced_at, ctx.tz)}` : "Aguardando a primeira leitura")}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <ActionForm action={syncCalendarNowAction}><input type="hidden" name="importId" value={i.id} /><Button size="sm" variant="ghost">Atualizar agora</Button></ActionForm>
+                        <ActionForm action={removeCalendarImportAction}><input type="hidden" name="importId" value={i.id} /><Button size="sm" variant="ghost">Desconectar</Button></ActionForm>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
+        </Card>
+      )}
+
       {allowed && tab === "whatsapp" && data.wa && (
         <Card>
           <CardTitle hint="Escolha como a clínica conecta o WhatsApp. Dá para trocar depois sem perder as conversas.">Canal de WhatsApp</CardTitle>
+          <div className="mb-6 flex items-start gap-4 rounded-lg border border-[#25D366]/30 bg-[#25D366]/[0.06] p-4">
+            <span className="icone-app size-10 shrink-0 rounded-[12px]" style={{ "--icone-rgb": "37 211 102" } as CSSProperties}><MousePointerClick size={19} aria-hidden /></span>
+            <div className="text-[13.5px]">
+              <p className="font-semibold">Ainda não conectou? Já dá para usar, por clique.</p>
+              <p className="t-small mt-0.5">Sem conexão, lembretes e automações aparecem na hora certa em <strong>Hoje</strong> com o botão “Enviar no WhatsApp”: abre o WhatsApp Web (ou o app no celular) com o paciente e a mensagem prontos. Você só confere e envia. Conectando um dos canais abaixo, os envios passam a sair sozinhos.</p>
+            </div>
+          </div>
           <WhatsAppPanel
             provider={data.wa.wa_provider}
             evolution={{ baseUrl: data.wa.evo_base_url ?? "", instance: data.wa.evo_instance ?? "", hasKey: data.wa.has_evo_key, connected: !!data.wa.evo_connected_at, webhookUrl: `${env.appUrl}/api/webhooks/evolution/${data.wa.evo_webhook_token}` }}
@@ -308,10 +392,25 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
                 <Input name="reviewUrl" defaultValue={ctx.clinic.google_review_url ?? ""} placeholder="https://g.page/r/…/review" />
               </Field>
               <Field label="Link do perfil no Google Maps (opcional)"><Input name="businessUrl" defaultValue={ctx.clinic.google_business_url ?? ""} placeholder="https://maps.app.goo.gl/…" /></Field>
-              <Field label="Place ID (opcional)" hint={env.googlePlacesKey ? "Com ele, nota e total de avaliações são atualizados todo dia sozinhos. Use a busca abaixo para preencher." : "Identificador do Google para a atualização automática diária, quando ativada na plataforma."} className="simples:hidden">
-                <Input name="placeId" defaultValue={ctx.clinic.google_place_id ?? ""} placeholder="ChIJ…" className="font-mono text-[13px]" />
-              </Field>
-              {env.googlePlacesKey && <div className="simples:hidden"><GooglePlaceSearch defaultQuery={ctx.clinic.name} /></div>}
+              <div className="space-y-4 rounded-lg border border-line p-4">
+                <div>
+                  <p className="t-h3">ID do local no Google (Place ID)</p>
+                  <p className="t-small mt-1">Com ele, o sistema monta o link de avaliação e acompanha a nota e o total de avaliações sozinho.</p>
+                </div>
+                {env.googlePlacesKey ? <GooglePlaceSearch defaultQuery={ctx.clinic.name} /> : (
+                  <ol className="space-y-2 text-[13.5px]">
+                    <li className="flex gap-2"><span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-acento/15 text-[11px] font-bold text-acento">1</span>
+                      <span>Abra o <a href="https://developers.google.com/maps/documentation/places/web-service/place-id?hl=pt-br#find-id" target="_blank" rel="noopener noreferrer" className="font-semibold underline underline-offset-2">localizador de Place ID do Google</a>.</span></li>
+                    <li className="flex gap-2"><span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-acento/15 text-[11px] font-bold text-acento">2</span>
+                      <span>No mapa da página, digite o nome da clínica e escolha o resultado certo.</span></li>
+                    <li className="flex gap-2"><span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-acento/15 text-[11px] font-bold text-acento">3</span>
+                      <span>Copie o código que aparece em “Place ID” (começa com <code className="font-mono">ChIJ</code>) e cole abaixo.</span></li>
+                  </ol>
+                )}
+                <Field label="Place ID" hint="Também aceita colar um link do Google que contenha o Place ID.">
+                  <Input name="placeId" defaultValue={ctx.clinic.google_place_id ?? ""} placeholder="ChIJ…" className="font-mono text-[13px]" />
+                </Field>
+              </div>
               <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>
             </ActionForm>
           </Card>
@@ -397,6 +496,29 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             </ActionForm>
           </Card>
         </div>
+      )}
+
+      {allowed && tab === "ia" && (
+        <Card className="mt-6 h-auto">
+          <CardTitle hint="Palavrão, ofensa, ameaça de reclamação ou mensagem em CAIXA ALTA: a assistente para na hora, responde com acolhimento e passa a conversa para a equipe.">Paciente irritado</CardTitle>
+          <ActionForm action={saveIrritationAction} className="space-y-6" resetOnDone={false}>
+            <Checkbox name="enabled" defaultChecked={s.irritation.enabled} label="Detectar paciente irritado" hint="Recomendado. A conversa aparece em “Esperando você” com o motivo." />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Checkbox name="profanity" defaultChecked={s.irritation.profanity} label="Palavrões e ofensas" hint="Ex.: palavrões comuns e xingamentos." />
+              <Checkbox name="harsh" defaultChecked={s.irritation.harsh} label="Expressões duras e ameaças" hint="“absurdo”, “descaso”, “vou no Procon”, “Reclame Aqui”, “nunca mais”…" />
+              <Checkbox name="caps" defaultChecked={s.irritation.caps} label="Mensagem toda em CAIXA ALTA" hint="Quando o paciente está “gritando”." />
+              <Checkbox name="exclamations" defaultChecked={s.irritation.exclamations} label="Muitas exclamações ou interrogações" hint="Quatro ou mais seguidas (!!!! ou ????)." />
+            </div>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Field label="Outras palavras ou frases (uma por linha)" hint="Termos que, na sua clínica, indicam insatisfação."><Textarea name="extra" defaultValue={s.irritation.extra.join("\n")} className="min-h-28" placeholder={"demora\nesperei mais de uma hora"} /></Field>
+              <div className="space-y-5">
+                <Field label="Resposta automática ao paciente" hint="Enviada uma vez, antes de a equipe assumir. Deixe vazio para não responder."><Textarea name="message" defaultValue={s.irritation.message} className="min-h-24" /></Field>
+                <Checkbox name="urgent" defaultChecked={s.irritation.urgent} label="Marcar como urgente" hint="Aparece no topo da fila, em vermelho." />
+              </div>
+            </div>
+            <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>
+          </ActionForm>
+        </Card>
       )}
 
       {tab === "auditoria" && (

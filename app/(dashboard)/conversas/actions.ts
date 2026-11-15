@@ -124,6 +124,9 @@ export async function linkPatientAction(_: ActionState, form: FormData): Promise
         insert into contact_patient_links (clinic_id, contact_id, patient_id, relationship, is_guardian)
         values (${ctx.clinicId}, ${data.contactId}, ${patientId}, ${data.relationship}, ${guardian})
         on conflict (contact_id, patient_id) do update set relationship = excluded.relationship, is_guardian = excluded.is_guardian`;
+      // Origem detectada no contato (anúncio, "vi no Instagram"…) passa para o paciente que ainda não tem.
+      await tx`update patients p set source = c.origin, source_detail = 'Detectado: ' || coalesce(c.origin_detail, '')
+               from contacts c where c.id = ${data.contactId} and c.origin is not null and p.id = ${patientId} and p.source is null`;
     });
   });
 }

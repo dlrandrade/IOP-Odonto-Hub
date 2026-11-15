@@ -132,6 +132,10 @@ O modelo precisa suportar *tool calling*. Chaves ficam criptografadas e nunca vo
 - Crie uma conta no Resend, verifique o domínio do remetente e salve `RESEND_API_KEY` e `EMAIL_FROM` (ex.: `Avisos <avisos@seudominio.com.br>`) na Vercel. O nome exibido vira o da clínica e as respostas vão para o e-mail da clínica.
 - Sem isso, automações por e-mail viram tarefa com o texto pronto. Instagram também vira tarefa até o Instagram Direct ser conectado.
 
+### Suporte da plataforma (botão flutuante)
+
+- Defina `SUPPORT_WHATSAPP` na Vercel (DDI + DDD + número, só dígitos, ex.: `5511999990000`). Sem ela, o botão não aparece.
+
 ## Desenvolvimento local sem Supabase
 
 ```bash

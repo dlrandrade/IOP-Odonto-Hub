@@ -22,6 +22,17 @@ export const settingsSchema = z.object({
   aiMonthlyBudgetCents: z.coerce.number().int().min(0).nullable().default(null),
   followup1Text: z.string().default("Oi! Ficou alguma dúvida? Se quiser, posso ver um horário para você."),
   followup2Text: z.string().default("Passando para saber se ainda posso ajudar com o agendamento. Se preferir, é só responder quando puder."),
+  /** Paciente irritado (src/domain/irritation.ts): a assistente para e chama a equipe. */
+  irritation: z.object({
+    enabled: z.coerce.boolean().default(true),
+    profanity: z.coerce.boolean().default(true),
+    harsh: z.coerce.boolean().default(true),
+    caps: z.coerce.boolean().default(true),
+    exclamations: z.coerce.boolean().default(false),
+    extra: z.array(z.string()).default([]),
+    urgent: z.coerce.boolean().default(false),
+    message: z.string().default("Sinto muito pelo transtorno. Vou chamar uma pessoa da nossa equipe agora para resolver isso com você."),
+  }).prefault({}),
 });
 
 export type ClinicSettings = z.infer<typeof settingsSchema>;

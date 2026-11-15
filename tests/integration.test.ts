@@ -9,6 +9,10 @@ import { runDueJobs } from "@/services/jobs";
 import { renderRuleText, sweepBirthdays } from "@/services/automation-rules";
 import { createClinic, REVIEW_REQUEST_TEXT } from "@/services/clinic-setup";
 import { loadReviewHistory, sweepGoogleReviews } from "@/services/google-reviews";
+import { syncCalendarImport } from "@/services/calendar-sync";
+import { setResolverForTests } from "@/lib/safe-url";
+import { encryptField as enc } from "@/lib/crypto";
+import { buildSystemPrompt } from "@/agent/prompt";
 import { handleWhatsAppWebhook } from "@/services/webhook";
 import { loadDashboard } from "@/services/dashboard";
 import { ScriptedProvider, setLlmOverride, type LlmBlock, type LlmRequest } from "@/integrations/llm";
@@ -852,6 +856,79 @@ describe("Google Meu Negócio, canais da automação e setup pela contratação"
     expect(h.growth30).toBe(17);
     const other = await asUser(b.ownerAuthId, (tx) => loadReviewHistory(tx));
     expect(other.points).toHaveLength(0);
+  });
+});
+
+describe("Envio por clique, paciente irritado, origem e Google Agenda", () => {
+  it("sem WhatsApp conectado, a automação vira um botão 'Enviar no WhatsApp' com número e texto prontos", async () => {
+    setProviderOverride(null);
+    const c = await makeClinic();
+    await sql`insert into automation_rules (clinic_id, name, trigger, offset_minutes, action, channel, body) values (${c.clinicId}, 'Obrigado', 'after_appointment', 0, 'message', 'whatsapp', 'Obrigado, {primeiro_nome}!')`;
+    const patientId = await makePatient(c.clinicId, "Lia Prado");
+    const [ct] = await sql<{ id: string }[]>`insert into contacts (clinic_id, phone_e164) values (${c.clinicId}, '+5511955559999') returning id`;
+    await sql`insert into contact_patient_links (clinic_id, contact_id, patient_id) values (${c.clinicId}, ${ct!.id}, ${patientId})`;
+    const booked = await bookAppointment(sql, { clinicId: c.clinicId, patientId, contactId: ct!.id, serviceId: c.evaluationId, professionalId: c.professionalIds[0]!, startsAt: at("08:00", 0), createdByType: "user", now: addMinutes(NOW, -3 * 60) });
+    if (!booked.ok) throw new Error("setup");
+    await sql`update appointments set status = 'in_service' where id = ${booked.appointmentId}`;
+    await setAppointmentStatus(sql, c.clinicId, booked.appointmentId, "completed", "user", NOW);
+    await runDueJobs({ now: addMinutes(NOW, 2), clinicId: c.clinicId });
+    const [task] = await sql<{ wa_phone: string; message_text: string; kind: string }[]>`select wa_phone, message_text, kind from tasks where clinic_id = ${c.clinicId} and wa_phone is not null`;
+    expect(task).toEqual({ wa_phone: "+5511955559999", message_text: "Obrigado, Lia!", kind: "whatsapp_click" });
+  });
+
+  it("paciente irritado: a assistente não chama o modelo, responde com acolhimento e passa para a equipe", async () => {
+    const c = await makeClinic();
+    let called = false;
+    setLlmOverride({ name: "x", complete: async () => { called = true; throw new Error("não deveria"); } });
+    await ingestInbound(sql, c.clinicId, "whatsapp", inbound("ISSO É UM DESCASO, NINGUÉM RESPONDE NADA", "+5511955558888"), NOW);
+    await runJobs(c.clinicId, 1);
+    const conv = await conversationOf(c.clinicId, "+5511955558888");
+    const [row] = await sql<{ state: string; handoff_reason: string }[]>`select state, handoff_reason from conversations where id = ${conv.id}`;
+    expect(called).toBe(false);
+    expect(row?.state).toBe("awaiting_human");
+    expect(row?.handoff_reason).toContain("Paciente irritado");
+    expect((await outboundMessages(conv.id)).map((m) => m.body).join()).toContain("Sinto muito pelo transtorno");
+  });
+
+  it("origem: 'vi no Instagram' na primeira mensagem vai para o contato e para o paciente cadastrado pela IA", async () => {
+    const c = await makeClinic();
+    await sql`update clinics set ai_enabled = false where id = ${c.clinicId}`;
+    await ingestInbound(sql, c.clinicId, "whatsapp", inbound("Oi! Vi vocês no Instagram, fazem clareamento?", "+5511955557777"), NOW);
+    const conv = await conversationOf(c.clinicId, "+5511955557777");
+    const [ct] = await sql<{ origin: string }[]>`select origin from contacts where id = ${conv.contact_id}`;
+    expect(ct?.origin).toBe("instagram");
+    const ctx: ToolCtx = { sql, clinicId: c.clinicId, conversationId: conv.id, contactId: conv.contact_id, tz: TZ, now: NOW, expect: { state: "ai_active", rowVersion: 0 }, flags: { handedOff: false, booked: false } };
+    const r = (await runTool("criar_paciente", { nome: "Rita Souza", relacao_com_contato: "self" }, ctx)).result as { patient_id: string };
+    const [p] = await sql<{ source: string; source_detail: string }[]>`select source, source_detail from patients where id = ${r.patient_id}`;
+    expect(p?.source).toBe("instagram");
+    expect(p?.source_detail).toContain("Instagram");
+  });
+
+  it("a assistente recebe o link de avaliação e os contatos públicos da clínica", () => {
+    const prompt = buildSystemPrompt({ name: "Sorriso", assistantName: "Ana", alertMessage: null, publicInfo: { reviewUrl: "https://g.page/r/x/review", instagram: "sorriso" } });
+    expect(prompt).toContain("Link para avaliar a clínica no Google: https://g.page/r/x/review");
+    expect(prompt).toContain("@sorriso");
+  });
+
+  it("Google Agenda: compromissos do iCal viram bloqueios do dentista e somem dos horários livres", async () => {
+    setResolverForTests(async () => [{ address: "142.250.0.1" }]);
+    try {
+      const c = await makeClinic();
+      const start = at("10:00", 0).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+      const end = at("11:00", 0).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+      const ics = `BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:g1\r\nSUMMARY:Particular\r\nDTSTART:${start}\r\nDTEND:${end}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`;
+      const fake = (async () => new Response(ics, { status: 200 })) as unknown as typeof fetch;
+      const [imp] = await sql<{ id: string; clinic_id: string; professional_id: string | null; url_enc: string }[]>`
+        insert into calendar_imports (clinic_id, professional_id, label, url_enc) values (${c.clinicId}, ${c.professionalIds[0]!}, 'Google', ${enc("https://calendar.google.com/calendar/ical/x/basic.ics")})
+        returning id, clinic_id, professional_id, url_enc`;
+      expect(await syncCalendarImport(sql, imp!, NOW, fake)).toEqual({ ok: true, count: 1 });
+      expect(await syncCalendarImport(sql, imp!, NOW, fake)).toEqual({ ok: true, count: 1 }); // substitui, não duplica
+      const blocks = await sql<{ reason: string }[]>`select reason from time_blocks where import_id = ${imp!.id}`;
+      expect(blocks).toEqual([{ reason: "Google Agenda: Particular" }]);
+      const { slots } = await findSlots(sql, { clinicId: c.clinicId, serviceId: c.evaluationId, fromDate: DAY, toDate: DAY, now: addMinutes(NOW, -600) });
+      expect(slots.length).toBeGreaterThan(0);
+      expect(slots.some((s) => s.startsAt.getTime() >= at("10:00", 0).getTime() && s.startsAt.getTime() < at("11:00", 0).getTime())).toBe(false);
+    } finally { setResolverForTests(null); }
   });
 });
 

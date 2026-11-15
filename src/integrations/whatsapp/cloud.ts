@@ -64,6 +64,7 @@ const inboundSchema = z.object({
   audio: z.object({ id: z.string(), mime_type: z.string().optional() }).optional(),
   image: z.object({ id: z.string(), mime_type: z.string().optional(), caption: z.string().optional() }).optional(),
   button: z.object({ text: z.string() }).optional(),
+  referral: z.object({ source_url: z.string().optional(), source_type: z.string().optional(), headline: z.string().optional() }).optional(),
   interactive: z.object({
     button_reply: z.object({ title: z.string() }).optional(),
     list_reply: z.object({ title: z.string() }).optional(),
@@ -101,6 +102,7 @@ export function parseCloudWebhook(payload: unknown): ParsedWebhook[] {
           waMessageId: m.id, from: `+${m.from.replace(/\D/g, "")}`, profileName: names.get(m.from) ?? null,
           timestamp: m.timestamp ? new Date(Number(m.timestamp) * 1000) : new Date(),
           type, text, mediaId: m.audio?.id ?? m.image?.id ?? null, mediaMime: m.audio?.mime_type ?? m.image?.mime_type ?? null, rawType: m.type,
+          referral: m.referral ? { sourceUrl: m.referral.source_url ?? null, sourceType: m.referral.source_type ?? null, headline: m.referral.headline ?? null } : null,
         };
       });
       const statuses: StatusUpdate[] = (v.statuses ?? []).flatMap((s) =>

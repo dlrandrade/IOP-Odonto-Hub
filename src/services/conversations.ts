@@ -1,3 +1,4 @@
+import { detectOrigin, originFromReferral } from "@/domain/contact";
 import { inTx, pgErrorCode, PG_UNIQUE_VIOLATION, type Sql } from "@/db/client";
 import { isOptOut } from "@/domain/alerts";
 import { parseSettings } from "@/domain/settings";
@@ -22,6 +23,18 @@ export type IngestResult = { duplicate: boolean; conversationId: string | null; 
  * Passo 2 do pipeline: contato → conversa → mensagem, idempotente por wa_message_id.
  * Reentrega do mesmo evento não cria nada novo nem agenda nova resposta.
  */
+/**
+ * Guarda de onde o contato veio (anúncio, "vi no Instagram", indicação…) só na primeira detecção,
+ * e repassa para os pacientes ligados a ele que ainda não têm origem.
+ */
+export async function recordOrigin(sql: Sql, clinicId: string, contactId: string, o: { source: string; detail: string } | null): Promise<void> {
+  if (!o) return;
+  const updated = await sql`update contacts set origin = ${o.source}, origin_detail = ${o.detail} where id = ${contactId} and clinic_id = ${clinicId} and origin is null returning id`;
+  if (updated.length === 0) return;
+  await sql`update patients set source = ${o.source}, source_detail = ${`Detectado: ${o.detail}`}
+            where clinic_id = ${clinicId} and source is null and id in (select patient_id from contact_patient_links where contact_id = ${contactId})`;
+}
+
 export async function ingestInbound(sql: Sql, clinicId: string, channel: "whatsapp" | "simulator", m: InboundMessage, now: Date = new Date()): Promise<IngestResult> {
   const outcome = await inTx(sql, async (tx) => {
     const [contact] = await tx<{ id: string; opted_out_at: Date | null }[]>`
@@ -30,6 +43,7 @@ export async function ingestInbound(sql: Sql, clinicId: string, channel: "whatsa
       on conflict (clinic_id, phone_e164) do update set wa_profile_name = coalesce(excluded.wa_profile_name, contacts.wa_profile_name)
       returning id, opted_out_at`;
     if (!contact) throw new Error("Falha ao registrar contato");
+    await recordOrigin(tx, clinicId, contact.id, originFromReferral(m.referral) ?? (m.text ? detectOrigin(m.text) : null));
 
     let [conv] = await tx<ConversationRow[]>`
       select * from conversations where contact_id = ${contact.id} and channel = ${channel} and state <> 'closed' for update`;

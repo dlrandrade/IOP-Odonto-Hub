@@ -1,6 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { Sql } from "@/db/client";
 import { detectAlert } from "@/domain/alerts";
+import { detectIrritation } from "@/domain/irritation";
+import { reviewUrlFor, mapsUrlFor } from "@/integrations/google/places";
 import { parseSettings } from "@/domain/settings";
 import { formatFull, isWithinBusinessHours, type BusinessHours } from "@/lib/datetime";
 import { estimateCostCents, llmProviderFor, LlmUnavailableError } from "@/integrations/llm";
@@ -23,9 +25,12 @@ type Msg = { id: string; direction: string; sender_type: string; type: string; b
 export async function processConversation(sql: Sql, clinicId: string, conversationId: string, now: Date = new Date()): Promise<RunOutcome> {
   const started = Date.now();
   const [conv] = await sql<ConversationRow[]>`select * from conversations where id = ${conversationId} and clinic_id = ${clinicId}`;
-  const [clinic] = await sql<{ name: string; assistant_name: string; timezone: string; business_hours: BusinessHours; ai_enabled: boolean; ai_kill_switch: boolean; alert_keywords: string[]; alert_message: string | null; alert_after_hours_message: string | null; settings: unknown }[]>`
-    select name, assistant_name, timezone, business_hours, ai_enabled, ai_kill_switch, alert_keywords, alert_message, alert_after_hours_message, settings
-    from clinics where id = ${clinicId}`;
+  const [clinic] = await sql<{ name: string; assistant_name: string; timezone: string; business_hours: BusinessHours; ai_enabled: boolean; ai_kill_switch: boolean; alert_keywords: string[]; alert_message: string | null; alert_after_hours_message: string | null; settings: unknown;
+    contact_phone: string | null; contact_email: string | null; website_url: string | null; instagram_handle: string | null; google_review_url: string | null; google_business_url: string | null; google_place_id: string | null; address: string | null }[]>`
+    select c.name, c.assistant_name, c.timezone, c.business_hours, c.ai_enabled, c.ai_kill_switch, c.alert_keywords, c.alert_message, c.alert_after_hours_message, c.settings,
+           c.contact_phone, c.contact_email, c.website_url, c.instagram_handle, c.google_review_url, c.google_business_url, c.google_place_id,
+           (select u.address from units u where u.clinic_id = c.id order by u.created_at limit 1) as address
+    from clinics c where c.id = ${clinicId}`;
   if (!conv || !clinic) return "skipped";
   if (conv.state !== "ai_active" || !clinic.ai_enabled || clinic.ai_kill_switch) return "skipped";
 
@@ -63,6 +68,17 @@ export async function processConversation(sql: Sql, clinicId: string, conversati
     return "alert";
   }
 
+  // Paciente irritado (palavrão, ofensa, caixa alta…): a assistente não discute; acolhe e chama a equipe.
+  const irritation = detectIrritation(batchText, settings.irritation);
+  if (irritation) {
+    const version = await requestHuman(sql, clinicId, conversationId, `Paciente irritado: ${irritation}`, settings.irritation.urgent ? "urgente" : "normal");
+    if (version !== null && settings.irritation.message.trim()) {
+      await sendOutbound(sql, { clinicId, conversationId, senderType: "ai", body: settings.irritation.message.trim(), expect: { state: "awaiting_human", rowVersion: version }, now });
+    }
+    await record("handoff");
+    return "handoff";
+  }
+
   const provider = await llmProviderFor(sql, clinicId);
   if (!provider) {
     await requestHuman(sql, clinicId, conversationId, "Assistente de IA sem provedor configurado (Configurações → Assistente)", "normal");
@@ -96,6 +112,14 @@ export async function processConversation(sql: Sql, clinicId: string, conversati
   const messages = toLlmMessages(history, turnContext);
   const ctx: ToolCtx = { sql, clinicId, conversationId, contactId: conv.contact_id, tz: clinic.timezone, now, expect, flags: { handedOff: false, booked: false } };
   const toolsCalled: { name: string; ok: boolean }[] = [];
+  const systemPrompt = buildSystemPrompt({
+    name: clinic.name, assistantName: clinic.assistant_name, alertMessage: clinic.alert_message,
+    publicInfo: {
+      phone: clinic.contact_phone, email: clinic.contact_email, website: clinic.website_url, instagram: clinic.instagram_handle, address: clinic.address,
+      reviewUrl: clinic.google_review_url ?? (clinic.google_place_id ? reviewUrlFor(clinic.google_place_id) : null),
+      mapsUrl: clinic.google_business_url ?? (clinic.google_place_id ? mapsUrlFor(clinic.google_place_id) : null),
+    },
+  });
   let tokensIn = 0;
   let tokensOut = 0;
   let model = provider.name;
@@ -103,7 +127,7 @@ export async function processConversation(sql: Sql, clinicId: string, conversati
 
   try {
     for (let step = 0; step < MAX_STEPS; step++) {
-      const res = await provider.complete({ system: buildSystemPrompt({ name: clinic.name, assistantName: clinic.assistant_name, alertMessage: clinic.alert_message }), messages, tools: TOOL_SPECS });
+      const res = await provider.complete({ system: systemPrompt, messages, tools: TOOL_SPECS });
       tokensIn += res.usage.input;
       tokensOut += res.usage.output;
       if (res.usage.costUsd != null) costUsd = (costUsd ?? 0) + res.usage.costUsd;

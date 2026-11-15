@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { extractPlaceId, normalizeGoogleUrl, normalizeInstagram, normalizePhone, normalizeUrl, parseClinicProfile } from "@/domain/contact";
+import { detectIrritation, DEFAULT_IRRITATION, isShouting } from "@/domain/irritation";
+import { buildIcs, busyIntervals, parseIcs } from "@/domain/ical";
+import { detectOrigin, originFromAnswer, originFromReferral, whatsappLink, extractPlaceId, normalizeGoogleUrl, normalizeInstagram, normalizePhone, normalizeUrl, parseClinicProfile } from "@/domain/contact";
 import { addDays, clampToQuietHours, formatFull, isWithinBusinessHours, localDate, localTime, weekdayOf, zonedToUtc } from "@/lib/datetime";
 import { computeSlots, pickOffers, type SlotQuery } from "@/domain/slots";
 import { canTransitionAppointment, validateStageMove } from "@/domain/states";
@@ -201,5 +203,61 @@ describe("dados de contato da clínica", () => {
     expect(normalizePhone("(11) 3333-4444")).toBe("(11) 3333-4444");
     expect(() => normalizePhone("123")).toThrow();
     expect(parseClinicProfile({ phone: "", email: "", instagram: "" })).toEqual({ phone: null, email: null, website: null, instagram: null, address: null, googleReviewUrl: null });
+  });
+});
+
+describe("paciente irritado", () => {
+  it("detecta palavrão, expressões duras, caixa alta e termos da clínica; frases normais passam", () => {
+    expect(detectIrritation("que porra é essa, ninguém atende", DEFAULT_IRRITATION)).toBe("palavrão ou ofensa");
+    expect(detectIrritation("Isso é um absurdo, vou no Procon", DEFAULT_IRRITATION)).toContain("insatisfação");
+    expect(detectIrritation("QUERO FALAR COM ALGUÉM AGORA", DEFAULT_IRRITATION)).toBe("mensagem em caixa alta (gritando)");
+    expect(detectIrritation("esperei demais", { ...DEFAULT_IRRITATION, extra: ["esperei demais"] })).toContain("configurada");
+    expect(detectIrritation("Oi, quero marcar uma limpeza para sexta", DEFAULT_IRRITATION)).toBeNull();
+    expect(detectIrritation("Computador da recepção", DEFAULT_IRRITATION)).toBeNull(); // "puta" dentro de outra palavra não conta
+    expect(detectIrritation("OK", DEFAULT_IRRITATION)).toBeNull();
+    expect(isShouting("Oi TUDO BEM?")).toBe(false);
+    expect(detectIrritation("que porra", { ...DEFAULT_IRRITATION, enabled: false })).toBeNull();
+  });
+});
+
+describe("origem do paciente", () => {
+  it("detecta pela mensagem, pelo anúncio e pela resposta; não confunde pedido de link com origem", () => {
+    expect(detectOrigin("Oi! Vi vocês no Instagram e queria saber do clareamento")?.source).toBe("instagram");
+    expect(detectOrigin("achei a clínica pesquisando no google")?.source).toBe("google");
+    expect(detectOrigin("Minha amiga me indicou a Dra. Ana")?.source).toBe("indicacao");
+    expect(detectOrigin("me manda o link do google pra eu avaliar")).toBeNull();
+    expect(detectOrigin("quero marcar uma consulta")).toBeNull();
+    expect(originFromReferral({ sourceUrl: "https://www.instagram.com/p/abc", sourceType: "ad", headline: "Clareamento" })).toEqual({ source: "instagram", detail: "Anúncio no Instagram “Clareamento”" });
+    expect(originFromAnswer("foi pelo insta")).toBe("instagram");
+    expect(originFromAnswer("indicação da minha mãe")).toBe("indicacao");
+    expect(whatsappLink("+55 (11) 99999-0000", "Olá, tudo bem?")).toBe("https://wa.me/5511999990000?text=Ol%C3%A1%2C%20tudo%20bem%3F");
+  });
+});
+
+describe("agenda iCal (Google Agenda)", () => {
+  const ICS = [
+    "BEGIN:VCALENDAR", "BEGIN:VEVENT", "UID:a", "SUMMARY:Congresso", "DTSTART;TZID=America/Sao_Paulo:20261117T090000", "DTEND;TZID=America/Sao_Paulo:20261117T120000", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:b", "SUMMARY:Aula toda segunda", "DTSTART:20261116T120000Z", "DTEND:20261116T130000Z", "RRULE:FREQ=WEEKLY;BYDAY=MO;COUNT=3", "EXDATE:20261123T120000Z", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:c", "SUMMARY:Livre", "DTSTART:20261118T120000Z", "DTEND:20261118T130000Z", "TRANSP:TRANSPARENT", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:d", "SUMMARY:Feriado", "DTSTART;VALUE=DATE:20261120", "DTEND;VALUE=DATE:20261121", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:e", "SUMMARY:Cancelado", "DTSTART:20261119T120000Z", "DTEND:20261119T130000Z", "STATUS:CANCELLED", "END:VEVENT",
+    "END:VCALENDAR",
+  ].join("\r\n");
+  it("lê eventos, fuso, dia inteiro, recorrência com exceção e ignora livres e cancelados", () => {
+    const busy = busyIntervals(parseIcs(ICS), new Date("2026-11-15T00:00:00Z"), new Date("2026-12-31T00:00:00Z"), TZ);
+    expect(busy.map((b) => [b.uid, b.start.toISOString()])).toEqual([
+      ["b", "2026-11-16T12:00:00.000Z"],
+      ["a", "2026-11-17T12:00:00.000Z"],
+      ["d", "2026-11-20T03:00:00.000Z"],
+      ["b", "2026-11-30T12:00:00.000Z"],
+    ]);
+  });
+  it("gera iCal que o Google aceita e que a própria leitura entende", () => {
+    const ics = buildIcs("Clínica, Teste", [{ id: "x1", start: new Date("2026-11-16T13:00:00Z"), end: new Date("2026-11-16T13:30:00Z"), summary: "Ana · Limpeza; retorno" }], new Date("2026-11-15T00:00:00Z"));
+    expect(ics).toContain("X-WR-CALNAME:Clínica\\, Teste");
+    expect(ics).toContain("SUMMARY:Ana · Limpeza\\; retorno");
+    const back = busyIntervals(parseIcs(ics), new Date("2026-11-15T00:00:00Z"), new Date("2026-11-20T00:00:00Z"), TZ);
+    expect(back).toHaveLength(1);
+    expect(back[0]!.end.toISOString()).toBe("2026-11-16T13:30:00.000Z");
   });
 });

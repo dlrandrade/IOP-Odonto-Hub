@@ -3,7 +3,7 @@ import { decideAutomation } from "@/domain/automation";
 import { parseSettings } from "@/domain/settings";
 import type { ConversationState } from "@/domain/states";
 import { addMinutes, clampToQuietHours, formatFull, localDate, localParts, zonedToUtc } from "@/lib/datetime";
-import { enforcesWindow } from "@/integrations/whatsapp";
+import { enforcesWindow, providerFor } from "@/integrations/whatsapp";
 import { enqueueJob } from "./jobs-queue";
 import { emailConfigured, isEmail, sendEmail } from "@/integrations/email";
 import { reviewLink } from "./google-reviews";
@@ -13,8 +13,11 @@ export const RULE_TRIGGERS = ["before_appointment", "after_appointment", "no_sho
 export type RuleTrigger = (typeof RULE_TRIGGERS)[number];
 export const RULE_ACTIONS = ["message", "task"] as const;
 export type RuleAction = (typeof RULE_ACTIONS)[number];
-/** Por onde a mensagem sai. Instagram vira tarefa com o texto pronto até o Instagram Direct ser conectado. */
-export const RULE_CHANNELS = ["whatsapp", "email", "instagram"] as const;
+/**
+ * Por onde a mensagem sai. "whatsapp_click": na hora certa vira um botão "Enviar no WhatsApp" para a equipe
+ * (abre o WhatsApp Web/app com número e texto prontos). Instagram vira tarefa com o texto pronto.
+ */
+export const RULE_CHANNELS = ["whatsapp", "whatsapp_click", "email", "instagram"] as const;
 export type RuleChannel = (typeof RULE_CHANNELS)[number];
 
 export type AutomationRule = {
@@ -153,14 +156,20 @@ export async function runRuleJob(sql: Sql, job: RuleJob, now: Date): Promise<str
     if (!r.ok) { if (r.retryable) throw new Error(r.error); return `blocked:email`; }
     return "sent_email";
   }
-  const [contact] = await sql<{ id: string; opted_out_at: Date | null; service_messages_allowed: boolean; is_test: boolean }[]>`
-    select ct.id, ct.opted_out_at, ct.service_messages_allowed, ct.is_test from contacts ct
+  const [contact] = await sql<{ id: string; phone_e164: string; opted_out_at: Date | null; service_messages_allowed: boolean; is_test: boolean }[]>`
+    select ct.id, ct.phone_e164, ct.opted_out_at, ct.service_messages_allowed, ct.is_test from contacts ct
     where ct.clinic_id = ${job.clinic_id} and ct.id = coalesce(${appt?.contact_id ?? null}, (
       select l.contact_id from contact_patient_links l where l.patient_id = ${patientId} order by l.is_guardian desc, l.created_at limit 1))`;
   if (!contact) {
     await sql`insert into tasks (clinic_id, title, detail, kind, appointment_id)
               values (${job.clinic_id}, ${`${rule.name}: avisar manualmente`}, ${`${patient.full_name} não tem WhatsApp vinculado.`}, 'automation', ${job.appointment_id})`;
     return "human_task";
+  }
+  if (contact.opted_out_at || !contact.service_messages_allowed) return "skipped:opt_out";
+  // Envio por clique: escolhido na automação ou porque a clínica ainda não conectou o WhatsApp.
+  if (!contact.is_test && (rule.channel === "whatsapp_click" || !(await providerFor(sql, job.clinic_id, "whatsapp")))) {
+    await createClickTask(sql, { clinicId: job.clinic_id, title: `${rule.name}: enviar no WhatsApp`, patient: patient.full_name, phone: contact.phone_e164, text, appointmentId: job.appointment_id, contactId: contact.id });
+    return "human_task:clique";
   }
   const channel = contact.is_test ? "simulator" : "whatsapp";
   let [conv] = await sql<{ id: string; state: ConversationState; window_expires_at: Date | null; last_inbound_at: Date | null }[]>`
@@ -197,4 +206,10 @@ export async function runRuleJob(sql: Sql, job: RuleJob, now: Date): Promise<str
   });
   if (sent.status !== "sent" && sent.status !== "queued") return `blocked:${sent.status}`;
   return decision.action === "send_template" ? "sent_template" : "sent";
+}
+
+/** Tarefa "Enviar no WhatsApp": guarda número e texto; a tela mostra o botão que abre o WhatsApp já preenchido. */
+export async function createClickTask(sql: Sql, t: { clinicId: string; title: string; patient: string; phone: string; text: string; appointmentId?: string | null; contactId?: string | null; conversationId?: string | null }): Promise<void> {
+  await sql`insert into tasks (clinic_id, title, detail, kind, appointment_id, contact_id, conversation_id, wa_phone, message_text, due_at)
+            values (${t.clinicId}, ${t.title}, ${`Para ${t.patient}`}, 'whatsapp_click', ${t.appointmentId ?? null}, ${t.contactId ?? null}, ${t.conversationId ?? null}, ${t.phone}, ${t.text}, now())`;
 }

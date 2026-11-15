@@ -22,6 +22,7 @@ import { audit, diff } from "@/services/audit";
 import { ContactError, extractPlaceId, normalizeEmail, normalizeGoogleUrl, normalizeInstagram, normalizePhone, normalizeUrl } from "@/domain/contact";
 import { searchPlaces } from "@/integrations/google/places";
 import { reviewLink } from "@/services/google-reviews";
+import { syncCalendarImport } from "@/services/calendar-sync";
 
 const id = z.string().uuid();
 const PATH = "/configuracoes";
@@ -485,3 +486,84 @@ export async function saveReviewSnapshotAction(_: ActionState, form: FormData): 
   });
 }
 
+
+// ───────────── Paciente irritado ─────────────
+
+export async function saveIrritationAction(_: ActionState, form: FormData): Promise<ActionState> {
+  return act("ai.configure", [PATH], async (ctx) => {
+    const current = parseSettings(ctx.clinic.settings);
+    const extra = str(form, "extra").split("\n").map((k) => k.trim()).filter((k) => k.length >= 2).slice(0, 100);
+    const message = str(form, "message").slice(0, 500);
+    const settings = settingsSchema.parse({
+      ...current,
+      irritation: { enabled: bool(form, "enabled"), profanity: bool(form, "profanity"), harsh: bool(form, "harsh"), caps: bool(form, "caps"), exclamations: bool(form, "exclamations"), urgent: bool(form, "urgent"), extra, message },
+    });
+    await q(ctx, async (tx) => {
+      await tx`update clinics set settings = ${tx.json(settings as never)} where id = ${ctx.clinicId}`;
+      await audit(tx, actorOf(ctx), "ai.irritation", "clinics", ctx.clinicId, current.irritation, settings.irritation);
+    });
+    return { ok: true, message: "Detecção de paciente irritado salva." };
+  });
+}
+
+// ───────────── Google Agenda (iCal) ─────────────
+
+const CAL_PATHS = [PATH, "/agenda"];
+
+/** Puxar: a clínica cola o "Endereço secreto no formato iCal" do Google Agenda; testamos na hora. */
+export async function addCalendarImportAction(_: ActionState, form: FormData): Promise<ActionState> {
+  return act("settings.manage", CAL_PATHS, async (ctx) => {
+    const raw = str(form, "url").replace(/^webcal:/i, "https:");
+    let url: URL;
+    try { url = await assertPublicUrl(raw); } catch (e) { throw new UserError(e instanceof Error ? e.message : "Endereço inválido."); }
+    const professionalId = optStr(form, "professionalId");
+    const label = (optStr(form, "label") ?? (url.hostname.includes("google") ? "Google Agenda" : "Agenda externa")).slice(0, 60);
+    const result = await q(ctx, async (tx) => {
+      if (professionalId) z.string().uuid().parse(professionalId);
+      const [imp] = await tx<{ id: string; clinic_id: string; professional_id: string | null; url_enc: string }[]>`
+        insert into calendar_imports (clinic_id, professional_id, label, url_enc) values (${ctx.clinicId}, ${professionalId}, ${label}, ${encryptField(url.toString())})
+        returning id, clinic_id, professional_id, url_enc`;
+      await audit(tx, actorOf(ctx), "calendar.import.add", "calendar_imports", imp!.id, null, { label, professional_id: professionalId });
+      return syncCalendarImport(tx, imp!);
+    });
+    if (!result.ok) return { ok: true, message: `Agenda salva, mas a leitura falhou: ${result.error}` };
+    return { ok: true, message: `Agenda conectada: ${result.count} compromisso(s) nos próximos 90 dias viraram bloqueios.` };
+  });
+}
+
+export async function syncCalendarNowAction(_: ActionState, form: FormData): Promise<ActionState> {
+  return act("settings.manage", CAL_PATHS, async (ctx) => {
+    const id = z.string().uuid().parse(form.get("importId"));
+    const result = await q(ctx, async (tx) => {
+      const [imp] = await tx<{ id: string; clinic_id: string; professional_id: string | null; url_enc: string }[]>`select id, clinic_id, professional_id, url_enc from calendar_imports where id = ${id}`;
+      if (!imp) throw new UserError("Agenda não encontrada.");
+      return syncCalendarImport(tx, imp);
+    });
+    return result.ok ? { ok: true, message: `Sincronizado: ${result.count} compromisso(s).` } : { error: result.error ?? "Falha ao sincronizar." };
+  });
+}
+
+export async function removeCalendarImportAction(_: ActionState, form: FormData): Promise<ActionState> {
+  return act("settings.manage", CAL_PATHS, async (ctx) => {
+    const id = z.string().uuid().parse(form.get("importId"));
+    await q(ctx, async (tx) => {
+      await tx`delete from calendar_imports where id = ${id}`; // os bloqueios importados saem junto (cascade)
+      await audit(tx, actorOf(ctx), "calendar.import.remove", "calendar_imports", id, null, null);
+    });
+    return { ok: true, message: "Agenda desconectada e bloqueios removidos." };
+  });
+}
+
+/** Espelhar: o que aparece no Google Agenda da clínica e troca do link secreto. */
+export async function saveCalendarFeedAction(_: ActionState, form: FormData): Promise<ActionState> {
+  return act("settings.manage", CAL_PATHS, async (ctx) => {
+    const privacy = z.enum(["busy", "service", "name_service"]).parse(form.get("privacy"));
+    const rotate = form.get("rotate") === "1";
+    await q(ctx, async (tx) => {
+      await tx`update clinic_integrations set calendar_feed_privacy = ${privacy}
+               ${rotate ? tx`, calendar_feed_token = replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '')` : tx``}`;
+      await audit(tx, actorOf(ctx), "calendar.feed", "clinic_integrations", ctx.clinicId, null, { privacy, rotated: rotate });
+    });
+    return { ok: true, message: rotate ? "Novo link gerado. O link antigo parou de funcionar: assine o novo no Google Agenda." : "Preferência salva. O Google atualiza a agenda em algumas horas." };
+  });
+}

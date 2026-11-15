@@ -1,7 +1,8 @@
 "use server";
 
 import { z } from "zod";
-import { q } from "@/auth/session";
+import { actionCtx, q } from "@/auth/session";
+import { emailConfigured, sendEmail } from "@/integrations/email";
 import type { ActionState } from "@/components/client";
 import { parseSettings, settingsSchema } from "@/domain/settings";
 import { act, actorOf, bool, optStr, str, UserError } from "@/lib/action";
@@ -177,4 +178,33 @@ export async function saveLimitsAction(_: ActionState, form: FormData): Promise<
     await writeSettings(ctx, (s) => ({ ...s, quietStartHour: Number(form.get("quietStartHour")), quietEndHour: Number(form.get("quietEndHour")), maxAutomatedPerDay: Number(form.get("maxAutomatedPerDay")) }), "automation.limits");
     return { ok: true, message: "Limites salvos." };
   });
+}
+
+/* ───────────── Testar uma automação ───────────── */
+
+const SIMULATOR_PHONE = "+5511900000001";
+
+/**
+ * Teste: a mensagem (já com dados de exemplo) aparece no Simulador como se tivesse sido enviada,
+ * ou, no canal e-mail, vai para o e-mail de quem está testando. Nada é enviado a pacientes.
+ */
+export async function testAutomationAction(input: { text: string; channel: string }): Promise<{ ok: boolean; message: string; href?: string }> {
+  const ctx = await actionCtx("automations.manage");
+  const text = z.string().trim().min(1, "Mensagem vazia.").max(2000).parse(input.text);
+  if (input.channel === "email") {
+    if (!emailConfigured()) return { ok: false, message: "O envio de e-mail da plataforma ainda não foi ativado. A prévia acima é exatamente o que o paciente receberia." };
+    const r = await sendEmail({ to: ctx.email, subject: `[Teste] ${ctx.clinic.name}`, text, replyTo: ctx.clinic.contact_email, fromName: ctx.clinic.name });
+    return r.ok ? { ok: true, message: `E-mail de teste enviado para ${ctx.email}.` } : { ok: false, message: r.error };
+  }
+  await q(ctx, async (tx) => {
+    const [contact] = await tx<{ id: string }[]>`
+      insert into contacts (clinic_id, phone_e164, wa_profile_name, is_test, source) values (${ctx.clinicId}, ${SIMULATOR_PHONE}, 'Paciente do simulador', true, 'simulator')
+      on conflict (clinic_id, phone_e164) do update set is_test = true returning id`;
+    let [conv] = await tx<{ id: string }[]>`select id from conversations where contact_id = ${contact!.id} and channel = 'simulator' and state <> 'closed' limit 1`;
+    if (!conv) [conv] = await tx<{ id: string }[]>`insert into conversations (clinic_id, contact_id, channel, state) values (${ctx.clinicId}, ${contact!.id}, 'simulator', 'ai_active') returning id`;
+    await tx`insert into messages (clinic_id, conversation_id, direction, sender_type, type, body, delivery_status)
+             values (${ctx.clinicId}, ${conv!.id}, 'outbound', 'system', 'text', ${text}, 'delivered')`;
+    await tx`update conversations set last_message_at = now(), last_message_preview = ${text.slice(0, 120)} where id = ${conv!.id}`;
+  });
+  return { ok: true, message: "Mensagem de teste entregue no Simulador.", href: `/simulador?tel=${SIMULATOR_PHONE.replace(/\D/g, "").slice(2)}` };
 }
