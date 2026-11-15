@@ -12,7 +12,20 @@ O wacli é um programa que fica rodando o tempo todo, com a sessão e o históri
 A Vercel só roda funções curtas e sem disco, então o gateway precisa de uma máquina sempre ligada com disco persistente
 (VPS, Railway, Fly.io, Render com disco etc.). Um gateway atende todas as clínicas da plataforma.
 
-## Subir
+## Subir num servidor (recomendado: Docker Compose + HTTPS automático)
+
+Num VPS Linux com Docker (2 GB de RAM bastam para dezenas de clínicas):
+
+```bash
+git clone https://github.com/dlrandrade/IOP-Odonto-Hub.git && cd IOP-Odonto-Hub/gateway/wacli
+cp .env.example .env   # preencha GATEWAY_DOMAIN e GATEWAY_TOKEN (openssl rand -hex 32)
+docker compose up -d --build
+curl https://SEU_DOMINIO/healthz   # deve responder {"ok":true,...}
+```
+
+O Caddy emite o certificado HTTPS sozinho; o domínio precisa apontar para o servidor e as portas 80/443 precisam estar abertas.
+
+## Subir só o container
 
 ```bash
 docker build -t iop-wacli-gateway gateway/wacli

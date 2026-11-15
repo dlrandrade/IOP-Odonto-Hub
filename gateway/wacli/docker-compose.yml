@@ -1,0 +1,30 @@
+# Gateway wacli + Caddy (HTTPS automático com Let's Encrypt).
+# Uso: no servidor, dentro de gateway/wacli, crie o arquivo .env (veja .env.example) e rode: docker compose up -d --build
+services:
+  gateway:
+    build: .
+    restart: unless-stopped
+    environment:
+      GATEWAY_TOKEN: ${GATEWAY_TOKEN:?defina GATEWAY_TOKEN no .env}
+      TZ: America/Sao_Paulo
+    volumes:
+      - wacli-data:/data
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    depends_on: [gateway]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      GATEWAY_DOMAIN: ${GATEWAY_DOMAIN:?defina GATEWAY_DOMAIN no .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+
+volumes:
+  wacli-data:
+  caddy-data:
