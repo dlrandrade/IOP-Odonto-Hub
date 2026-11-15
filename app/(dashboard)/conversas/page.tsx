@@ -273,11 +273,11 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                       {m.type === "image" && !m.media_path && !m.wa_media_id && <p className="text-xs italic">📷 Imagem (simulada)</p>}
                       {m.type !== "audio" && m.body && <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed">{m.body}</p>}
                       <p className="mt-1.5 flex items-center justify-end gap-2 font-mono text-[10.5px] text-bone-mute">
-                        {m.type === "template" && <span>template</span>}
+                        {m.type === "template" && <span className="simples:hidden">template</span>}
                         <time dateTime={m.created_at.toISOString()}>{localTime(m.created_at, ctx.tz)}</time>
                         {out && <DeliveryIcon status={m.delivery_status} />}
                       </p>
-                      {m.error && m.delivery_status === "failed" && <p className="mt-1 rounded-sm bg-danger-soft px-2 py-1 text-[11px] text-danger">Falha no envio: {m.error}</p>}
+                      {m.error && m.delivery_status === "failed" && <p className="mt-1 rounded-sm bg-danger-soft px-2 py-1 text-[11px] text-danger">Falha no envio<span className="simples:hidden">: {m.error}</span><span className="detalhado:hidden">. Tente de novo ou fale com o suporte.</span></p>}
                     </div>
                     </div>
                   </div>

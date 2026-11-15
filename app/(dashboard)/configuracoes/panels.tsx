@@ -8,15 +8,15 @@ import { cn } from "@/lib/format";
 import { connectWacliAction, evolutionLogoutAction, evolutionQrAction, evolutionStatusAction, listFreeModelsAction, listModelsAction, saveEvolutionAction, saveLlmAction, testLlmAction, useOfficialWhatsAppAction, wacliLogoutAction, wacliStatusAction } from "./actions";
 
 /** Escolha entre opções do mesmo peso: cartões do mesmo tamanho, lado a lado. */
-export function ChoiceCards<T extends string>({ name, value, onChange, options }: {
-  name: string; value: T; onChange: (v: T) => void; options: { value: T; title: string; text: string; tag?: ReactNode }[];
+export function ChoiceCards<T extends string>({ name, value, onChange, options, className }: {
+  name: string; value: T; onChange: (v: T) => void; options: { value: T; title: string; text: string; tag?: ReactNode; className?: string }[]; className?: string;
 }) {
   return (
-    <div role="radiogroup" className={cn("grid gap-4", options.length === 4 ? "sm:grid-cols-2 xl:grid-cols-4" : options.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+    <div role="radiogroup" className={cn("grid gap-4", className ?? (options.length === 4 ? "sm:grid-cols-2 xl:grid-cols-4" : options.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"))}>
       {options.map((o) => {
         const on = value === o.value;
         return (
-          <label key={o.value} className={cn("btn relative flex h-full cursor-pointer flex-col gap-2 rounded-md border p-5", on ? "border-acento bg-acento/[0.07]" : "border-line bg-surface-2/40 hover:border-bone-mute/60")}>
+          <label key={o.value} className={cn("bloco relative flex h-full cursor-pointer flex-col gap-2 rounded-lg border p-5", on ? "border-acento bg-acento/[0.08]" : "border-line bg-bone/[0.03] hover:border-bone-mute/60", o.className)}>
             <input type="radio" name={name} value={o.value} checked={on} onChange={() => onChange(o.value)} className="sr-only" />
             <span className="flex items-center justify-between gap-3">
               <span className="t-h3">{o.title}</span>
@@ -42,10 +42,11 @@ export function WhatsAppPanel({ provider, official, evolution, wacli }: {
   const [choice, setChoice] = useState(provider);
   return (
     <div className="space-y-8">
-      <ChoiceCards name="channel" value={choice} onChange={setChoice} options={[
+      <ChoiceCards name="channel" value={choice} onChange={setChoice} className={provider === "evolution" ? "sm:grid-cols-3" : "sm:grid-cols-3 simples:sm:grid-cols-2"} options={[
         { value: "cloud", title: "WhatsApp oficial (Meta)", text: "Número verificado pela Meta. Estável e sem risco de bloqueio. Exige cadastro na Meta e mensagens prontas aprovadas.", tag: <Badge tone="ok">Recomendado</Badge> },
-        { value: "wacli", title: "QR Code direto (wacli)", text: "Leia um QR Code com o celular da clínica e pronto. Roda no gateway da plataforma, sem servidor extra.", tag: <Badge tone="warn">Não oficial</Badge> },
-        { value: "evolution", title: "QR Code pela Evolution API", text: "Para quem já tem um servidor Evolution API próprio. Também não é oficial.", tag: <Badge tone="warn">Não oficial</Badge> },
+        { value: "wacli", title: "QR Code direto", text: "Leia um QR Code com o celular da clínica e pronto, como no WhatsApp Web. Nada para instalar.", tag: <Badge tone="warn">Não oficial</Badge> },
+        // Evolution exige servidor próprio: só aparece na visualização detalhada (ou se já estiver em uso).
+        { value: "evolution", title: "QR Code pela Evolution API", text: "Para quem já tem um servidor Evolution API próprio. Também não é oficial.", tag: <Badge tone="warn">Não oficial</Badge>, className: provider === "evolution" ? undefined : "simples:hidden" },
       ]} />
       {choice === "cloud" ? (
         <div className="space-y-6">
@@ -100,7 +101,7 @@ function WacliSetup({ platformGateway, ownUrl, hasOwnToken, connected, active }:
           <p className="t-small mb-5">{platformGateway ? "A plataforma já mantém o servidor que conversa com o WhatsApp. É só gerar o QR Code." : "Informe o servidor (gateway wacli) que a sua equipe instalou."}</p>
           <ActionForm action={connectWacliAction} resetOnDone={false} className="flex flex-1 flex-col gap-5">
             {platformGateway && (
-              <label className="flex items-center gap-2.5 text-[13.5px]"><input type="checkbox" checked={ownGateway} onChange={(e) => setOwnGateway(e.target.checked)} className="size-4 accent-[var(--color-gold)]" /> Usar um gateway próprio</label>
+              <label className={cn("flex items-center gap-2.5 text-[13.5px]", !ownGateway && "simples:hidden")}><input type="checkbox" checked={ownGateway} onChange={(e) => setOwnGateway(e.target.checked)} className="size-4 accent-[var(--color-gold)]" /> Usar um gateway próprio</label>
             )}
             {ownGateway && (
               <div className="grid gap-4 sm:grid-cols-2">
@@ -210,7 +211,7 @@ function EvolutionSetup({ baseUrl, instance, hasKey, webhookUrl, connected, acti
           </div>
         </section>
       </div>
-      {active && <p className="t-small">Endereço que configuramos na Evolution para receber mensagens: <code className="break-all font-mono text-bone-dim">{webhookUrl}</code></p>}
+      {active && <p className="t-small simples:hidden">Endereço que configuramos na Evolution para receber mensagens: <code className="break-all font-mono text-bone-dim">{webhookUrl}</code></p>}
     </div>
   );
 }

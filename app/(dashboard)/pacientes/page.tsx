@@ -147,7 +147,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
         )}
       </PageHeader>
 
-      <form action="/pacientes" className="mb-6 rounded-lg border border-line bg-surface/70">
+      <form action="/pacientes" className="vidro mb-6 rounded-lg">
         <div className="flex flex-wrap items-center gap-3 p-3">
           <div className="relative min-w-0 flex-1 basis-72">
             <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-bone-mute" aria-hidden />

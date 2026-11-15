@@ -114,7 +114,7 @@ export default async function IndicatorsPage({ searchParams }: { searchParams: P
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <Card>
+            <Card className="simples:lg:col-span-2">
               <CardTitle hint="Criadas pelas automações quando precisam de uma pessoa." action={<Link className={buttonClass("outline", "sm")} href="/automacoes">Ver todas</Link>}>Tarefas abertas ({d.queue.openTasks})</CardTitle>
               {data.tasks.length === 0 ? <Empty title="Nenhuma tarefa pendente" /> : (
                 <ul className="divide-y divide-line">
@@ -127,7 +127,7 @@ export default async function IndicatorsPage({ searchParams }: { searchParams: P
                 </ul>
               )}
             </Card>
-            <Card>
+            <Card className="simples:hidden">
               <CardTitle hint="Todos os números saem das tabelas por SQL e conciliam com os registros.">Como cada número é calculado</CardTitle>
               <dl className="divide-y divide-line">
                 {[

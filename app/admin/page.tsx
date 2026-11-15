@@ -91,7 +91,8 @@ export default async function PlatformPage() {
                 <td>
                   <div className="flex items-center justify-end gap-2">
                     {c.is_demo && <form action={demoActivityAction}><input type="hidden" name="clinicId" value={c.id} /><Button size="sm" variant="outline" title="Cria conversas, tarefas e consultas de hoje (fictícias)">Movimentar demo</Button></form>}
-                    <form action={enterClinicAction}><input type="hidden" name="clinicId" value={c.id} /><Button size="sm">Entrar</Button></form>
+                    <form action={enterClinicAction}><input type="hidden" name="clinicId" value={c.id} /><input type="hidden" name="vista" value="simples" /><Button size="sm" variant="outline" title="Abre a clínica na visualização simples, como a equipe dela vê">Ver como cliente</Button></form>
+                    <form action={enterClinicAction}><input type="hidden" name="clinicId" value={c.id} /><Button size="sm" title="Abre a clínica com todos os detalhes">Entrar</Button></form>
                   </div>
                 </td>
               </tr>

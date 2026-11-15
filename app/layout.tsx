@@ -20,7 +20,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const theme = (await cookies()).get("tema")?.value === "light" ? "light" : "dark";
   return (
     <html lang="pt-BR" data-theme={theme} className={`${display.variable} ${sans.variable} ${mono.variable}`}>
-      <body className="min-h-dvh bg-ink text-bone antialiased" data-tema="">
+      <body className="min-h-dvh text-bone antialiased" data-tema="">
         <TemaPagina />
         {children}
       </body>

@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, Ban, CalendarCheck, CalendarPlus, Check, CircleDashed, DoorOpen, MessageCircle, Stethoscope, UserPlus, UserX, type LucideIcon } from "lucide-react";
+import { ArrowRight, Ban, BarChart3, CalendarCheck, CalendarDays, CalendarPlus, Check, CircleDashed, DoorOpen, KanbanSquare, MessageCircle, Stethoscope, UserPlus, Users, UserX, type LucideIcon } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
-import { Badge, buttonClass, Card, CardTitle, Empty } from "@/components/ui";
+import { Badge, buttonClass, Card, CardTitle, Empty, Tile } from "@/components/ui";
+import { temaDaRota } from "@/lib/tema";
 import { can } from "@/domain/permissions";
 import { APPOINTMENT_STATUS_LABELS, type AppointmentStatus } from "@/domain/states";
 import { addDays, formatDay, formatShort, localDate, localParts, localTime, zonedToUtc } from "@/lib/datetime";
@@ -62,11 +63,19 @@ export default async function TodayPage() {
   const nextId = data.appts.find((a) => a.ends_at.getTime() > nowMs && ["scheduled", "confirmed", "arrived"].includes(a.status))?.id;
   const open = data.appts.filter((a) => ["scheduled", "confirmed", "arrived", "in_service"].includes(a.status)).length;
 
-  const actions = [
-    can(ctx.role, "agenda.write") && { href: "/agenda?nova=1", icon: CalendarPlus, title: "Agendar consulta", text: "Paciente, serviço e horário." },
-    can(ctx.role, "patients.write") && { href: "/pacientes?novo=1", icon: UserPlus, title: "Cadastrar paciente", text: "Leva menos de 1 minuto." },
-    seesChats && { href: "/conversas", icon: MessageCircle, title: "Responder conversas", text: data.waiting.length ? `${data.waiting.length} esperando agora.` : "Acompanhe a assistente." },
-  ].filter((x): x is { href: string; icon: LucideIcon; title: string; text: string } => !!x);
+  // Atalhos em blocos quadrados (como ícones de aplicativo): o que a recepção mais faz, com o número do momento.
+  const count = (n: number) => <span className="min-w-6 rounded-full bg-bone/[0.1] px-2 py-0.5 text-center text-[12px] font-bold text-bone">{n}</span>;
+  const urgentBadge = data.waiting.length ? <span className="min-w-6 rounded-full bg-danger px-2 py-0.5 text-center text-[12px] font-bold text-on-danger">{data.waiting.length === 6 ? "6+" : data.waiting.length}</span> : undefined;
+  type TileItem = { href: string; icon: LucideIcon; title: string; text: string; rgb: string; badge?: React.ReactNode };
+  const tiles = ([
+    seesChats && ctx.role !== "dentista" && { href: "/conversas?f=nao-atribuidas", icon: MessageCircle, title: "Conversas", text: data.waiting.length ? "Esperando resposta" : "Ninguém esperando", rgb: temaDaRota("/conversas").rgb, badge: urgentBadge },
+    seesAgenda && { href: `/agenda?d=${today}`, icon: CalendarDays, title: "Agenda de hoje", text: open ? "Por atender hoje" : "Agenda livre", rgb: temaDaRota("/agenda").rgb, badge: count(open) },
+    can(ctx.role, "agenda.write") && { href: "/agenda?nova=1", icon: CalendarPlus, title: "Nova consulta", text: "Marcar um horário", rgb: temaDaRota("/agenda").rgb },
+    can(ctx.role, "patients.write") && { href: "/pacientes?novo=1", icon: UserPlus, title: "Novo paciente", text: "Cadastro em 1 minuto", rgb: temaDaRota("/pacientes").rgb },
+    can(ctx.role, "patients.view") && { href: "/pacientes", icon: Users, title: "Pacientes", text: "Fichas e histórico", rgb: temaDaRota("/pacientes").rgb },
+    can(ctx.role, "crm.view") && { href: "/crm", icon: KanbanSquare, title: "Oportunidades", text: "Tratamentos em decisão", rgb: temaDaRota("/crm").rgb },
+    can(ctx.role, "dashboard.view") && { href: "/indicadores", icon: BarChart3, title: "Indicadores", text: "Como a clínica está indo", rgb: temaDaRota("/indicadores").rgb },
+  ] as (TileItem | false)[]).filter((x): x is TileItem => !!x).slice(0, 6);
 
   return (
     <div className="space-y-10">
@@ -75,37 +84,10 @@ export default async function TodayPage() {
         <h1 className="t-h1 mt-1">{greeting}, {ctx.name.split(" ")[0]}</h1>
       </header>
 
-      {/* Quatro caixas de 25%: duas a duas, alinham com os blocos de 50% logo abaixo. */}
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-        <section aria-label="Agora" className="fio-topo flex h-[104px] items-center gap-4 rounded-lg border border-acento/30 bg-acento/[0.07] px-5">
-          <div className="grid w-full grid-cols-2 divide-x divide-line">
-            {seesChats && ctx.role !== "dentista" ? (
-              <Link href="/conversas?f=nao-atribuidas" className="group pr-4">
-                <span className="eyebrow block text-bone-mute">Esperando</span>
-                <span className="mt-1 flex items-baseline gap-1.5"><span className={`display num text-[30px] leading-none ${data.waiting.length ? "text-gold" : ""}`}>{data.waiting.length === 6 ? "6+" : data.waiting.length}</span><span className="t-small group-hover:text-bone">conversa{data.waiting.length === 1 ? "" : "s"}</span></span>
-              </Link>
-            ) : <div className="pr-4"><span className="eyebrow block text-bone-mute">Hoje</span><span className="t-small mt-1 block">{formatDay(today)}</span></div>}
-            {seesAgenda ? (
-              <Link href={`/agenda?d=${today}`} className="group pl-4">
-                <span className="eyebrow block text-bone-mute">Por atender</span>
-                <span className="mt-1 flex items-baseline gap-1.5"><span className="display num text-[30px] leading-none">{open}</span><span className="t-small group-hover:text-bone">consulta{open === 1 ? "" : "s"} hoje</span></span>
-              </Link>
-            ) : <div className="pl-4" />}
-          </div>
-        </section>
-        {actions.map((a) => (
-          <Link key={a.href} href={a.href} className="group fio-topo flex h-[104px] flex-col justify-between rounded-lg border border-line bg-surface/70 px-5 py-4 transition-colors hover:border-bone-mute/50 hover:bg-surface">
-            <span className="flex items-center justify-between">
-              <span className="flex size-8 items-center justify-center rounded-md bg-acento/12 text-acento"><a.icon size={17} aria-hidden /></span>
-              <ArrowRight size={16} aria-hidden className="text-bone-mute transition-transform group-hover:translate-x-0.5 group-hover:text-bone" />
-            </span>
-            <span className="min-w-0">
-              <span className="t-h3 block truncate">{a.title}</span>
-              <span className="t-small block truncate">{a.text}</span>
-            </span>
-          </Link>
-        ))}
-      </div>
+      {/* Blocos quadrados grandes: um toque e a pessoa já está fazendo o que precisa. */}
+      <nav aria-label="Atalhos" className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 xl:grid-cols-6">
+        {tiles.map((t) => <Tile key={t.href} href={t.href} icon={t.icon} title={t.title} text={t.text} rgb={t.rgb} badge={t.badge} />)}
+      </nav>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {seesChats && ctx.role !== "dentista" && (
@@ -177,14 +159,16 @@ export default async function TodayPage() {
 
         {data.week && (
           <Block title="Últimos 7 dias" hint="Resumo da semana. Os números completos e como cada um é calculado ficam em Indicadores." href="/indicadores" linkLabel="Indicadores">
-            <dl className="grid flex-1 grid-cols-2 gap-px overflow-hidden rounded-md bg-line">
+            <dl className="grid flex-1 grid-cols-2 gap-px overflow-hidden rounded-md bg-line/70">
               {[
                 ["Novos contatos", String(data.week.newContacts)],
                 ["Consultas marcadas", String(data.week.appointmentsBooked)],
                 ["Contato → avaliação", data.week.conversion.rate == null ? "—" : `${Math.round(data.week.conversion.rate * 100)}%`],
                 ["Gasto com IA", `US$ ${(data.week.aiCostCents / 100).toFixed(2).replace(".", ",")}`],
+                ["Conversas recebidas", String(data.week.conversations)],
               ].map(([k, v]) => (
-                <div key={k} className="flex flex-col justify-between gap-3 bg-surface p-5">
+                // Custo da IA é detalhe técnico: na visualização simples, o quarto número é o de conversas.
+                <div key={k} className={`flex flex-col justify-between gap-3 bg-surface/90 p-5 ${k === "Gasto com IA" ? "simples:hidden" : k === "Conversas recebidas" ? "detalhado:hidden" : ""}`}>
                   <dt className="eyebrow text-bone-mute">{k}</dt>
                   <dd className="display num text-[32px] leading-none">{v}</dd>
                 </div>

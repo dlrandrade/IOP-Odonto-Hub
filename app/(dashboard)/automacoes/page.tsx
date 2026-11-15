@@ -126,18 +126,18 @@ export default async function AutomationsPage() {
         <div className="mb-6">
           <Notice tone="sun">
             <strong>WhatsApp ainda não conectado.</strong> As automações já estão programadas, mas as mensagens só saem quando houver um canal ligado em{" "}
-            <Link className="underline underline-offset-2" href="/configuracoes?aba=whatsapp">Configurações → WhatsApp</Link>. Até lá, elas ficam como “não entregue”. Para testar agora, use o Simulador: lembretes e follow-ups de pacientes do simulador chegam lá normalmente. Automações que só criam tarefa funcionam sem WhatsApp.
+            <Link className="underline underline-offset-2" href="/configuracoes?aba=whatsapp">Configurações → WhatsApp</Link>.<span className="simples:hidden"> Até lá, elas ficam como “não entregue”. Para testar agora, use o Simulador: lembretes e follow-ups de pacientes do simulador chegam lá normalmente. Automações que só criam tarefa funcionam sem WhatsApp.</span>
           </Notice>
         </div>
       )}
-      {(data.counts?.failed ?? 0) > 0 && <div className="mb-6"><Notice tone="danger">{data.counts!.failed} automação(ões) falharam nos últimos 7 dias. Veja o histórico abaixo; cada falha virou uma tarefa para a equipe.</Notice></div>}
+      {(data.counts?.failed ?? 0) > 0 && <div className="mb-6"><Notice tone="danger">{data.counts!.failed} automação(ões) falharam nos últimos 7 dias. Cada falha virou uma tarefa para a equipe<span className="simples:hidden"> (detalhes no histórico abaixo)</span>.</Notice></div>}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <section aria-labelledby="fluxos">
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
               <h2 id="fluxos" className="t-h2">Seus fluxos</h2>
-              <p className="t-small mt-1">{active} de {all.length} ativos · arraste pela alça à esquerda para mudar a ordem.</p>
+              <p className="t-small mt-1">{active} de {all.length} ativos<span className="simples:hidden"> · arraste pela alça à esquerda para mudar a ordem</span>.</p>
             </div>
           </div>
           <FlowList reorder={reorderAutomationsAction} items={all.map((f) => ({
@@ -146,7 +146,7 @@ export default async function AutomationsPage() {
               <div>
                 <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2"><h3 className="t-h3">{f.name}</h3>{f.builtin ? <Badge>nativa</Badge> : <Badge tone="violet">da clínica</Badge>}</div>
+                    <div className="flex items-center gap-2"><h3 className="t-h3">{f.name}</h3><span className="simples:hidden">{f.builtin ? <Badge>nativa</Badge> : <Badge tone="violet">da clínica</Badge>}</span></div>
                     <p className="t-small mt-0.5">{f.purpose}</p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -179,7 +179,7 @@ export default async function AutomationsPage() {
               <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar limites</Button></div>
             </ActionForm>
           </Card>
-          <Card className="h-auto">
+          <Card className="h-auto simples:hidden">
             <CardTitle>Sempre conferido antes de enviar</CardTitle>
             <ul className="space-y-2.5 text-[13px] text-bone-dim">
               {["O paciente não pediu para parar de receber mensagens.", "Ninguém da equipe está atendendo a conversa.", "O paciente não respondeu nem agendou nesse meio-tempo.", "Está dentro do horário e do limite diário.", "No WhatsApp oficial, fora da janela de 24 h só vai template aprovado; sem ele, vira tarefa."].map((t) => (
@@ -191,7 +191,7 @@ export default async function AutomationsPage() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Card>
+        <Card className="simples:hidden">
           <CardTitle hint="Fora da janela de 24 h o WhatsApp só aceita templates aprovados pela Meta. Crie o template com o mesmo nome no WhatsApp Manager e, quando aprovado, marque aqui.">Templates do WhatsApp</CardTitle>
           <ul className="space-y-6">
             {data.templates.map((t) => (
@@ -213,7 +213,7 @@ export default async function AutomationsPage() {
             ))}
           </ul>
         </Card>
-        <Card>
+        <Card className="simples:lg:col-span-2">
           <CardTitle hint="Quando a automação não pode agir sozinha, ela pede uma pessoa.">Tarefas para a equipe ({data.tasks.length})</CardTitle>
           {data.tasks.length === 0 ? <Empty title="Nada pendente" /> : (
             <ul className="divide-y divide-line">
@@ -231,7 +231,7 @@ export default async function AutomationsPage() {
         </Card>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-6 simples:hidden">
         <Card>
           <CardTitle hint={`${data.counts?.pending ?? 0} na fila agora`}>Histórico de execuções</CardTitle>
           {data.jobs.length === 0 ? <Empty title="Nenhuma execução ainda" /> : (

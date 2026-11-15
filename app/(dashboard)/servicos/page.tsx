@@ -129,7 +129,7 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
                   <td>{s.duration_min} min{s.buffer_min ? ` +${s.buffer_min}` : ""}</td>
                   <td>{price(s)}</td>
                   <td>{s.bookable_directly ? <Badge tone="ok">direto</Badge> : <Badge>via avaliação</Badge>}</td>
-                  <td><Badge tone={s.status === "published" ? "navy" : "warn"}>{s.status === "published" ? "Publicado" : "Rascunho"}</Badge><p className="t-small mt-1">v{s.version}{s.approver ? ` · ${s.approver.split(" ")[0]}` : ""}</p></td>
+                  <td><Badge tone={s.status === "published" ? "navy" : "warn"}>{s.status === "published" ? "Publicado" : "Rascunho"}</Badge><p className="t-small mt-1 simples:hidden">v{s.version}{s.approver ? ` · ${s.approver.split(" ")[0]}` : ""}</p></td>
                   <td className="text-right"><Modal trigger="Editar" title="Editar serviço" description={`${s.name} · versão ${s.version}. Ao salvar publicado, a assistente usa a nova versão na próxima resposta.`} wide triggerClass={buttonClass("outline", "sm")}><ServiceForm s={s} /></Modal></td>
                 </tr>
               ))}
@@ -147,7 +147,7 @@ export default async function ServicesPage({ searchParams }: { searchParams: Pro
               </div>
               <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm text-bone-dim">{d.body || <span className="text-bone-mute">Sem conteúdo ainda. A assistente não responde sobre este tema até você publicar.</span>}</p>
               <div className="mt-3 flex items-center justify-between text-[11px] text-bone-mute">
-                <span>v{d.version} · {d.versions} versão(ões) no histórico · {formatShort(d.updated_at, ctx.tz)}{d.approver ? ` · aprovado por ${d.approver.split(" ")[0]}` : ""}</span>
+                <span><span className="simples:hidden">v{d.version} · {d.versions} versão(ões) no histórico · </span>Atualizado em {formatShort(d.updated_at, ctx.tz)}{d.approver ? ` · aprovado por ${d.approver.split(" ")[0]}` : ""}</span>
                 <Modal trigger="Editar" title="Editar documento" description={d.title} wide triggerClass={buttonClass("outline", "sm")}>
                   <ActionForm action={saveDocAction} className="space-y-4" resetOnDone={false}>
                     <input type="hidden" name="docId" value={d.id} />

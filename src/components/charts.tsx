@@ -54,7 +54,7 @@ export function Bars({ data, label, height = 168 }: { data: { key: string; value
 /** Indicador: rótulo, número e nota. Altura fixa para a linha de indicadores ficar simétrica. */
 export function Stat({ label, value, note, tone }: { label: string; value: string; note?: string; tone?: "sun" | "navy" }) {
   return (
-    <div className="fio-topo flex h-full min-h-[148px] flex-col justify-between rounded-lg border border-line bg-surface/70 p-6" data-ativo={tone === "sun"}>
+    <div className="vidro fio-topo flex h-full min-h-[148px] flex-col justify-between rounded-lg p-6" data-ativo={tone === "sun"}>
       <p className="eyebrow text-bone-mute">{label}</p>
       <p className={cn("display num text-[40px] leading-none", tone === "navy" ? "text-gold" : "text-bone")}>{value}</p>
       <p className="t-small min-h-[19px] truncate">{note ?? ""}</p>

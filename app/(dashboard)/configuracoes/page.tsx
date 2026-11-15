@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { Bot, Building2, CalendarDays, MessageCircle, Plus, ScrollText, Users, type LucideIcon } from "lucide-react";
+import { Bot, Building2, CalendarDays, Eye, MessageCircle, Plus, ScrollText, Users, type LucideIcon } from "lucide-react";
+import type { CSSProperties } from "react";
+import { VistaSwitch } from "@/components/vista";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal } from "@/components/client";
 import { Badge, Button, buttonClass, Card, CardTitle, Checkbox, Empty, Field, Input, Notice, PageHeader, Select, Table, Textarea } from "@/components/ui";
@@ -12,16 +14,26 @@ import { inviteUserAction, saveAiAction, saveClinicAction, saveProfessionalActio
 
 export const metadata = { title: "Configurações" };
 
-const TABS = [["clinica", "Clínica"], ["equipe", "Equipe"], ["agenda", "Agenda"], ["whatsapp", "WhatsApp"], ["ia", "Assistente (IA)"], ["auditoria", "Auditoria"]] as const;
-const TAB_ICON: Record<(typeof TABS)[number][0], LucideIcon> = { clinica: Building2, equipe: Users, agenda: CalendarDays, whatsapp: MessageCircle, ia: Bot, auditoria: ScrollText };
+const TABS = [["clinica", "Clínica"], ["equipe", "Equipe"], ["agenda", "Agenda"], ["whatsapp", "WhatsApp"], ["ia", "Assistente"], ["visualizacao", "Visualização"], ["auditoria", "Auditoria"]] as const;
+type TabKey = (typeof TABS)[number][0];
+/** Cada seção é um bloco com ícone colorido, como nos Ajustes do iPhone. */
+const TAB_ICON: Record<TabKey, { icon: LucideIcon; rgb: string; text: string }> = {
+  clinica: { icon: Building2, rgb: "232 181 75", text: "Nome, endereço e horários" },
+  equipe: { icon: Users, rgb: "87 166 240", text: "Acessos de cada pessoa" },
+  agenda: { icon: CalendarDays, rgb: "124 131 245", text: "Dentistas e cadeiras" },
+  whatsapp: { icon: MessageCircle, rgb: "37 190 100", text: "Conectar o número" },
+  ia: { icon: Bot, rgb: "167 139 250", text: "Como a assistente atende" },
+  visualizacao: { icon: Eye, rgb: "124 141 166", text: "Simples ou com detalhes" },
+  auditoria: { icon: ScrollText, rgb: "124 141 166", text: "Quem alterou o quê" },
+};
 const ranges = (list?: [string, string][]) => (list ?? []).map(([a, b]) => `${a}-${b}`).join(", ");
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
   const ctx = await requireCtx("audit.view");
   const isAdmin = can(ctx.role, "settings.manage");
   const requested = (await searchParams).aba;
-  const tab = TABS.some(([k]) => k === requested) ? requested! : isAdmin ? "clinica" : "auditoria";
-  const allowed = isAdmin || tab === "auditoria";
+  const tab = TABS.some(([k]) => k === requested) ? requested! : isAdmin ? "clinica" : "visualizacao";
+  const allowed = isAdmin || tab === "auditoria" || tab === "visualizacao";
   const hours = ctx.clinic.business_hours as BusinessHours;
   const s = ctx.settings;
 
@@ -81,26 +93,37 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   return (
     <>
       <PageHeader title="Configurações" subtitle="Tudo é ajustável por aqui, sem mexer em código." />
-      <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-10">
-        <nav aria-label="Seções de configuração" className="scroll-thin -mx-4 flex gap-1 overflow-x-auto px-4 lg:mx-0 lg:flex lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0">
-          {TABS.filter(([k]) => isAdmin || k === "auditoria").map(([k, label]) => (
-            <Link key={k} href={`/configuracoes?aba=${k}`} aria-current={tab === k ? "page" : undefined}
-              className={cn("group relative flex shrink-0 items-center gap-3 rounded-md py-2 pl-4 pr-3 text-[13.5px] font-medium transition-colors", tab === k ? "bg-surface-2 text-bone" : "text-bone-dim hover:bg-surface-2/60 hover:text-bone")}>
-              {tab === k && <span aria-hidden className="absolute left-1.5 top-1/2 hidden h-4 w-[3px] -translate-y-1/2 rounded-full bg-acento lg:block" />}
-              {(() => { const Icon = TAB_ICON[k]; return <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-sm transition-colors", tab === k ? "bg-acento/15 text-acento" : "bg-surface-2/70 text-bone-mute group-hover:text-bone-dim")}><Icon size={15} aria-hidden /></span>; })()}
-              {label}
-            </Link>
-          ))}
+      <div className="space-y-8">
+        {/* Seções em blocos quadrados: alvo grande, ícone e uma linha dizendo o que tem dentro. Auditoria só na visualização detalhada. */}
+        <nav aria-label="Seções de configuração" className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7 lg:gap-4 simples:lg:grid-cols-6">
+          {TABS.filter(([k]) => (isAdmin || k === "auditoria" || k === "visualizacao")).map(([k, label]) => {
+            const t = TAB_ICON[k];
+            return (
+              <Link key={k} href={`/configuracoes?aba=${k}`} aria-current={tab === k ? "page" : undefined} style={{ "--icone-rgb": t.rgb } as CSSProperties}
+                className={cn("vidro bloco flex flex-col justify-between gap-3 rounded-lg p-4 lg:aspect-square", k === "auditoria" && tab !== k && "simples:hidden")}>
+                <span className="icone-app size-11 rounded-[13px]"><t.icon size={22} aria-hidden strokeWidth={1.9} /></span>
+                <span className="min-w-0"><span className="block text-[14.5px] font-semibold leading-tight">{label}</span><span className="t-small mt-0.5 line-clamp-2 block leading-snug">{t.text}</span></span>
+              </Link>
+            );
+          })}
         </nav>
         <div className="min-w-0 space-y-6">
       {!allowed && <Notice tone="danger">Apenas administradores acessam esta seção.</Notice>}
+
+      {tab === "visualizacao" && (
+        <Card className="h-auto">
+          <CardTitle hint="Vale só para este navegador. Cada pessoa da equipe escolhe a sua em Meu perfil.">Visualização</CardTitle>
+          <div className="max-w-xl"><VistaSwitch detailed={ctx.detailed} /></div>
+          <p className="t-small mt-5 max-w-xl">Na visualização simples ficam escondidos custos da IA, históricos de execução, auditoria, códigos e opções avançadas de conexão. Nada é apagado: ligue quando precisar.</p>
+        </Card>
+      )}
 
       {allowed && tab === "clinica" && (
         <Card>
           <ActionForm action={saveClinicAction} className="space-y-5" resetOnDone={false}>
             <div className="grid gap-6 sm:grid-cols-2">
               <Field label="Nome da clínica"><Input name="name" defaultValue={ctx.clinic.name} required /></Field>
-              <Field label="Fuso horário" hint="Todos os horários são exibidos neste fuso."><Input name="timezone" defaultValue={ctx.clinic.timezone} required list="tz" /><datalist id="tz">{["America/Sao_Paulo", "America/Manaus", "America/Recife", "America/Belem", "America/Cuiaba", "America/Rio_Branco", "America/Noronha"].map((z) => <option key={z} value={z} />)}</datalist></Field>
+              <Field label="Fuso horário" hint="Todos os horários são exibidos neste fuso." className="simples:hidden"><Input name="timezone" defaultValue={ctx.clinic.timezone} required list="tz" /><datalist id="tz">{["America/Sao_Paulo", "America/Manaus", "America/Recife", "America/Belem", "America/Cuiaba", "America/Rio_Branco", "America/Noronha"].map((z) => <option key={z} value={z} />)}</datalist></Field>
               <Field label="Nome da assistente virtual" hint="Ela sempre se apresenta como assistente virtual."><Input name="assistantName" defaultValue={ctx.clinic.assistant_name} required /></Field>
               <Field label="Endereço da unidade"><Input name="address" defaultValue={data.unit?.address ?? ""} /></Field>
             </div>
@@ -113,7 +136,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               </div>
             </fieldset>
             <Field label="Mensagem fora do expediente" hint="Enviada uma vez quando não há IA nem equipe atendendo. Sem promessa de prazo."><Textarea name="afterHours" defaultValue={ctx.clinic.after_hours_message} className="min-h-16" required /></Field>
-            <div className="grid gap-6 sm:grid-cols-2">
+            <div className="grid gap-6 simples:hidden sm:grid-cols-2">
               <Field label="Antecedência mínima para a IA agendar (min)"><Input type="number" min={0} name="minLeadMinutes" defaultValue={s.minLeadMinutes} /></Field>
               <Field label="Agenda aberta até (dias à frente)"><Input type="number" min={1} max={365} name="maxAdvanceDays" defaultValue={s.maxAdvanceDays} /></Field>
             </div>
@@ -260,13 +283,24 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       {allowed && tab === "ia" && (
         <div className="space-y-6">
         {data.wa && (
-          <Card>
+          <Card className="hidden h-auto detalhado:hidden simples:flex">
+            <div className="flex flex-wrap items-center gap-4">
+              <span className="icone-app size-12 rounded-[14px]" style={{ "--icone-rgb": "167 139 250" } as CSSProperties}><Bot size={24} aria-hidden /></span>
+              <div className="min-w-0 flex-1">
+                <p className="t-h3">Inteligência artificial: {{ platform: "a da plataforma", anthropic: "Claude (chave própria)", openrouter: "OpenRouter", openai_compatible: "provedor próprio" }[data.wa.llm_provider]}</p>
+                <p className="t-small">Para trocar de provedor ou de modelo, ligue “Mostrar detalhes técnicos” em <Link href="/configuracoes?aba=visualizacao" className="underline underline-offset-2">Visualização</Link>.</p>
+              </div>
+            </div>
+          </Card>
+        )}
+        {data.wa && (
+          <Card className="simples:hidden">
             <CardTitle hint="Escolha qual inteligência artificial responde os pacientes. A chave fica criptografada.">Provedor de IA</CardTitle>
             <LlmPanel provider={data.wa.llm_provider} model={data.wa.llm_model ?? ""} baseUrl={data.wa.llm_base_url ?? ""} hasKey={data.wa.has_llm_key} freeAuto={data.wa.llm_free_auto} fallbackModels={data.wa.llm_fallback_models}
               checkedAt={data.wa.llm_checked_at ? formatShort(data.wa.llm_checked_at, ctx.tz) : null} lastError={data.wa.llm_last_error} platformReady={!!env.anthropicKey} />
           </Card>
         )}
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 simples:hidden lg:grid-cols-2">
             <Card>
               <CardTitle>Integrações</CardTitle>
               <ul className="text-[14px]">
@@ -309,9 +343,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <h2 className="t-h2">Assistente virtual</h2>
               <div className="grid gap-6 lg:grid-cols-2">
               <Checkbox name="aiEnabled" defaultChecked={ctx.clinic.ai_enabled} label="Assistente ativada" hint="Responde conversas em “IA ativa”. Exige protocolo aprovado." />
-              <Checkbox name="killSwitch" defaultChecked={ctx.clinic.ai_kill_switch} label="Pausa de emergência (kill switch)" hint="Interrompe todas as respostas automáticas na hora. A inbox humana continua funcionando." />
+              <Checkbox name="killSwitch" defaultChecked={ctx.clinic.ai_kill_switch} label="Pausa de emergência" hint="Interrompe todas as respostas automáticas na hora. A inbox humana continua funcionando." />
               </div>
-              <div className="grid gap-6 lg:grid-cols-2">
+              <div className="grid gap-6 simples:hidden lg:grid-cols-2">
                 <Field label="Espera para agrupar mensagens (s)" hint="A assistente aguarda este tempo para responder mensagens em sequência de uma vez."><Input type="number" min={0} max={60} name="debounceSeconds" defaultValue={s.debounceSeconds} /></Field>
                 <Field label="Teto mensal de custo da IA (US$)" hint="Ao atingir, as conversas vão para a equipe. Vazio = sem teto."><Input name="budget" inputMode="decimal" defaultValue={s.aiMonthlyBudgetCents != null ? (s.aiMonthlyBudgetCents / 100).toFixed(2) : ""} /></Field>
               </div>

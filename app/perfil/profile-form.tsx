@@ -27,7 +27,7 @@ export function ProfileForm({ name, email, avatar, roleLabel }: { name: string; 
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
-      <section className="flex flex-col rounded-md border border-line p-6">
+      <section className="vidro flex flex-col rounded-lg p-6">
         <h2 className="t-h2">Seus dados</h2>
         <p className="t-small mt-1">Aparecem no menu, nas conversas que você assume e na auditoria.</p>
         <ActionForm action={saveProfileAction} resetOnDone={false} className="mt-6 flex flex-1 flex-col gap-5">
@@ -54,7 +54,7 @@ export function ProfileForm({ name, email, avatar, roleLabel }: { name: string; 
           <div className="mt-auto flex justify-end border-t border-line pt-5"><Button type="submit">Salvar perfil</Button></div>
         </ActionForm>
       </section>
-      <section className="flex flex-col rounded-md border border-line p-6">
+      <section className="vidro flex flex-col rounded-lg p-6">
         <h2 className="t-h2">Senha</h2>
         <p className="t-small mt-1">Use pelo menos 8 caracteres. Não reaproveite senhas de outros sites.</p>
         <ActionForm action={changePasswordAction} className="mt-6 flex flex-1 flex-col gap-5">

@@ -1,6 +1,8 @@
 import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { resolveVista, VISTA_COOKIE } from "@/lib/vista";
 import { db, asUser } from "@/db/client";
 import type postgres from "postgres";
 import { getAuthUser } from "./provider";
@@ -32,6 +34,8 @@ export type Ctx = {
   clinic: ClinicRow;
   settings: ClinicSettings;
   tz: string;
+  /** Visualização detalhada (termos técnicos, custos, históricos). Falso = visualização simples. */
+  detailed: boolean;
 };
 
 
@@ -98,6 +102,7 @@ export const getCtx = cache(async (): Promise<Ctx | null> => {
     role: acting ? "admin" : member?.role ?? "recepcao",
     isPlatformAdmin: me.isPlatformAdmin, actingAsPlatform: acting,
     clinicId, clinic, settings: parseSettings(clinic.settings), tz: clinic.timezone,
+    detailed: resolveVista((await cookies()).get(VISTA_COOKIE)?.value, me.isPlatformAdmin) === "detalhada",
   };
 });
 

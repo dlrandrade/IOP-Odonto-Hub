@@ -5,6 +5,7 @@ import { requireCtx, q } from "@/auth/session";
 import { Logo } from "@/components/brand";
 import { Frame, MobileTabs, ThemeToggle, SearchBox, Sidebar, type NavEntry, type NavGroup } from "@/components/nav";
 import { Avatar, Badge } from "@/components/ui";
+import { VerComoCliente } from "@/components/vista";
 import { can, ROLE_LABELS } from "@/domain/permissions";
 import { setupSteps } from "@/services/setup-progress";
 import { logoutAction } from "../(auth)/actions";
@@ -62,7 +63,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   const footer = (
     <>
       {next && (
-        <Link href={next.href} className="block rounded-md border border-line bg-surface-2/50 p-3 transition-colors hover:border-bone-mute/50">
+        <Link href={next.href} className="vidro block rounded-md p-3 transition-colors hover:border-bone-mute/50">
           <span className="flex items-center justify-between text-[11px] font-medium text-bone-mute"><span>Primeiros passos</span><span className="font-mono">{done}/{steps.length}</span></span>
           <span className="mt-2 block h-1 overflow-hidden rounded-full bg-line"><span className="block h-full rounded-full bg-gold" style={{ width: `${(done / steps.length) * 100}%` }} /></span>
           <span className="mt-2.5 block text-[12.5px] font-medium">{next.label}</span>
@@ -84,15 +85,16 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   );
 
   return (
-    <div className="min-h-dvh lg:pl-64">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 border-r border-line bg-surface lg:block">
-        <div className="flex h-14 items-center border-b border-line px-6"><Link href="/" aria-label="Início"><Logo /></Link></div>
+    // data-vista: "simples" esconde o que é técnico (classes simples:hidden); "detalhada" mostra tudo.
+    <div className="min-h-dvh lg:pl-64" data-vista={ctx.detailed ? "detalhada" : "simples"}>
+      <aside className="vidro-forte fixed inset-y-0 left-0 z-30 hidden w-64 border-r lg:block">
+        <div className="flex h-14 items-center border-b border-line/70 px-6"><Link href="/" aria-label="Início"><Logo /></Link></div>
         <div className="h-[calc(100%-3.5rem)]"><Sidebar groups={groups} settings={settings} footer={footer} /></div>
       </aside>
       <div className="flex min-h-dvh flex-col">
-        <header className="sticky top-0 z-20 border-b border-line bg-ink/85 backdrop-blur">
+        <header className="vidro-forte sticky top-0 z-20 border-x-0 border-t-0 border-b">
           <Frame className="flex h-14 items-center gap-3">
-          <Link href="/" aria-label="Início" className="lg:hidden"><Logo /></Link>
+          <Link href="/" aria-label="Início" className="shrink-0 lg:hidden"><Logo /></Link>
           <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 lg:ml-0 lg:justify-between lg:gap-6">
             <div className="hidden min-w-0 max-w-[480px] flex-1 lg:block"><SearchBox pages={flat} /></div>
             <div className="flex items-center gap-2">
@@ -105,8 +107,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
                 <Badge tone={aiOn ? "ok" : "warn"}><Bot size={11} aria-hidden /> IA {ctx.clinic.ai_kill_switch ? "pausada" : aiOn ? "ativa" : "desligada"}</Badge>
               </Link>
               {ctx.clinic.is_demo && <Badge tone="sun" className="hidden md:inline-flex">Demonstração</Badge>}
+              {ctx.isPlatformAdmin && <VerComoCliente detailed={ctx.detailed} />}
               {ctx.isPlatformAdmin && (
-                <Link href="/admin" aria-label="Painel da plataforma" className="flex items-center gap-1.5 rounded-sm border border-line px-2.5 py-1.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.08em] text-bone-dim transition-colors hover:border-gold hover:text-gold">
+                <Link href="/admin" aria-label="Painel da plataforma" className="flex h-8 items-center gap-1.5 rounded-sm border border-line px-2.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.08em] text-bone-dim transition-colors hover:border-gold hover:text-gold">
                   <ShieldCheck size={13} aria-hidden /><span className="hidden md:inline">Plataforma</span>
                 </Link>
               )}

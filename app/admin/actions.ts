@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+import { VISTA_COOKIE } from "@/lib/vista";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { adminCreateUser } from "@/auth/provider";
@@ -16,10 +18,15 @@ async function platform() {
   return me;
 }
 
-/** Entra em uma clínica como suporte (vira admin daquela clínica enquanto durar). */
+/**
+ * Entra em uma clínica como suporte (vira admin daquela clínica enquanto durar).
+ * "vista=simples" abre como o cliente vê (visualização simples); o padrão do operador é a detalhada.
+ */
 export async function enterClinicAction(form: FormData): Promise<void> {
   const me = await platform();
   const clinicId = z.string().uuid().parse(form.get("clinicId"));
+  const vista = form.get("vista") === "simples" ? "simples" : "detalhada";
+  (await cookies()).set(VISTA_COOKIE, vista, { path: "/", maxAge: 31536000, sameSite: "lax", secure: process.env.NODE_ENV === "production" });
   await db()`update platform_admins set acting_clinic_id = ${clinicId} where auth_user_id = ${me.authUserId}`;
   await db()`insert into audit_events (clinic_id, actor_label, action, entity, entity_id) values (${clinicId}, ${`Plataforma (${me.email})`}, 'platform.enter', 'clinics', ${clinicId})`;
   redirect("/");

@@ -46,6 +46,8 @@ Registro das decisões tomadas na construção. Defaults da seção 17 do PRD fo
 | Um modelo de IA por clínica | OpenRouter com modelos reserva ou em **rodízio de modelos gratuitos** (lista com ferramentas, atualizada a cada hora; troca em 429/5xx/404; espera de 10 min para o que falhou) | Pedido do dono do produto: custo zero para clínicas pequenas. Modelos gratuitos variam em qualidade e limite; sem resposta, a conversa vai para a equipe |
 
 | Cadastro público com conta criada já confirmada | Cadastro via `auth.signUp` com link de confirmação; operador da plataforma só por `setup:admin` | Inspeção de segurança: e-mail não verificado + promoção por e-mail permitiam tomar o painel da plataforma |
+| Uma única visualização para todos | **Visualização simples** (padrão da equipe das clínicas) e **detalhada** (padrão do operador), em cookie `vista`; classes `simples:hidden` / `detalhado:hidden` (variantes Tailwind em `app/globals.css`); operador alterna no topo ("Ver como cliente") ou entra na clínica por "Ver como cliente" no painel | Usuário final é leigo: custos da IA, históricos de execução, auditoria, templates, versões e conexões avançadas ficam escondidos (não apagados) até a pessoa ligar "Mostrar detalhes técnicos" em Meu perfil ou Configurações → Visualização. É preferência de exibição, não permissão. |
+| Superfícies opacas | **Vidro sutil** (classes `.vidro`/`.vidro-forte`: translúcido + desfoque + borda clara) e **blocos quadrados** com ícone de app (`Tile`, `.icone-app`) em Hoje, Configurações e no menu "Mais" do celular | Visual iOS/macOS pedido; alvos grandes ajudam quem tem pouca familiaridade com sistemas. |
 
 ## Decisões técnicas complementares
 

@@ -71,10 +71,10 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 min-[1760px]:grid-cols-8">
           {OPPORTUNITY_STAGES.map((stage) => {
             const list = data.opps.filter((o) => o.stage === stage);
-            const tone = stage === "accepted" ? "bg-ok-soft/60 border-ok/20" : stage === "lost" ? "bg-surface-2/40 border-line" : "bg-surface/70 border-line";
+            const tone = stage === "accepted" ? "vidro bg-ok-soft/50" : stage === "lost" ? "vidro opacity-90" : "vidro";
             return (
               <DropColumn key={stage} stage={stage} label={OPPORTUNITY_STAGE_LABELS[stage]} move={moveOpportunityAction} enabled={canWrite}
-                className={cn("flex min-h-[220px] min-w-0 flex-col rounded-lg border p-3", tone)}>
+                className={cn("flex min-h-[220px] min-w-0 flex-col rounded-lg p-3", tone)}>
                 <h2 className="flex h-9 items-center justify-between gap-2 px-1.5">
                   <span className="t-h3 truncate text-[14px]">{OPPORTUNITY_STAGE_LABELS[stage]}</span>
                   <span className="flex h-6 min-w-6 items-center justify-center rounded-sm bg-surface-2 px-1.5 font-mono text-[11px] text-bone-dim">{list.length}</span>
@@ -84,7 +84,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
                   {list.map((o) => {
                     const overdue = o.next_step_due && o.next_step_due < new Date() && !["accepted", "lost"].includes(o.stage);
                     return (
-                      <DragCard key={o.id} id={o.id} enabled={canWrite} className="rounded-md border border-line bg-surface p-3.5 transition-colors hover:border-bone-mute/50">
+                      <DragCard key={o.id} id={o.id} enabled={canWrite} className="rounded-md border border-line bg-surface/80 p-3.5 shadow-[inset_0_1px_0_var(--glass-shine)] transition-colors hover:border-bone-mute/50">
                         {o.patient_id ? (
                           <Link href={`/pacientes/${o.patient_id}`} draggable={false} className="t-h3 block truncate text-[14px] underline-offset-2 hover:underline" title="Abrir ficha do paciente">{o.patient ?? "Paciente"}</Link>
                         ) : <p className="t-h3 truncate text-[14px]">{o.wa_profile_name ?? (o.phone_e164 ? formatPhone(o.phone_e164) : "Sem nome")}</p>}

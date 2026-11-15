@@ -174,7 +174,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         )}
       </PageHeader>
 
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-line bg-surface/70 p-3">
+      <div className="vidro mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg p-3">
         <div className="flex items-center gap-2">
           <Link href={href({ d: shift(-1) })} aria-label="Anterior" className={cn(buttonClass("outline"), "w-10 px-0!")}><ChevronLeft size={16} /></Link>
           <Link href={href({ d: null })} className={buttonClass("outline")}>Hoje</Link>

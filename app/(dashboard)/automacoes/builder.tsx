@@ -37,7 +37,7 @@ export function FlowList({ items, reorder }: { items: { key: string; node: React
           onDragEnd={() => { setDragging(null); setOver(null); }}
           onDragOver={(e) => { if (dragging) { e.preventDefault(); setOver(k); } }}
           onDrop={(e) => { e.preventDefault(); drop(k); setOver(null); }}
-          className={cn("group relative flex items-stretch gap-3 rounded-lg border border-line bg-surface/70 transition-[opacity,box-shadow]",
+          className={cn("vidro group relative flex items-stretch gap-3 rounded-lg transition-[opacity,box-shadow]",
             dragging === k && "opacity-40", over === k && dragging !== k && "shadow-[0_-2px_0_0_rgb(var(--acento-rgb))]")}>
           <span className="flex w-10 shrink-0 cursor-grab flex-col items-center justify-center gap-1 rounded-l-lg border-r border-line text-bone-mute active:cursor-grabbing group-hover:text-bone-dim" title="Arraste para reordenar" aria-hidden>
             <span className="font-mono text-[11px]">{String(i + 1).padStart(2, "0")}</span>
