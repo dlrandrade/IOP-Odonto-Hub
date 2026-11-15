@@ -34,9 +34,6 @@ export type Ctx = {
   tz: string;
 };
 
-function platformEmails(): string[] {
-  return (process.env.PLATFORM_ADMIN_EMAILS ?? "").split(",").map((e) => e.trim().toLowerCase()).filter(Boolean);
-}
 
 export type Identity = {
   authUserId: string; email: string; isPlatformAdmin: boolean; actingClinicId: string | null;
@@ -72,11 +69,9 @@ const loadSession = cache(async (): Promise<{ identity: Identity; clinic: Clinic
         (select acting_clinic_id from platform_admins where auth_user_id = ${user.id}),
         (select clinic_id from app_users where auth_user_id = ${user.id} and active))`,
   ]);
-  let isPlatformAdmin = !!row?.pa;
-  if (!isPlatformAdmin && platformEmails().includes(user.email.toLowerCase())) {
-    await sql`insert into platform_admins (auth_user_id, email) values (${user.id}, ${user.email}) on conflict (auth_user_id) do nothing`;
-    isPlatformAdmin = true;
-  }
+  // Operador da plataforma só existe se cadastrado explicitamente em platform_admins (npm run setup:admin).
+  // Nunca promovemos alguém por e-mail no login: o cadastro público não pode virar porta de entrada para o painel.
+  const isPlatformAdmin = !!row?.pa;
   const appUser = row?.au_id ? { id: row.au_id, clinic_id: row.au_clinic!, name: row.au_name!, role: row.au_role!, active: !!row.au_active, avatar: row.au_avatar } : null;
   return {
     identity: { authUserId: user.id, email: user.email, isPlatformAdmin, actingClinicId: row?.acting_clinic_id ?? null, appUser, platformName: row?.pa_name ?? null, platformAvatar: row?.pa_avatar ?? null },

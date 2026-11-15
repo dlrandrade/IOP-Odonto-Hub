@@ -12,8 +12,11 @@ import { sendOutbound } from "@/services/conversations";
 import { setProviderOverride } from "@/integrations/whatsapp";
 import { addMinutes } from "@/lib/datetime";
 import { makeClinic } from "./helpers";
+import { assertPublicUrl, isPrivateAddress, setResolverForTests } from "@/lib/safe-url";
 
 const sql = db();
+// A rede de teste não resolve domínios externos: simulamos um IP público para os endereços dos testes.
+setResolverForTests(async () => [{ address: "93.184.216.34" }]);
 afterEach(() => { vi.unstubAllGlobals(); setProviderOverride(null); });
 afterAll(async () => { await sql.end(); });
 
@@ -223,5 +226,22 @@ describe("OpenRouter: modelos gratuitos em rodízio", () => {
     const r = await buildProvider({ provider: "openrouter", apiKey: "k", model: "principal", baseUrl: null, fallbackModels: ["reserva"] })!.complete(req);
     expect(used).toEqual(["principal", "reserva"]);
     expect(r.model).toBe("reserva");
+  });
+});
+
+describe("Segurança: endereços informados pelas clínicas (SSRF)", () => {
+  it("bloqueia rede interna, metadados de nuvem, http e credenciais na URL", async () => {
+    for (const ip of ["127.0.0.1", "10.1.2.3", "172.20.0.1", "192.168.0.10", "169.254.169.254", "100.64.0.1", "0.0.0.0", "::1", "fd00::1", "fe80::1", "::ffff:10.0.0.1"]) {
+      expect(isPrivateAddress(ip), ip).toBe(true);
+    }
+    expect(isPrivateAddress("8.8.8.8")).toBe(false);
+    await expect(assertPublicUrl("http://api.exemplo.com")).rejects.toThrow(/https/);
+    await expect(assertPublicUrl("https://user:senha@api.exemplo.com")).rejects.toThrow(/usuário ou senha/);
+    await expect(assertPublicUrl("https://169.254.169.254/latest")).rejects.toThrow(/privada/);
+    await expect(assertPublicUrl("https://servico.internal")).rejects.toThrow(/internos/);
+    setResolverForTests(async () => [{ address: "10.0.0.5" }]);
+    await expect(assertPublicUrl("https://parece-publico.com")).rejects.toThrow(/privada/); // DNS aponta para rede interna
+    setResolverForTests(async () => [{ address: "93.184.216.34" }]);
+    await expect(assertPublicUrl("https://api.exemplo.com/v1")).resolves.toBeInstanceOf(URL);
   });
 });

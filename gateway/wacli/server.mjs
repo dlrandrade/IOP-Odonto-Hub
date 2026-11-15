@@ -224,7 +224,8 @@ const server = createServer(async (req, res) => {
       if (!text.trim() || text.length > 4096) return send(res, 400, { error: "texto inválido" });
       if (a.state !== "connected") return send(res, 409, { error: "WhatsApp desconectado" });
       // --message-escapes desligado: o texto vai literal. `sync --follow` recebe o envio pelo canal local (delegação).
-      const r = await wacliJson(id, ["send", "text", "--to", to, "--message", text, "--no-preview"], 60_000);
+      // "--opção=valor": um texto que comece com "-" nunca é interpretado como opção do wacli.
+      const r = await wacliJson(id, ["send", "text", `--to=${to}`, `--message=${text}`, "--no-preview"], 60_000);
       if (!r?.success || !r.data?.id) return send(res, 502, { error: r?.error ?? "envio não confirmado" });
       return send(res, 200, { id: r.data.id });
     }
@@ -234,9 +235,9 @@ const server = createServer(async (req, res) => {
       const msg = url.searchParams.get("id") ?? "";
       if (!/^[\w.:-]+@[\w.]+$/.test(chat) || !/^[\w-]{4,128}$/.test(msg)) return send(res, 400, { error: "parâmetros inválidos" });
       const out = join(tmpdir(), `wacli-${randomUUID()}`);
-      const r = await wacliJson(id, ["--read-only", "media", "download", "--chat", chat, "--id", msg, "--output", out], 90_000);
+      const r = await wacliJson(id, ["--read-only", "media", "download", `--chat=${chat}`, `--id=${msg}`, `--output=${out}`], 90_000);
       if (!r?.success || !existsSync(out)) return send(res, 404, { error: r?.error ?? "mídia indisponível" });
-      res.writeHead(200, { "content-type": r.data?.mime_type ?? r.data?.mimeType ?? "application/octet-stream", "content-length": statSync(out).size, "cache-control": "no-store" });
+      res.writeHead(200, { "content-type": r.data?.mime_type ?? r.data?.mimeType ?? "application/octet-stream", "content-length": statSync(out).size, "cache-control": "no-store", "x-content-type-options": "nosniff" });
       const stream = createReadStream(out);
       stream.pipe(res);
       stream.on("close", () => rmSync(out, { force: true }));

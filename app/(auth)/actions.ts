@@ -28,6 +28,7 @@ export async function signupAction(_: ActionState, form: FormData): Promise<Acti
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const r = await signUp(parsed.data.email, parsed.data.password);
   if (!r.ok) return { error: r.error };
+  if ("pendingConfirmation" in r) return { ok: true, message: "Quase lá: enviamos um link para o seu e-mail. Clique nele para ativar a conta e continuar o cadastro da clínica." };
   redirect("/onboarding");
 }
 

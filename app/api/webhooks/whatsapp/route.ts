@@ -9,7 +9,9 @@ export const maxDuration = 60;
 export async function GET(request: NextRequest) {
   const p = request.nextUrl.searchParams;
   if (p.get("hub.mode") === "subscribe" && (await verifyWebhookToken(p.get("hub.verify_token")))) {
-    return new NextResponse(p.get("hub.challenge") ?? "", { status: 200 });
+    // Devolve só o desafio numérico da Meta, como texto puro (nunca HTML refletido).
+    const challenge = (p.get("hub.challenge") ?? "").replace(/[^0-9A-Za-z_-]/g, "").slice(0, 200);
+    return new NextResponse(challenge, { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Content-Type-Options": "nosniff" } });
   }
   return new NextResponse("forbidden", { status: 403 });
 }

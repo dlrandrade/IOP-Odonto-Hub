@@ -21,7 +21,7 @@ Copie `.env.example` para `.env.local` (uso local) e cadastre as mesmas chaves n
 | `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` | sim | passo 1 |
 | `FIELD_ENCRYPTION_KEY` | sim | `openssl rand -hex 32` — guarde; trocar invalida tokens de WhatsApp e CPFs já gravados |
 | `CRON_SECRET` | sim | `openssl rand -hex 32` |
-| `PLATFORM_ADMIN_EMAILS` | sim | seu e-mail de operador (separe vários por vírgula) |
+| `PLATFORM_ADMIN_EMAILS` | não | não dá mais acesso por si só: o operador é criado só por `npm run setup:admin` |
 | `NEXT_PUBLIC_APP_URL` | sim | URL pública, ex.: `https://app.suaempresa.com.br` |
 | `ANTHROPIC_API_KEY` | para a IA | console.anthropic.com. Sem ela, as conversas vão direto para a equipe |
 | `ANTHROPIC_MODEL` | não | padrão `claude-opus-5-5` |
@@ -157,3 +157,12 @@ npm run dev
 - Ative **Point-in-Time Recovery** no Supabase (plano Pro) para atender RPO de 1 h; no plano gratuito há apenas backup diário.
 - Ensaie a restauração antes do piloto: restaure para um projeto novo, aponte um deploy de teste para ele e rode `npm run db:migrate` (deve informar que nada há a aplicar).
 - A mídia fica no bucket privado `media`; inclua-o na rotina de backup.
+
+## Segurança (checklist do operador)
+
+- Operador da plataforma só existe se criado por `npm run setup:admin` (tabela `platform_admins`). Nenhum e-mail vira operador ao fazer login.
+- Cadastro público exige confirmar o e-mail pelo link (Supabase → Authentication → Providers → Email → **Confirm email** ligado).
+  Para volume real, configure um SMTP próprio no Supabase (o envio padrão tem limite baixo por hora).
+- Ligue **Leaked password protection** no Supabase (Authentication → Policies) para recusar senhas vazadas.
+- Endereços informados pelas clínicas (Evolution, gateway próprio, IA compatível) só são aceitos se forem https públicos.
+- `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `FIELD_ENCRYPTION_KEY`, `CRON_SECRET` e `WACLI_GATEWAY_TOKEN` sempre como **Sensitive** na Vercel.

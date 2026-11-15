@@ -1,3 +1,4 @@
+import { assertPublicUrl } from "@/lib/safe-url";
 import { z } from "zod";
 import { ProviderError, type InboundMessage, type SendResult, type StatusUpdate, type WhatsAppProvider } from "./types";
 
@@ -13,6 +14,7 @@ function url(c: EvolutionConfig, path: string): string {
 }
 
 async function call(c: EvolutionConfig, method: "GET" | "POST" | "DELETE", path: string, body?: unknown, timeoutMs = 15_000): Promise<unknown> {
+  try { await assertPublicUrl(c.baseUrl); } catch (e) { throw new ProviderError(e instanceof Error ? e.message : "Endereço não permitido.", false); }
   let res: Response;
   try {
     res = await fetch(path === "instance/create" ? `${c.baseUrl.replace(/\/+$/, "")}/instance/create` : url(c, path), {
@@ -20,6 +22,7 @@ async function call(c: EvolutionConfig, method: "GET" | "POST" | "DELETE", path:
       headers: { apikey: c.apiKey, "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
+      redirect: "error",
     });
   } catch {
     throw new ProviderError("Não foi possível falar com o servidor da Evolution API. Confira o endereço.", true);

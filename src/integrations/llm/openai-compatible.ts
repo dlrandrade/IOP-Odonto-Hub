@@ -1,3 +1,4 @@
+import { assertPublicUrl } from "@/lib/safe-url";
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import { LlmUnavailableError, type LlmBlock, type LlmProvider, type LlmRequest, type LlmResponse } from "./types";
@@ -73,6 +74,11 @@ export function fromOpenAiResponse(json: unknown, fallbackModel: string): LlmRes
   };
 }
 
+/** Endereço da API informado pela clínica: só https público (proteção contra SSRF). */
+async function safeBase(baseUrl: string): Promise<void> {
+  try { await assertPublicUrl(baseUrl); } catch (e) { throw new LlmUnavailableError(e instanceof Error ? e.message : "Endereço da IA não permitido.", false); }
+}
+
 export class OpenAiCompatibleProvider implements LlmProvider {
   readonly name: string;
   constructor(private readonly baseUrl: string, private readonly apiKey: string, private readonly model: string, private readonly extraHeaders: Record<string, string> = {}, name = "openai_compatible") {
@@ -80,6 +86,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
   }
 
   async complete(req: LlmRequest): Promise<LlmResponse> {
+    await safeBase(this.baseUrl);
     let res: Response;
     try {
       res = await fetch(`${this.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
@@ -94,6 +101,7 @@ export class OpenAiCompatibleProvider implements LlmProvider {
           ...(this.name === "openrouter" ? { usage: { include: true } } : {}),
         }),
         signal: AbortSignal.timeout(60_000),
+        redirect: "error",
       });
     } catch {
       throw new LlmUnavailableError("Provedor de IA fora do ar", true);
@@ -108,9 +116,11 @@ export class OpenAiCompatibleProvider implements LlmProvider {
 
 /** Lista os modelos disponíveis (GET /models), para o admin escolher sem digitar nomes. */
 export async function listOpenAiModels(baseUrl: string, apiKey: string | null): Promise<string[]> {
+  await safeBase(baseUrl);
   const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/models`, {
     headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
     signal: AbortSignal.timeout(20_000),
+    redirect: "error",
   });
   if (!res.ok) throw new LlmUnavailableError(`Não foi possível listar os modelos (${res.status})`, false);
   const parsed = z.object({ data: z.array(z.object({ id: z.string() }).passthrough()) }).safeParse(await res.json());
@@ -153,7 +163,8 @@ let freeCache: { at: number; models: FreeModel[] } | null = null;
 /** Lista atual de modelos gratuitos do OpenRouter (cache de 1 h: a lista muda com frequência). */
 export async function listOpenRouterFreeModels(baseUrl: string, apiKey: string | null, now = Date.now()): Promise<FreeModel[]> {
   if (freeCache && now - freeCache.at < 60 * 60 * 1000 && freeCache.models.length) return freeCache.models;
-  const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/models`, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(20_000) })
+  await safeBase(baseUrl);
+  const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/models`, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(20_000), redirect: "error" })
     .catch(() => { throw new LlmUnavailableError("Não foi possível consultar os modelos gratuitos", true); });
   if (!res.ok) throw new LlmUnavailableError(`Não foi possível consultar os modelos gratuitos (${res.status})`, res.status >= 500);
   const models = pickFreeToolModels(await res.json());

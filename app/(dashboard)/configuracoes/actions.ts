@@ -3,11 +3,13 @@
 import { z, ZodError } from "zod";
 import { adminCreateUser, adminSetPassword } from "@/auth/provider";
 import { actionCtx, q } from "@/auth/session";
+import { db } from "@/db/client";
 import type { ActionState } from "@/components/client";
 import { ROLES } from "@/domain/permissions";
 import { parseSettings, settingsSchema } from "@/domain/settings";
 import { act, actorOf, bool, optStr, str, UserError } from "@/lib/action";
 import { decryptField, encryptField } from "@/lib/crypto";
+import { assertPublicUrl } from "@/lib/safe-url";
 import { env } from "@/lib/env";
 import { buildProvider, listClaudeModels, listOpenAiModels, listOpenRouterFreeModels, LlmUnavailableError, OPENROUTER_URL, type LlmSettings } from "@/integrations/llm";
 import { evolutionConfig, wacliGateway } from "@/integrations/whatsapp";
@@ -148,7 +150,8 @@ export async function saveWhatsAppAction(_: ActionState, form: FormData): Promis
     const token = optStr(form, "accessToken");
     const secret = optStr(form, "appSecret");
     await q(ctx, async (tx) => {
-      const [taken] = await tx`select 1 from clinic_integrations where wa_phone_number_id = ${phoneId} and clinic_id <> ${ctx.clinicId}`;
+      // A RLS esconde as outras clínicas; a unicidade é garantida pelo índice único (migração 0010).
+      const [taken] = await db()`select 1 from clinic_integrations where wa_phone_number_id = ${phoneId} and clinic_id <> ${ctx.clinicId}`;
       if (taken) throw new UserError("Este número já está conectado a outra clínica.");
       const [current] = await tx<{ wa_access_token_enc: string | null; wa_app_secret_enc: string | null }[]>`select wa_access_token_enc, wa_app_secret_enc from clinic_integrations where clinic_id = ${ctx.clinicId}`;
       if (!token && !current?.wa_access_token_enc) throw new UserError("Informe o token de acesso.");
@@ -208,6 +211,7 @@ export async function saveEvolutionAction(_: ActionState, form: FormData): Promi
   return act("integrations.manage", [PATH, "/"], async (ctx) => {
     const baseUrl = z.string().url("Informe o endereço completo, começando com https://").parse(str(form, "baseUrl")).replace(/\/+$/, "");
     if (!baseUrl.startsWith("https://") && !baseUrl.startsWith("http://localhost")) throw new UserError("Use um endereço https:// para proteger a chave.");
+    await assertPublicUrl(baseUrl).catch((e: unknown) => { throw new UserError(e instanceof Error ? e.message : "Endereço não permitido."); });
     const instance = z.string().regex(/^[A-Za-z0-9_-]{2,40}$/, "Nome da instância: só letras, números, hífen e sublinhado.").parse(str(form, "instance"));
     const apiKey = optStr(form, "apiKey");
     await q(ctx, async (tx) => {
@@ -287,6 +291,7 @@ export async function connectWacliAction(_: ActionState, form: FormData): Promis
     const url = optStr(form, "gatewayUrl")?.replace(/\/+$/, "") ?? null;
     const token = optStr(form, "gatewayToken");
     if (url && !/^https:\/\//.test(url) && !url.startsWith("http://localhost")) throw new UserError("Use um endereço https:// para o gateway.");
+    if (url) await assertPublicUrl(url).catch((e: unknown) => { throw new UserError(e instanceof Error ? e.message : "Endereço não permitido."); });
     const phone = optStr(form, "phone")?.replace(/\D/g, "") ?? null;
     if (phone && (phone.length < 12 || phone.length > 13)) throw new UserError("Informe o número com DDI e DDD, ex.: 55 11 98765-4321.");
     await q(ctx, async (tx) => {
@@ -359,6 +364,7 @@ async function llmFromForm(ctx: { authUserId: string }, form: FormData): Promise
 export async function saveLlmAction(_: ActionState, form: FormData): Promise<ActionState> {
   return act("ai.configure", [PATH, "/"], async (ctx) => {
     const s = await llmFromForm(ctx, form);
+    if (s.baseUrl) await assertPublicUrl(s.baseUrl).catch((e: unknown) => { throw new UserError(e instanceof Error ? e.message : "Endereço não permitido."); });
     if (s.provider !== "platform") {
       if (!s.apiKey) throw new UserError("Informe a chave de API do provedor.");
       if (!s.model && !s.freeAuto) throw new UserError("Escolha o modelo (use “Carregar modelos”).");

@@ -12,6 +12,7 @@ export const metadata = { title: "Entrar" };
 const ERRORS: Record<string, string> = {
   desativado: "Seu acesso foi desativado. Fale com o administrador da clínica.",
   suspensa: "A conta desta clínica está suspensa. Fale com o suporte.",
+  link: "Este link de confirmação expirou ou já foi usado. Entre com seu e-mail e senha ou cadastre-se de novo.",
 };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ erro?: string }> }) {

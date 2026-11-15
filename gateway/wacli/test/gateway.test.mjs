@@ -24,7 +24,7 @@ if (cmd.startsWith("auth")) {
   return;
 }
 if (cmd.startsWith("sync")) { fs.writeFileSync(store + "/sync-args.json", JSON.stringify(a)); setInterval(() => {}, 1000); return; }
-if (cmd.startsWith("send text")) { console.log(JSON.stringify({ success: true, data: { sent: true, to: "x", id: "3EB0TESTE" }, error: null })); process.exit(0); }
+if (cmd.startsWith("send text")) { if (!a.some((x) => x === "--message=--help")) { console.log(JSON.stringify({ success: false, data: null, error: "texto virou opção" })); process.exit(1); } console.log(JSON.stringify({ success: true, data: { sent: true, to: "x", id: "3EB0TESTE" }, error: null })); process.exit(0); }
 console.log(JSON.stringify({ success: false, data: null, error: "desconhecido" })); process.exit(1);
 `);
 chmodSync(fake, 0o755);
@@ -63,7 +63,7 @@ test("pareia por QR, liga o sync com webhook assinado, envia e desconecta", asyn
   assert.equal(syncArgs[syncArgs.indexOf("--webhook") + 1], "https://hub.exemplo/api/webhooks/wacli/abc");
   assert.equal(syncArgs[syncArgs.indexOf("--webhook-secret") + 1], secret);
 
-  const sent = await call("/v1/accounts/clinica-a/send", { method: "POST", body: JSON.stringify({ to: "+55 (11) 99999-0000", text: "Olá!" }) });
+  const sent = await call("/v1/accounts/clinica-a/send", { method: "POST", body: JSON.stringify({ to: "+55 (11) 99999-0000", text: "--help" }) });
   assert.equal(sent.status, 200);
   assert.deepEqual(await sent.json(), { id: "3EB0TESTE" });
 

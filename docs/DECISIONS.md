@@ -45,6 +45,8 @@ Registro das decisões tomadas na construção. Defaults da seção 17 do PRD fo
 | Só Cloud API oficial | Terceira opção: **gateway wacli** (`gateway/wacli`), uma sessão de WhatsApp Web por clínica num servidor sempre ligado, com webhook assinado por HMAC | Pedido do dono do produto: cada clínica conecta o próprio número com um QR Code, sem servidor por clínica. O wacli precisa de processo contínuo e disco, por isso não roda na Vercel. Mesmo risco de bloqueio da Evolution |
 | Um modelo de IA por clínica | OpenRouter com modelos reserva ou em **rodízio de modelos gratuitos** (lista com ferramentas, atualizada a cada hora; troca em 429/5xx/404; espera de 10 min para o que falhou) | Pedido do dono do produto: custo zero para clínicas pequenas. Modelos gratuitos variam em qualidade e limite; sem resposta, a conversa vai para a equipe |
 
+| Cadastro público com conta criada já confirmada | Cadastro via `auth.signUp` com link de confirmação; operador da plataforma só por `setup:admin` | Inspeção de segurança: e-mail não verificado + promoção por e-mail permitiam tomar o painel da plataforma |
+
 ## Decisões técnicas complementares
 
 - **Modelo de IA:** `claude-opus-5-5` por padrão (`ANTHROPIC_MODEL`), pensamento adaptativo, `effort: low` (chat), cache do prompt de sistema e fallback de recusa do lado do servidor. Sem chave configurada, a conversa vai para a equipe.

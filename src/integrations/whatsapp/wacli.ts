@@ -1,5 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
+import { env } from "@/lib/env";
+import { assertPublicUrl } from "@/lib/safe-url";
 import { ProviderError, type InboundMessage, type SendResult, type StatusUpdate, type WhatsAppProvider } from "./types";
 
 /**
@@ -9,12 +11,20 @@ import { ProviderError, type InboundMessage, type SendResult, type StatusUpdate,
 export type WacliGateway = { url: string; token: string; account: string };
 export type WacliState = "idle" | "pairing" | "connected" | "disconnected" | "error";
 
+/** O gateway da plataforma (variável de ambiente) é confiável; o informado pela clínica precisa ser público e https. */
+async function guard(g: WacliGateway): Promise<void> {
+  if (g.url === env.wacli.gatewayUrl) return;
+  try { await assertPublicUrl(g.url); } catch (e) { throw new ProviderError(e instanceof Error ? e.message : "Endereço não permitido.", false); }
+}
+
 async function call<T>(g: WacliGateway, method: "GET" | "POST", path: string, body?: unknown, timeoutMs = 30_000): Promise<T> {
+  await guard(g);
   const res = await fetch(`${g.url.replace(/\/+$/, "")}/v1/accounts/${encodeURIComponent(g.account)}${path}`, {
     method,
     headers: { authorization: `Bearer ${g.token}`, "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: AbortSignal.timeout(timeoutMs),
+    redirect: "error",
   }).catch((e: unknown) => { throw new ProviderError(`Gateway wacli inacessível: ${e instanceof Error ? e.message : "erro de rede"}`, true); });
   const json = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new ProviderError(json.error ?? `Gateway wacli respondeu ${res.status}`, res.status >= 500 || res.status === 409, String(res.status));
@@ -46,7 +56,8 @@ export class WacliProvider implements WhatsAppProvider {
     const [chat, id] = mediaId.split("|");
     if (!chat || !id) throw new ProviderError("Referência de mídia inválida", false);
     const url = `${this.g.url.replace(/\/+$/, "")}/v1/accounts/${encodeURIComponent(this.g.account)}/media?chat=${encodeURIComponent(chat)}&id=${encodeURIComponent(id)}`;
-    const res = await fetch(url, { headers: { authorization: `Bearer ${this.g.token}` }, signal: AbortSignal.timeout(100_000) })
+    await guard(this.g);
+    const res = await fetch(url, { headers: { authorization: `Bearer ${this.g.token}` }, signal: AbortSignal.timeout(100_000), redirect: "error" })
       .catch(() => { throw new ProviderError("Gateway wacli inacessível", true); });
     if (!res.ok) throw new ProviderError(`Mídia indisponível (${res.status})`, res.status >= 500);
     return { data: Buffer.from(await res.arrayBuffer()), mime: res.headers.get("content-type") ?? "application/octet-stream" };

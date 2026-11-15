@@ -13,6 +13,7 @@ import { hmacHex, safeEqual } from "@/lib/crypto";
  */
 export type AuthUser = { id: string; email: string };
 export type AuthResult = { ok: true; userId: string } | { ok: false; error: string };
+export type SignUpResult = AuthResult | { ok: true; pendingConfirmation: true };
 
 const LOCAL_COOKIE = "oc_session";
 const WEEK = 7 * 24 * 3600;
@@ -39,13 +40,16 @@ export function supabaseAdmin() {
 }
 
 function localSecret(): string {
-  return env.fieldKey ?? "dev-only-secret";
+  // Sem chave configurada, só em desenvolvimento: em produção o login local nunca usa um segredo conhecido.
+  if (env.fieldKey) return env.fieldKey;
+  if (process.env.NODE_ENV === "production") throw new Error("FIELD_ENCRYPTION_KEY obrigatória para o login local");
+  return "dev-only-secret";
 }
 
 async function setLocalCookie(userId: string) {
   const exp = Math.floor(Date.now() / 1000) + WEEK;
   const payload = `${userId}.${exp}`;
-  (await cookies()).set(LOCAL_COOKIE, `${payload}.${hmacHex(localSecret(), payload)}`, { httpOnly: true, sameSite: "lax", path: "/", maxAge: WEEK });
+  (await cookies()).set(LOCAL_COOKIE, `${payload}.${hmacHex(localSecret(), payload)}`, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: WEEK });
 }
 
 export async function getAuthUser(): Promise<AuthUser | null> {
@@ -107,10 +111,38 @@ export async function adminSetPassword(userId: string, password: string): Promis
   return !error;
 }
 
-export async function signUp(email: string, password: string): Promise<AuthResult> {
-  const created = await adminCreateUser(email, password);
-  if (!created.ok) return created;
-  return signIn(email, password);
+/**
+ * Cadastro público. No Supabase, a conta só é ativada depois que a pessoa clica no link enviado ao e-mail
+ * (prova de que o e-mail é dela). Contas criadas por um administrador seguem usando adminCreateUser.
+ */
+export async function signUp(email: string, password: string): Promise<SignUpResult> {
+  if (env.authMode === "local") {
+    const created = await adminCreateUser(email, password);
+    if (!created.ok) return created;
+    return signIn(email, password);
+  }
+  const { data, error } = await (await supabaseServer()).auth.signUp({
+    email: email.toLowerCase(), password, options: { emailRedirectTo: `${env.appUrl}/auth/confirm` },
+  });
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("already")) return { ok: false, error: "Já existe uma conta com este e-mail." };
+    if (msg.includes("password")) return { ok: false, error: "Senha fraca ou já vazada em outros sites. Escolha outra." };
+    return { ok: false, error: "Não foi possível criar a conta agora. Tente de novo em alguns minutos." };
+  }
+  if (data.session && data.user) return { ok: true, userId: data.user.id };
+  return { ok: true, pendingConfirmation: true };
+}
+
+/** Link de confirmação do e-mail (fluxo PKCE do Supabase): troca o código pela sessão. */
+export async function confirmEmail(params: { code: string | null; tokenHash: string | null; type: string | null }): Promise<boolean> {
+  if (env.authMode === "local") return false;
+  const client = await supabaseServer();
+  if (params.code) return !(await client.auth.exchangeCodeForSession(params.code)).error;
+  if (params.tokenHash && (params.type === "signup" || params.type === "email")) {
+    return !(await client.auth.verifyOtp({ token_hash: params.tokenHash, type: params.type })).error;
+  }
+  return false;
 }
 
 export async function signOut(): Promise<void> {
