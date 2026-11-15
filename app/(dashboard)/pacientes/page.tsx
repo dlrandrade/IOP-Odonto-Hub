@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChevronDown, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import { PATIENT_SOURCE_LABELS, PATIENT_SOURCES } from "@/domain/contact";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal } from "@/components/client";
 import { Avatar, Badge, Button, buttonClass, Card, Empty, Field, Input, PageHeader, Select, Table, Textarea } from "@/components/ui";
@@ -11,7 +12,7 @@ import { savePatientAction } from "./actions";
 
 export const metadata = { title: "Pacientes" };
 
-const FILTER_KEYS = ["q", "prof", "svc", "sit", "ultDe", "ultAte", "proxDe", "proxAte", "cadDe", "cadAte", "aniv", "idMin", "idMax", "resp", "crm", "ord"] as const;
+const FILTER_KEYS = ["q", "prof", "svc", "sit", "ultDe", "ultAte", "proxDe", "proxAte", "cadDe", "cadAte", "aniv", "idMin", "idMax", "resp", "crm", "ord", "origem"] as const;
 type Filters = Partial<Record<(typeof FILTER_KEYS)[number], string>>;
 const SITUATION: Record<string, string> = {
   futura: "Com consulta marcada", sem_futura: "Sem consulta marcada", nunca: "Nunca consultou", faltou: "Já faltou", sumido: "Sem vir há 6 meses ou mais",
@@ -44,6 +45,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
   if (f.crm && !(f.crm in OPPORTUNITY_STAGE_LABELS)) delete f.crm;
   if (f.ord && !(f.ord in ORDER)) delete f.ord;
   if (f.resp && !["menor", "varios"].includes(f.resp)) delete f.resp;
+  if (f.origem && !(PATIENT_SOURCES as readonly string[]).includes(f.origem)) delete f.origem;
   if (f.aniv && !(int(f.aniv)! >= 1 && int(f.aniv)! <= 12)) delete f.aniv;
   const search = f.q ?? "";
   const page = Math.max(1, Number(sp.p) || 1);
@@ -74,6 +76,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
       isDate(f.cadDe) ? tx`and p.created_at >= ${f.cadDe}::date` : tx``,
       isDate(f.cadAte) ? tx`and p.created_at < ${f.cadAte}::date + 1` : tx``,
       int(f.aniv) ? tx`and extract(month from p.birth_date) = ${int(f.aniv)}` : tx``,
+      f.origem ? tx`and p.source = ${f.origem}` : tx``,
       int(f.idMin) != null ? tx`and p.birth_date <= current_date - make_interval(years => ${int(f.idMin)})` : tx``,
       int(f.idMax) != null ? tx`and p.birth_date > current_date - make_interval(years => ${int(f.idMax)! + 1})` : tx``,
       f.resp === "menor" ? tx`and exists (select 1 from contact_patient_links l where l.patient_id = p.id and l.is_guardian)` : tx``,
@@ -117,6 +120,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
       cadDe: `Cadastro desde ${v.split("-").reverse().join("/")}`, cadAte: `Cadastro até ${v.split("-").reverse().join("/")}`,
       aniv: `Aniversário em ${MONTHS[Number(v) - 1] ?? v}`, idMin: `${v} anos ou mais`, idMax: `Até ${v} anos`,
       resp: v === "menor" ? "Tem responsável" : "Telefone compartilhado", crm: `CRM: ${OPPORTUNITY_STAGE_LABELS[v as OpportunityStage] ?? v}`,
+      origem: `Origem: ${PATIENT_SOURCE_LABELS[v as keyof typeof PATIENT_SOURCE_LABELS] ?? v}`,
     };
     return names[k] ?? v;
   };
@@ -139,6 +143,8 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
               <div className="grid gap-6 sm:grid-cols-2">
                 <Field label="Data de nascimento" hint="Usada na verificação de identidade."><Input type="date" name="birthDate" /></Field>
                 <Field label="WhatsApp (com DDD)"><Input name="phone" inputMode="tel" /></Field>
+                <Field label="E-mail" hint="Para lembretes e mensagens por e-mail."><Input name="email" type="email" /></Field>
+                <Field label="Como conheceu a clínica"><Select name="source" defaultValue={""}><option value="">Não informado</option>{PATIENT_SOURCES.map((k) => <option key={k} value={k}>{PATIENT_SOURCE_LABELS[k]}</option>)}</Select></Field>
               </div>
               <Field label="Observações administrativas" hint="Não registre informação clínica aqui."><Textarea name="notes" className="min-h-16" /></Field>
               <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>
@@ -170,6 +176,7 @@ export default async function PatientsPage({ searchParams }: { searchParams: Pro
             <Field label="Próxima consulta"><div className="grid grid-cols-2 gap-2"><Input type="date" name="proxDe" defaultValue={f.proxDe} aria-label="Próxima consulta desde" /><Input type="date" name="proxAte" defaultValue={f.proxAte} aria-label="Próxima consulta até" /></div></Field>
             <Field label="Cadastrado em"><div className="grid grid-cols-2 gap-2"><Input type="date" name="cadDe" defaultValue={f.cadDe} aria-label="Cadastrado desde" /><Input type="date" name="cadAte" defaultValue={f.cadAte} aria-label="Cadastrado até" /></div></Field>
             <Field label="Idade"><div className="grid grid-cols-2 gap-2"><Input type="number" min={0} max={120} name="idMin" defaultValue={f.idMin} placeholder="de" aria-label="Idade mínima" /><Input type="number" min={0} max={120} name="idMax" defaultValue={f.idMax} placeholder="até" aria-label="Idade máxima" /></div></Field>
+            <Field label="Como conheceu"><Select name="origem" defaultValue={f.origem ?? ""}><option value="">Qualquer origem</option>{PATIENT_SOURCES.map((k) => <option key={k} value={k}>{PATIENT_SOURCE_LABELS[k]}</option>)}</Select></Field>
             <Field label="Aniversário no mês"><Select name="aniv" defaultValue={f.aniv ?? ""}><option value="">Qualquer mês</option>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</Select></Field>
             <Field label="Responsável e telefone"><Select name="resp" defaultValue={f.resp ?? ""}><option value="">Todos</option><option value="menor">Tem responsável (ex.: criança)</option><option value="varios">Telefone usado por mais de um paciente</option></Select></Field>
             <div className="flex items-end justify-end gap-2 sm:col-span-2">

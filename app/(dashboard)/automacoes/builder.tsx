@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, useTransition, type ReactNode } from "react";
-import { Cake, CalendarCheck, CalendarClock, ClipboardList, GripVertical, MessageSquareText, UserX } from "lucide-react";
+import { Cake, CalendarCheck, CalendarClock, ClipboardList, GripVertical, Camera as Instagram, Mail, MessageCircle, MessageSquareText, UserX } from "lucide-react";
 import { ActionForm, type FormAction } from "@/components/client";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import { cn } from "@/lib/format";
@@ -83,8 +83,17 @@ export function Switch({ name, on, action, label }: { name: string; on: boolean;
 
 export type RuleDraft = {
   id?: string; name: string; trigger: string; amount: number; unit: "minutes" | "hours" | "days"; time: string;
-  action: "message" | "task"; body: string; taskTitle: string; templateName: string;
+  action: "message" | "task"; body: string; taskTitle: string; templateName: string; channel: "whatsapp" | "email" | "instagram";
 };
+
+/** O que já está pronto para cada canal (mostrado no formulário, sem esconder a opção). */
+export type ChannelStatus = { whatsapp: boolean; email: boolean; googleLink: boolean };
+
+const CHANNELS = [
+  { key: "whatsapp", label: "WhatsApp", icon: MessageCircle, rgb: "47 199 159" },
+  { key: "email", label: "E-mail", icon: Mail, rgb: "74 157 240" },
+  { key: "instagram", label: "Instagram", icon: Instagram, rgb: "238 110 157" },
+] as const;
 
 export const TRIGGERS: { key: string; title: string; text: string; icon: typeof Cake }[] = [
   { key: "before_appointment", title: "Antes da consulta", text: "Um tempo antes do horário marcado.", icon: CalendarClock },
@@ -94,21 +103,23 @@ export const TRIGGERS: { key: string; title: string; text: string; icon: typeof 
 ];
 
 const PRESETS: (Omit<RuleDraft, "id"> & { hint: string })[] = [
-  { name: "Agradecimento pós-consulta", hint: "2 h depois da consulta", trigger: "after_appointment", amount: 2, unit: "hours", time: "09:00", action: "message", taskTitle: "", templateName: "",
+  { name: "Pedir avaliação no Google", hint: "3 h depois da consulta, com o link", trigger: "after_appointment", amount: 3, unit: "hours", time: "09:00", action: "message", taskTitle: "", templateName: "", channel: "whatsapp",
+    body: "Olá, {primeiro_nome}! Obrigado por escolher a {clinica}. Se puder, conte como foi sua experiência no Google — leva menos de um minuto e ajuda muito: {link_avaliacao}" },
+  { name: "Agradecimento pós-consulta", hint: "2 h depois da consulta", trigger: "after_appointment", amount: 2, unit: "hours", time: "09:00", action: "message", taskTitle: "", templateName: "", channel: "whatsapp",
     body: "Olá, {primeiro_nome}! Obrigado pela visita hoje à {clinica}. Se ficar qualquer dúvida, é só responder por aqui." },
-  { name: "Convite para remarcar após falta", hint: "1 h depois da falta", trigger: "no_show", amount: 1, unit: "hours", time: "09:00", action: "message", taskTitle: "", templateName: "",
+  { name: "Convite para remarcar após falta", hint: "1 h depois da falta", trigger: "no_show", amount: 1, unit: "hours", time: "09:00", action: "message", taskTitle: "", templateName: "", channel: "whatsapp",
     body: "Olá, {primeiro_nome}! Sentimos sua falta hoje na {clinica}. Quer que eu veja um novo horário para você?" },
-  { name: "Parabéns de aniversário", hint: "às 9h do dia", trigger: "birthday", amount: 0, unit: "hours", time: "09:00", action: "message", taskTitle: "", templateName: "",
+  { name: "Parabéns de aniversário", hint: "às 9h do dia, por e-mail", trigger: "birthday", amount: 0, unit: "hours", time: "09:00", action: "message", taskTitle: "", templateName: "", channel: "email",
     body: "Feliz aniversário, {primeiro_nome}! Toda a equipe da {clinica} deseja um ótimo dia." },
-  { name: "Ligar antes de procedimentos", hint: "3 dias antes, vira tarefa", trigger: "before_appointment", amount: 3, unit: "days", time: "09:00", action: "task", body: "", templateName: "",
+  { name: "Ligar antes de procedimentos", hint: "3 dias antes, vira tarefa", trigger: "before_appointment", amount: 3, unit: "days", time: "09:00", action: "task", body: "", templateName: "", channel: "whatsapp",
     taskTitle: "Ligar para {paciente} sobre {servico} em {data}" },
 ];
 
-const VARS: [string, string][] = [["{primeiro_nome}", "Primeiro nome"], ["{paciente}", "Nome completo"], ["{servico}", "Serviço"], ["{dentista}", "Dentista"], ["{data}", "Data e hora"], ["{clinica}", "Clínica"]];
+const VARS: [string, string][] = [["{primeiro_nome}", "Primeiro nome"], ["{paciente}", "Nome completo"], ["{servico}", "Serviço"], ["{dentista}", "Dentista"], ["{data}", "Data e hora"], ["{clinica}", "Clínica"], ["{link_avaliacao}", "Link de avaliação no Google"], ["{instagram}", "@ do Instagram"]];
 
-const EMPTY: RuleDraft = { name: "", trigger: "after_appointment", amount: 2, unit: "hours", time: "09:00", action: "message", body: "", taskTitle: "", templateName: "" };
+const EMPTY: RuleDraft = { name: "", trigger: "after_appointment", amount: 2, unit: "hours", time: "09:00", action: "message", body: "", taskTitle: "", templateName: "", channel: "whatsapp" };
 
-export function RuleForm({ rule, templates, action }: { rule?: RuleDraft; templates: string[]; action: FormAction }) {
+export function RuleForm({ rule, templates, action, status }: { rule?: RuleDraft; templates: string[]; action: FormAction; status: ChannelStatus }) {
   const [d, setD] = useState<RuleDraft>(rule ?? EMPTY);
   const [formKey, setFormKey] = useState(0);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
@@ -143,6 +154,7 @@ export function RuleForm({ rule, templates, action }: { rule?: RuleDraft; templa
         {rule?.id && <input type="hidden" name="ruleId" value={rule.id} />}
         <input type="hidden" name="trigger" value={d.trigger} />
         <input type="hidden" name="action" value={d.action} />
+        <input type="hidden" name="channel" value={d.channel} />
 
         <Field label="Nome da automação"><Input name="name" value={d.name} onChange={(e) => set({ name: e.target.value })} required placeholder="Ex.: Agradecimento pós-consulta" /></Field>
 
@@ -178,13 +190,31 @@ export function RuleForm({ rule, templates, action }: { rule?: RuleDraft; templa
         <section>
           <p className="mb-2 text-[13px] font-medium">3. O que fazer</p>
           <div className="grid grid-cols-2 gap-2">
-            {([["message", "Enviar mensagem no WhatsApp", MessageSquareText], ["task", "Criar tarefa para a equipe", ClipboardList]] as const).map(([k, label, Icon]) => (
+            {([["message", "Enviar mensagem", MessageSquareText], ["task", "Criar tarefa para a equipe", ClipboardList]] as const).map(([k, label, Icon]) => (
               <button key={k} type="button" aria-pressed={d.action === k} onClick={() => set({ action: k })}
                 className={cn("flex h-14 items-center gap-3 rounded-md border px-4 text-left text-[13.5px] font-medium transition-colors", d.action === k ? "border-acento bg-acento/10" : "border-line hover:border-bone-mute/50")}>
                 <Icon size={17} aria-hidden className={d.action === k ? "text-acento" : "text-bone-mute"} /> {label}
               </button>
             ))}
           </div>
+          {d.action === "message" && (
+            <div className="mt-4">
+              <p className="mb-2 text-[13px] font-medium">Por onde enviar</p>
+              <div className="grid grid-cols-3 gap-2">
+                {CHANNELS.map((c) => (
+                  <button key={c.key} type="button" aria-pressed={d.channel === c.key} onClick={() => set({ channel: c.key })} style={{ "--icone-rgb": c.rgb } as React.CSSProperties}
+                    className={cn("bloco flex flex-col items-center justify-center gap-2 rounded-lg border p-3 text-[13px] font-medium sm:aspect-[4/3]", d.channel === c.key ? "border-acento bg-acento/10" : "border-line hover:border-bone-mute/50")}>
+                    <span className="icone-app size-10 rounded-[12px]"><c.icon size={20} aria-hidden /></span>{c.label}
+                  </button>
+                ))}
+              </div>
+              <p className="t-small mt-2">
+                {d.channel === "whatsapp" && (status.whatsapp ? "Sai pelo WhatsApp conectado da clínica." : "O WhatsApp ainda não está conectado: até lá, a mensagem fica como não entregue.")}
+                {d.channel === "email" && (status.email ? "Vai para o e-mail cadastrado na ficha do paciente; respostas chegam no e-mail da clínica. Sem e-mail na ficha, vira tarefa." : "O envio de e-mail da plataforma ainda não foi ativado: por enquanto, cada envio vira uma tarefa com o texto pronto.")}
+                {d.channel === "instagram" && "Enquanto o Instagram Direct não estiver conectado, cada envio vira uma tarefa com o texto pronto para a equipe mandar pelo Instagram."}
+              </p>
+            </div>
+          )}
           <div className="mt-4 space-y-3">
             {d.action === "message" ? (
               <Field label="Mensagem"><Textarea ref={bodyRef} name="body" value={d.body} onChange={(e) => set({ body: e.target.value })} className="min-h-24" required /></Field>
@@ -197,7 +227,10 @@ export function RuleForm({ rule, templates, action }: { rule?: RuleDraft; templa
                 <button key={v} type="button" onClick={() => insertVar(v)} className="h-7 rounded-sm border border-line px-2 text-[12px] text-bone-dim transition-colors hover:border-acento hover:text-bone">{label}</button>
               ))}
             </div>
-            {d.action === "message" && templates.length > 0 && (
+            {d.action === "message" && d.body.includes("{link_avaliacao}") && !status.googleLink && (
+              <p className="rounded-sm border-l-2 border-gold/70 bg-gold/[0.07] px-3 py-2 text-[13px]">Cadastre o Google Meu Negócio em Configurações → Google para o link entrar na mensagem. Sem ele, a automação não envia.</p>
+            )}
+            {d.action === "message" && d.channel === "whatsapp" && templates.length > 0 && (
               <Field label="Template para fora da janela de 24 h (opcional)" hint="No WhatsApp oficial, sem template aprovado a mensagem vira tarefa para a equipe.">
                 <Select name="templateName" value={d.templateName} onChange={(e) => set({ templateName: e.target.value })}>
                   <option value="">Nenhum</option>{templates.map((t) => <option key={t} value={t}>{t}</option>)}

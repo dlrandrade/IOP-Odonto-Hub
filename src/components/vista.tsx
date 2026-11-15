@@ -4,6 +4,7 @@ import { useTransition, type CSSProperties } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { setVistaAction } from "../../app/(dashboard)/vista-actions";
 import { cn } from "@/lib/format";
+import { CORES } from "@/lib/tema";
 
 /** Interruptor "Mostrar detalhes técnicos" (Meu perfil e Configurações). */
 export function VistaSwitch({ detailed }: { detailed: boolean }) {
@@ -12,7 +13,7 @@ export function VistaSwitch({ detailed }: { detailed: boolean }) {
   return (
     <button type="button" role="switch" aria-checked={detailed} onClick={toggle} disabled={pending}
       className="vidro bloco flex w-full items-center gap-4 rounded-lg p-5 text-left">
-      <span className="icone-app size-12 rounded-[14px]" style={{ "--icone-rgb": "124 141 166" } as CSSProperties}>{detailed ? <Eye size={22} aria-hidden /> : <EyeOff size={22} aria-hidden />}</span>
+      <span className="icone-app size-12 rounded-[14px]" style={{ "--icone-rgb": CORES.ajustes.rgb } as CSSProperties}>{detailed ? <Eye size={22} aria-hidden /> : <EyeOff size={22} aria-hidden />}</span>
       <span className="min-w-0 flex-1">
         <span className="block text-[15.5px] font-semibold">Mostrar detalhes técnicos</span>
         <span className="t-small block">{detailed ? "Ligado: custos da IA, históricos, códigos e opções avançadas aparecem." : "Desligado: a tela mostra só o essencial do dia a dia."}</span>

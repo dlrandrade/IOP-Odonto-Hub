@@ -7,6 +7,8 @@ import { handBack, ingestInbound, sendOutbound, takeOver } from "@/services/conv
 import { moveOpportunity, registerInterest, syncOpportunityOnBooking } from "@/services/crm";
 import { runDueJobs } from "@/services/jobs";
 import { renderRuleText, sweepBirthdays } from "@/services/automation-rules";
+import { createClinic, REVIEW_REQUEST_TEXT } from "@/services/clinic-setup";
+import { loadReviewHistory, sweepGoogleReviews } from "@/services/google-reviews";
 import { handleWhatsAppWebhook } from "@/services/webhook";
 import { loadDashboard } from "@/services/dashboard";
 import { ScriptedProvider, setLlmOverride, type LlmBlock, type LlmRequest } from "@/integrations/llm";
@@ -768,3 +770,88 @@ describe("Automações da clínica (construtor visual)", () => {
     expect((await outboundMessages(conv.id)).map((m) => m.body)).toContain("Feliz aniversário, Bia!");
   });
 });
+
+describe("Google Meu Negócio, canais da automação e setup pela contratação", () => {
+  const completed = async (c: TestClinic, patientId: string, contactId: string | null) => {
+    const booked = await bookAppointment(sql, { clinicId: c.clinicId, patientId, contactId, serviceId: c.evaluationId, professionalId: c.professionalIds[0]!, startsAt: at("08:00", 0), createdByType: "user", now: addMinutes(NOW, -3 * 60) });
+    if (!booked.ok) throw new Error("setup");
+    await sql`update appointments set status = 'in_service' where id = ${booked.appointmentId}`;
+    expect((await setAppointmentStatus(sql, c.clinicId, booked.appointmentId, "completed", "user", NOW)).ok).toBe(true);
+  };
+
+  it("dados da contratação já configuram a conta: contatos, endereço e automação de avaliação", async () => {
+    const owner = await makeUser();
+    const clinicId = await createClinic(sql, {
+      clinicName: "Clínica Contratada", owner: { authUserId: owner, email: "x@teste.dev", name: "Dona" }, chairs: 1, professionals: [],
+      profile: { phone: "(11) 3333-4444", email: "contato@clinica.dev", instagram: "clinica", address: "Rua A, 10", googleReviewUrl: "https://g.page/r/abc/review" },
+    });
+    const [c] = await sql<{ contact_phone: string; instagram_handle: string; google_review_url: string }[]>`select contact_phone, instagram_handle, google_review_url from clinics where id = ${clinicId}`;
+    expect(c).toMatchObject({ contact_phone: "(11) 3333-4444", instagram_handle: "clinica", google_review_url: "https://g.page/r/abc/review" });
+    expect((await sql<{ address: string }[]>`select address from units where clinic_id = ${clinicId}`)[0]?.address).toBe("Rua A, 10");
+    const rules = await sql<{ name: string; body: string; enabled: boolean }[]>`select name, body, enabled from automation_rules where clinic_id = ${clinicId}`;
+    expect(rules).toEqual([{ name: "Pedir avaliação no Google", body: REVIEW_REQUEST_TEXT, enabled: true }]);
+  });
+
+  it("pedido de avaliação leva o link do Google; sem Google cadastrado, não envia", async () => {
+    const c = await makeClinic();
+    await sql`update clinics set ai_enabled = false where id = ${c.clinicId}`;
+    await sql`insert into automation_rules (clinic_id, name, trigger, offset_minutes, action, channel, body) values (${c.clinicId}, 'Avaliação', 'after_appointment', 0, 'message', 'whatsapp', 'Avalie: {link_avaliacao}')`;
+    const patientId = await makePatient(c.clinicId, "Ana Reis");
+    await ingestInbound(sql, c.clinicId, "whatsapp", inbound("Oi", "+5511955551001"), NOW);
+    const conv = await conversationOf(c.clinicId, "+5511955551001");
+    await sql`insert into contact_patient_links (clinic_id, contact_id, patient_id) values (${c.clinicId}, ${conv.contact_id}, ${patientId})`;
+    await completed(c, patientId, conv.contact_id);
+    await runDueJobs({ now: addMinutes(NOW, 2), clinicId: c.clinicId });
+    expect((await outboundMessages(conv.id)).map((m) => m.body).join()).not.toContain("Avalie");
+    const [job] = await sql<{ result: string }[]>`select result from scheduled_jobs where clinic_id = ${c.clinicId} and type = 'automation'`;
+    expect(job?.result).toBe("skipped:sem_link_do_google");
+
+    await sql`update clinics set google_place_id = 'ChIJ_teste_123456' where id = ${c.clinicId}`;
+    await sql`update scheduled_jobs set status = 'pending', result = null where clinic_id = ${c.clinicId} and type = 'automation'`;
+    await runDueJobs({ now: addMinutes(NOW, 3), clinicId: c.clinicId });
+    expect((await outboundMessages(conv.id)).map((m) => m.body)).toContain("Avalie: https://search.google.com/local/writereview?placeid=ChIJ_teste_123456");
+  });
+
+  it("Instagram vira tarefa com o texto pronto; e-mail sem configuração ou sem e-mail na ficha também", async () => {
+    const c = await makeClinic();
+    await sql`update clinics set instagram_handle = 'sorriso' where id = ${c.clinicId}`;
+    await sql`insert into automation_rules (clinic_id, name, trigger, offset_minutes, action, channel, body) values
+      (${c.clinicId}, 'Insta', 'after_appointment', 0, 'message', 'instagram', 'Oi {primeiro_nome}, siga {instagram}'),
+      (${c.clinicId}, 'Mail', 'after_appointment', 0, 'message', 'email', 'Obrigado, {primeiro_nome}')`;
+    const patientId = await makePatient(c.clinicId, "Caio Lins");
+    await completed(c, patientId, null);
+    await runDueJobs({ now: addMinutes(NOW, 2), clinicId: c.clinicId });
+    const tasks = await sql<{ title: string; detail: string }[]>`select title, detail from tasks where clinic_id = ${c.clinicId} order by title`;
+    expect(tasks).toEqual(expect.arrayContaining([
+      { title: "Insta: enviar pelo Instagram", detail: "Para Caio Lins: Oi Caio, siga @sorriso" },
+      expect.objectContaining({ title: "Mail: enviar manualmente", detail: expect.stringContaining("não tem e-mail cadastrado") }),
+    ]));
+  });
+
+  it("avaliações: uma foto por dia pela API do Google, histórico e crescimento; RLS isola as clínicas", async () => {
+    const a = await makeClinic();
+    const b = await makeClinic();
+    await sql`update clinics set google_place_id = 'ChIJ_place_a_0001' where id = ${a.clinicId}`;
+    await sql`insert into google_review_snapshots (clinic_id, taken_on, rating, review_count) values (${a.clinicId}, current_date - 40, 4.6, 80)`;
+    const prev = process.env.GOOGLE_PLACES_API_KEY;
+    process.env.GOOGLE_PLACES_API_KEY = "teste";
+    let calls = 0;
+    const fake = (async (url: string) => {
+      calls++;
+      return new Response(JSON.stringify(url.includes("ChIJ_place_a_0001") ? { rating: 4.84, userRatingCount: 97 } : {}), { status: 200 });
+    }) as unknown as typeof fetch;
+    try {
+      await sweepGoogleReviews(sql, new Date(), fake);
+      await sweepGoogleReviews(sql, new Date(), fake); // segunda rodada no mesmo dia não consulta de novo
+    } finally { if (prev === undefined) delete process.env.GOOGLE_PLACES_API_KEY; else process.env.GOOGLE_PLACES_API_KEY = prev; }
+    expect(calls).toBeGreaterThanOrEqual(1);
+    const callsForA = calls;
+    expect(callsForA).toBeLessThan(10);
+    const h = await asUser(a.ownerAuthId, (tx) => loadReviewHistory(tx));
+    expect(h.latest).toMatchObject({ rating: 4.8, count: 97 });
+    expect(h.growth30).toBe(17);
+    const other = await asUser(b.ownerAuthId, (tx) => loadReviewHistory(tx));
+    expect(other.points).toHaveLength(0);
+  });
+});
+

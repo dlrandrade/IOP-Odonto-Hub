@@ -11,6 +11,7 @@ import { enforcesWindow, providerFor } from "@/integrations/whatsapp";
 import { deliverMessage, sendOutbound } from "./conversations";
 import { debounceConversationJob, enqueueJob } from "./jobs-queue";
 import { runRuleJob, sweepBirthdays } from "./automation-rules";
+import { sweepGoogleReviews } from "./google-reviews";
 
 type Job = {
   id: string; clinic_id: string; type: string; attempts: number; payload: Record<string, unknown>;
@@ -32,6 +33,8 @@ export async function runDueJobs(opts: { now?: Date; limit?: number; clinicId?: 
   await sql`update scheduled_jobs set status = 'pending' where status = 'running' and locked_at < now() - interval '5 minutes'`;
   // Automações de aniversário viram jobs aqui (idempotentes: um envio por paciente por ano).
   if (!opts.clinicId) await sweepBirthdays(sql, now).catch(() => 0);
+  // Avaliações do Google: uma foto por clínica por dia (só com GOOGLE_PLACES_API_KEY).
+  if (!opts.clinicId) await sweepGoogleReviews(sql, now).catch(() => 0);
   for (let i = 0; i < (opts.limit ?? 25); i++) {
     const [job] = await sql<Job[]>`
       update scheduled_jobs set status = 'running', attempts = attempts + 1, locked_at = now()

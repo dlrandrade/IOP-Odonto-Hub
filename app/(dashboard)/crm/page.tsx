@@ -67,14 +67,14 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
           return <li key={String(text)} className="inline-flex h-8 items-center gap-2 rounded-sm border border-line bg-surface/60 px-3 text-[12.5px] text-bone-dim"><I size={14} aria-hidden className="text-acento" />{String(text)}</li>;
         })}
       </ul>
-      {/* Funil em largura total: as colunas dividem a tela igualmente, sem rolagem lateral escondida. */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 min-[1760px]:grid-cols-8">
+      {/* Funil sempre numa única linha, da esquerda para a direita. Em telas estreitas, rola para o lado. */}
+      <div className="scroll-thin -mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-3 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
           {OPPORTUNITY_STAGES.map((stage) => {
             const list = data.opps.filter((o) => o.stage === stage);
             const tone = stage === "accepted" ? "vidro bg-ok-soft/50" : stage === "lost" ? "vidro opacity-90" : "vidro";
             return (
               <DropColumn key={stage} stage={stage} label={OPPORTUNITY_STAGE_LABELS[stage]} move={moveOpportunityAction} enabled={canWrite}
-                className={cn("flex min-h-[220px] min-w-0 flex-col rounded-lg p-3", tone)}>
+                className={cn("flex min-h-[420px] w-[240px] shrink-0 snap-start flex-col rounded-lg p-3 xl:w-auto xl:min-w-[220px] xl:flex-1", tone)}>
                 <h2 className="flex h-9 items-center justify-between gap-2 px-1.5">
                   <span className="t-h3 truncate text-[14px]">{OPPORTUNITY_STAGE_LABELS[stage]}</span>
                   <span className="flex h-6 min-w-6 items-center justify-center rounded-sm bg-surface-2 px-1.5 font-mono text-[11px] text-bone-dim">{list.length}</span>
@@ -100,10 +100,10 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
                           </p>
                         )}
                         {o.lost_reason && <p className="mt-2 text-[11px] text-bone-mute">Motivo: {o.lost_reason}</p>}
-                        <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-3">
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3">
                           {o.conversation_id && can(ctx.role, "conversations.view") ? <Link href={`/conversas?c=${o.conversation_id}`} className={buttonClass("ghost", "sm")}>Conversa</Link> : o.patient_id ? <Link href={`/pacientes/${o.patient_id}`} className={buttonClass("ghost", "sm")}>Ficha</Link> : <span />}
                           {canWrite && (
-                            <Modal trigger="Mover / editar" title={o.patient ?? o.wa_profile_name ?? (o.phone_e164 ? formatPhone(o.phone_e164) : "Sem nome")} description={`${o.service_interest} · hoje em “${OPPORTUNITY_STAGE_LABELS[o.stage]}”`} triggerClass={buttonClass("outline", "sm")}>
+                            <Modal trigger="Editar" triggerTitle="Mover de estágio ou editar" title={o.patient ?? o.wa_profile_name ?? (o.phone_e164 ? formatPhone(o.phone_e164) : "Sem nome")} description={`${o.service_interest} · hoje em “${OPPORTUNITY_STAGE_LABELS[o.stage]}”`} triggerClass={buttonClass("outline", "sm")}>
                               <h3 className="t-h3 mb-4">Mudar de estágio</h3>
                               <ActionForm action={moveOpportunityAction} className="space-y-5">
                                 <input type="hidden" name="opportunityId" value={o.id} />

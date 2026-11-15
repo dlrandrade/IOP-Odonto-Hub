@@ -6,7 +6,7 @@ import type { ActionState } from "@/components/client";
 import { parseSettings, settingsSchema } from "@/domain/settings";
 import { act, actorOf, bool, optStr, str, UserError } from "@/lib/action";
 import { audit, diff } from "@/services/audit";
-import { RULE_ACTIONS, RULE_TRIGGERS } from "@/services/automation-rules";
+import { RULE_ACTIONS, RULE_CHANNELS, RULE_TRIGGERS } from "@/services/automation-rules";
 import type { Ctx } from "@/auth/session";
 import type { ClinicSettings } from "@/domain/settings";
 import { BUILTIN_KEYS, type BuiltinKey } from "@/domain/automation";
@@ -120,6 +120,7 @@ export async function saveRuleAction(_: ActionState, form: FormData): Promise<Ac
   return act("automations.manage", PATH, async (ctx) => {
     const trigger = z.enum(RULE_TRIGGERS, { message: "Escolha quando a automação acontece." }).parse(form.get("trigger"));
     const action = z.enum(RULE_ACTIONS, { message: "Escolha o que a automação faz." }).parse(form.get("action"));
+    const channel = z.enum(RULE_CHANNELS, { message: "Escolha por onde enviar." }).catch("whatsapp").parse(form.get("channel"));
     const name = z.string().min(3, "Dê um nome à automação.").max(80).parse(str(form, "name"));
     let offset: number;
     if (trigger === "birthday") {
@@ -141,17 +142,17 @@ export async function saveRuleAction(_: ActionState, form: FormData): Promise<Ac
     await q(ctx, async (tx) => {
       if (ruleId) {
         const rid = id.parse(ruleId);
-        await tx`update automation_rules set name = ${name}, trigger = ${trigger}, offset_minutes = ${offset}, action = ${action},
+        await tx`update automation_rules set name = ${name}, trigger = ${trigger}, offset_minutes = ${offset}, action = ${action}, channel = ${channel},
                    body = ${action === "message" ? body : null}, template_name = ${action === "message" ? template : null}, task_title = ${action === "task" ? taskTitle : null}
                  where id = ${rid}`;
-        await audit(tx, actorOf(ctx), "automation.update", "automation_rules", rid, null, { name, trigger, offset, action });
+        await audit(tx, actorOf(ctx), "automation.update", "automation_rules", rid, null, { name, trigger, offset, action, channel });
       } else {
         const [r] = await tx<{ id: string }[]>`
-          insert into automation_rules (clinic_id, name, trigger, offset_minutes, action, body, template_name, task_title, position)
-          values (${ctx.clinicId}, ${name}, ${trigger}, ${offset}, ${action}, ${action === "message" ? body : null}, ${action === "message" ? template : null}, ${action === "task" ? taskTitle : null},
+          insert into automation_rules (clinic_id, name, trigger, offset_minutes, action, channel, body, template_name, task_title, position)
+          values (${ctx.clinicId}, ${name}, ${trigger}, ${offset}, ${action}, ${channel}, ${action === "message" ? body : null}, ${action === "message" && channel === "whatsapp" ? template : null}, ${action === "task" ? taskTitle : null},
                   (select coalesce(max(position), 0) + 1 from automation_rules where clinic_id = ${ctx.clinicId}))
           returning id`;
-        await audit(tx, actorOf(ctx), "automation.create", "automation_rules", r!.id, null, { name, trigger, offset, action });
+        await audit(tx, actorOf(ctx), "automation.create", "automation_rules", r!.id, null, { name, trigger, offset, action, channel });
       }
     });
     return { ok: true, message: ruleId ? "Automação salva." : "Automação criada e ativada." };

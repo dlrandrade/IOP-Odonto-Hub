@@ -152,7 +152,8 @@ export const TOOLS = [
     schema: z.object({}).passthrough(),
     jsonSchema: { type: "object", properties: {}, required: [] },
     run: async (_input, ctx) => {
-      const [clinic] = await ctx.sql<{ name: string; business_hours: BusinessHours }[]>`select name, business_hours from clinics where id = ${ctx.clinicId}`;
+      const [clinic] = await ctx.sql<{ name: string; business_hours: BusinessHours; contact_phone: string | null; contact_email: string | null; website_url: string | null; instagram_handle: string | null }[]>`
+        select name, business_hours, contact_phone, contact_email, website_url, instagram_handle from clinics where id = ${ctx.clinicId}`;
       const units = await ctx.sql<{ name: string; address: string | null; accessibility_info: string | null }[]>`
         select name, address, accessibility_info from units where clinic_id = ${ctx.clinicId} order by created_at`;
       const pros = await ctx.sql<{ id: string; name: string; specialty: string | null }[]>`
@@ -165,6 +166,11 @@ export const TOOLS = [
       const hours = clinic?.business_hours ?? {};
       return {
         clinica: clinic?.name,
+        // Contatos oficiais da clínica; só os cadastrados (nunca inventar).
+        contatos: {
+          telefone: clinic?.contact_phone ?? "não cadastrado", email: clinic?.contact_email ?? "não cadastrado",
+          instagram: clinic?.instagram_handle ? `@${clinic.instagram_handle}` : "não cadastrado", site: clinic?.website_url ?? "não cadastrado",
+        },
         unidades: units.map((u) => ({ nome: u.name, endereco: u.address || "não cadastrado", acessibilidade: u.accessibility_info || "não cadastrada" })),
         horario_de_atendimento_da_recepcao: WEEKDAY_KEYS.map((k, i) => `${WEEKDAY_LABELS[i]}: ${formatRanges(hours[k])}`),
         dentistas: pros.map((p) => {

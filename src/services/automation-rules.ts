@@ -5,25 +5,31 @@ import type { ConversationState } from "@/domain/states";
 import { addMinutes, clampToQuietHours, formatFull, localDate, localParts, zonedToUtc } from "@/lib/datetime";
 import { enforcesWindow } from "@/integrations/whatsapp";
 import { enqueueJob } from "./jobs-queue";
+import { emailConfigured, isEmail, sendEmail } from "@/integrations/email";
+import { reviewLink } from "./google-reviews";
 
 /** Automações criadas pela clínica no construtor visual. As quatro nativas continuam em jobs.ts. */
 export const RULE_TRIGGERS = ["before_appointment", "after_appointment", "no_show", "birthday"] as const;
 export type RuleTrigger = (typeof RULE_TRIGGERS)[number];
 export const RULE_ACTIONS = ["message", "task"] as const;
 export type RuleAction = (typeof RULE_ACTIONS)[number];
+/** Por onde a mensagem sai. Instagram vira tarefa com o texto pronto até o Instagram Direct ser conectado. */
+export const RULE_CHANNELS = ["whatsapp", "email", "instagram"] as const;
+export type RuleChannel = (typeof RULE_CHANNELS)[number];
 
 export type AutomationRule = {
   id: string; clinic_id: string; name: string; trigger: RuleTrigger; offset_minutes: number; action: RuleAction;
-  body: string | null; template_name: string | null; task_title: string | null; enabled: boolean; position: number;
+  body: string | null; template_name: string | null; task_title: string | null; enabled: boolean; position: number; channel: RuleChannel;
 };
 
-/** Variáveis aceitas no texto: {paciente} {primeiro_nome} {servico} {dentista} {data} {clinica}. */
-export function renderRuleText(text: string, v: { patient: string; service?: string | null; professional?: string | null; when?: string | null; clinic: string }): string {
+/** Variáveis aceitas no texto: {paciente} {primeiro_nome} {servico} {dentista} {data} {clinica} {link_avaliacao} {instagram}. */
+export function renderRuleText(text: string, v: { patient: string; service?: string | null; professional?: string | null; when?: string | null; clinic: string; reviewUrl?: string | null; instagram?: string | null }): string {
   const first = v.patient.split(" ")[0] ?? v.patient;
   return text
     .replaceAll("{paciente}", v.patient).replaceAll("{primeiro_nome}", first)
     .replaceAll("{servico}", v.service ?? "").replaceAll("{dentista}", v.professional ?? "")
     .replaceAll("{data}", v.when ?? "").replaceAll("{clinica}", v.clinic)
+    .replaceAll("{link_avaliacao}", v.reviewUrl ?? "").replaceAll("{instagram}", v.instagram ? `@${v.instagram.replace(/^@/, "")}` : "")
     .replace(/[ \t]{2,}/g, " ").trim();
 }
 
@@ -82,7 +88,8 @@ export async function runRuleJob(sql: Sql, job: RuleJob, now: Date): Promise<str
   if (!ruleId) return "skipped";
   const [rule] = await sql<AutomationRule[]>`select * from automation_rules where id = ${ruleId} and clinic_id = ${job.clinic_id}`;
   if (!rule || !rule.enabled) return "skipped:regra_desativada";
-  const [clinic] = await sql<{ name: string; timezone: string; settings: unknown }[]>`select name, timezone, settings from clinics where id = ${job.clinic_id}`;
+  const [clinic] = await sql<{ name: string; timezone: string; settings: unknown; google_review_url: string | null; google_place_id: string | null; instagram_handle: string | null; contact_email: string | null }[]>`
+    select name, timezone, settings, google_review_url, google_place_id, instagram_handle, contact_email from clinics where id = ${job.clinic_id}`;
   if (!clinic) return "skipped";
   const settings = parseSettings(clinic.settings);
 
@@ -102,10 +109,12 @@ export async function runRuleJob(sql: Sql, job: RuleJob, now: Date): Promise<str
     patientId = appt.patient_id;
   }
   if (!patientId) return "skipped";
-  const [patient] = await sql<{ full_name: string }[]>`select full_name from patients where id = ${patientId} and clinic_id = ${job.clinic_id}`;
+  const [patient] = await sql<{ full_name: string; email: string | null }[]>`select full_name, email from patients where id = ${patientId} and clinic_id = ${job.clinic_id}`;
   if (!patient) return "skipped";
   const when = appt ? formatFull(appt.starts_at, clinic.timezone) : null;
-  const vars = { patient: patient.full_name, service: appt?.service, professional: appt?.professional, when, clinic: clinic.name };
+  const vars = { patient: patient.full_name, service: appt?.service, professional: appt?.professional, when, clinic: clinic.name, reviewUrl: reviewLink(clinic), instagram: clinic.instagram_handle };
+  // Texto pede o link de avaliação mas a clínica ainda não cadastrou o Google: não envia link vazio.
+  if (rule.action === "message" && (rule.body ?? "").includes("{link_avaliacao}") && !vars.reviewUrl) return "skipped:sem_link_do_google";
 
   if (rule.action === "task") {
     await sql`insert into tasks (clinic_id, title, detail, kind, appointment_id)
@@ -119,6 +128,30 @@ export async function runRuleJob(sql: Sql, job: RuleJob, now: Date): Promise<str
     const next = clampToQuietHours(now, clinic.timezone, settings.quietStartHour, settings.quietEndHour);
     await enqueueJob(sql, { clinicId: job.clinic_id, type: "automation", runAt: next, appointmentId: job.appointment_id, idempotencyKey: `${job.id}:quiet`, payload: job.payload });
     return "deferred_quiet_hours";
+  }
+  const text = renderRuleText(rule.body ?? "", vars);
+
+  // Instagram: enquanto o Instagram Direct não estiver conectado, a equipe recebe o texto pronto para enviar.
+  if (rule.channel === "instagram") {
+    await sql`insert into tasks (clinic_id, title, detail, kind, appointment_id)
+              values (${job.clinic_id}, ${`${rule.name}: enviar pelo Instagram`}, ${`Para ${patient.full_name}: ${text}`}, 'automation', ${job.appointment_id})`;
+    return "human_task:instagram";
+  }
+
+  // E-mail: precisa do e-mail do paciente e do serviço de e-mail da plataforma; senão, vira tarefa.
+  if (rule.channel === "email") {
+    const optedOut = (await sql<{ out: boolean }[]>`
+      select exists (select 1 from contact_patient_links l join contacts ct on ct.id = l.contact_id
+                     where l.patient_id = ${patientId} and ct.opted_out_at is not null) as out`)[0]?.out;
+    if (optedOut) return "skipped:opt_out";
+    if (!isEmail(patient.email) || !emailConfigured()) {
+      await sql`insert into tasks (clinic_id, title, detail, kind, appointment_id)
+                values (${job.clinic_id}, ${`${rule.name}: enviar manualmente`}, ${`${patient.full_name} ${isEmail(patient.email) ? "— e-mail da plataforma não configurado" : "não tem e-mail cadastrado"}. Texto: ${text}`}, 'automation', ${job.appointment_id})`;
+      return "human_task";
+    }
+    const r = await sendEmail({ to: patient.email, subject: `${clinic.name}`, text, replyTo: clinic.contact_email, fromName: clinic.name });
+    if (!r.ok) { if (r.retryable) throw new Error(r.error); return `blocked:email`; }
+    return "sent_email";
   }
   const [contact] = await sql<{ id: string; opted_out_at: Date | null; service_messages_allowed: boolean; is_test: boolean }[]>`
     select ct.id, ct.opted_out_at, ct.service_messages_allowed, ct.is_test from contacts ct
@@ -157,7 +190,7 @@ export async function runRuleJob(sql: Sql, job: RuleJob, now: Date): Promise<str
     return "human_task";
   }
   const { sendOutbound } = await import("./conversations");
-  const body = renderRuleText(rule.body ?? "", vars);
+  const body = text;
   const sent = await sendOutbound(sql, {
     clinicId: job.clinic_id, conversationId: conv.id, senderType: "system", body, now,
     template: decision.action === "send_template" && template ? { name: template.name, language: template.language, params: [patient.full_name, appt?.service ?? "", appt?.professional ?? "", when ?? ""] } : undefined,

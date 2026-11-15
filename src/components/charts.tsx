@@ -13,7 +13,7 @@ function niceMax(v: number): number {
  * Barras de magnitude numa única cor (o acento da página), com grade horizontal e eixo.
  * Valor exato aparece no hover/foco; há tabela equivalente para leitores de tela.
  */
-export function Bars({ data, label, height = 168 }: { data: { key: string; value: number; hint?: string }[]; label: string; height?: number }) {
+export function Bars({ data, label, height = 168, emptyText = "Sem mensagens no período." }: { data: { key: string; value: number; hint?: string }[]; label: string; height?: number; emptyText?: string }) {
   const top = niceMax(Math.max(0, ...data.map((d) => d.value)));
   const ticks = [1, 0.75, 0.5, 0.25, 0].map((f) => Math.round(top * f));
   const empty = data.every((d) => d.value === 0);
@@ -40,7 +40,7 @@ export function Bars({ data, label, height = 168 }: { data: { key: string; value
           <div className="mt-2 flex gap-1.5 text-center font-mono text-[10px] text-bone-mute">
             {data.map((d) => <span key={d.key} className="flex-1 truncate">{d.key}</span>)}
           </div>
-          {empty && <p className="t-small absolute inset-x-0 top-1/3 text-center">Sem mensagens no período.</p>}
+          {empty && <p className="t-small absolute inset-x-0 top-1/3 text-center">{emptyText}</p>}
         </div>
       </div>
       <table className="sr-only">

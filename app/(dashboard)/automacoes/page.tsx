@@ -7,6 +7,7 @@ import { formatShort } from "@/lib/datetime";
 import { cn } from "@/lib/format";
 import { db } from "@/db/client";
 import { env } from "@/lib/env";
+import { emailConfigured } from "@/integrations/email";
 import { completeTaskAction, deleteRuleAction, reorderAutomationsAction, saveBuiltinAction, saveLimitsAction, saveRuleAction, saveTemplateAction, toggleAutomationAction } from "./actions";
 import { FlowList, RuleForm, Switch } from "./builder";
 import type { AutomationRule } from "@/services/automation-rules";
@@ -25,7 +26,7 @@ const TEMPLATE_USE: Record<string, string> = {
 };
 
 type FlowItem = {
-  key: string; name: string; builtin: boolean; on: boolean; trigger: string; wait: string; action: "message" | "task" | "confirmation";
+  key: string; name: string; builtin: boolean; on: boolean; trigger: string; wait: string; action: "message" | "task" | "confirmation"; channel?: "whatsapp" | "email" | "instagram";
   preview: string; purpose: string; edit: React.ReactNode;
 };
 
@@ -56,6 +57,7 @@ export default async function AutomationsPage() {
                 else wa_phone_number_id is not null and wa_access_token_enc is not null end as ok
     from clinic_integrations where clinic_id = ${ctx.clinicId}`;
   const waOn = !!channel?.ok || !!(env.wa.phoneNumberId && env.wa.accessToken);
+  const channelStatus = { whatsapp: waOn, email: emailConfigured(), googleLink: !!(ctx.clinic.google_review_url || ctx.clinic.google_place_id) };
 
   const BuiltinEdit = ({ k, hours, text }: { k: string; hours: number; text?: string }) => (
     <Modal trigger="Editar" title="Editar automação" description="Automação nativa: o texto do lembrete é montado com paciente, serviço, dentista e data." triggerClass={buttonClass("outline", "sm")}>
@@ -80,17 +82,17 @@ export default async function AutomationsPage() {
   ];
   const customs: FlowItem[] = data.rules.map((r) => {
     const draft = {
-      id: r.id, name: r.name, trigger: r.trigger, action: r.action, body: r.body ?? "", taskTitle: r.task_title ?? "", templateName: r.template_name ?? "",
+      id: r.id, name: r.name, trigger: r.trigger, action: r.action, body: r.body ?? "", taskTitle: r.task_title ?? "", templateName: r.template_name ?? "", channel: r.channel,
       time: `${String(Math.floor(r.offset_minutes / 60)).padStart(2, "0")}:${String(r.offset_minutes % 60).padStart(2, "0")}`,
       ...(r.offset_minutes % 1440 === 0 && r.offset_minutes > 0 ? { amount: r.offset_minutes / 1440, unit: "days" as const } : r.offset_minutes % 60 === 0 ? { amount: r.offset_minutes / 60, unit: "hours" as const } : { amount: r.offset_minutes, unit: "minutes" as const }),
     };
     return {
-      key: r.id, name: r.name, builtin: false, on: r.enabled, trigger: r.trigger, action: r.action,
+      key: r.id, name: r.name, builtin: false, on: r.enabled, trigger: r.trigger, action: r.action, channel: r.channel,
       wait: r.trigger === "birthday" ? `às ${draft.time}` : r.offset_minutes === 0 ? "na hora" : `${minutesLabel(r.offset_minutes)} ${r.trigger === "before_appointment" ? "antes" : "depois"}`,
       preview: (r.action === "message" ? r.body : r.task_title) ?? "", purpose: r.action === "task" ? "Cria uma tarefa para a equipe." : "Mensagem automática criada pela clínica.",
       edit: (
         <Modal trigger="Editar" title="Editar automação" description={r.name} wide triggerClass={buttonClass("outline", "sm")}>
-          <RuleForm rule={draft} templates={templateNames} action={saveRuleAction} />
+          <RuleForm rule={draft} templates={templateNames} action={saveRuleAction} status={channelStatus} />
           <ActionForm action={deleteRuleAction} className="mt-6 flex items-center justify-between gap-4 rounded-md border border-danger/30 bg-danger-soft/40 px-4 py-3">
             <input type="hidden" name="ruleId" value={r.id} />
             <span className="text-[13px] text-bone-dim">Excluir apaga a automação e cancela os envios ainda não feitos.</span>
@@ -119,7 +121,7 @@ export default async function AutomationsPage() {
     <>
       <PageHeader title="Automações" subtitle="Mensagens e tarefas que acontecem sozinhas. Ligue, desligue, edite ou arraste para organizar. Antes de cada envio o sistema confere se ainda faz sentido.">
         <Modal trigger={<><Plus aria-hidden /> Nova automação</>} title="Nova automação" description="Escolha quando acontece, quanto tempo esperar e o que fazer." wide triggerClass={buttonClass("primary")}>
-          <RuleForm templates={templateNames} action={saveRuleAction} />
+          <RuleForm templates={templateNames} action={saveRuleAction} status={channelStatus} />
         </Modal>
       </PageHeader>
       {!waOn && (
@@ -159,7 +161,7 @@ export default async function AutomationsPage() {
                   <ArrowRight size={14} aria-hidden className="hidden text-bone-mute sm:block" />
                   <Chip eyebrow="Espera" tone="border-line bg-surface-2/60">{f.wait}</Chip>
                   <ArrowRight size={14} aria-hidden className="hidden text-bone-mute sm:block" />
-                  <Chip eyebrow="Faz" tone={f.action === "task" ? "border-warn/30 bg-warn-soft/60" : "border-ok/30 bg-ok-soft/60"}>{f.action === "task" ? "Cria tarefa" : f.action === "confirmation" ? "Pede confirmação" : "Envia mensagem"}</Chip>
+                  <Chip eyebrow="Faz" tone={f.action === "task" ? "border-warn/30 bg-warn-soft/60" : "border-ok/30 bg-ok-soft/60"}>{f.action === "task" ? "Cria tarefa" : f.action === "confirmation" ? "Pede confirmação" : f.channel === "email" ? "Envia e-mail" : f.channel === "instagram" ? "Envia no Instagram" : "Envia no WhatsApp"}</Chip>
                 </div>
                 {f.preview && <p className="mt-3 line-clamp-2 border-l-2 border-line pl-3 text-[13px] italic text-bone-dim">“{f.preview}”</p>}
               </div>

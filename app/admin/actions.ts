@@ -10,6 +10,7 @@ import { getIdentity } from "@/auth/session";
 import type { ActionState } from "@/components/client";
 import { db } from "@/db/client";
 import { createClinic } from "@/services/clinic-setup";
+import { ContactError, parseClinicProfile } from "@/domain/contact";
 import { seedDemoActivity, seedDemoClinic } from "@/services/demo";
 
 async function platform() {
@@ -72,11 +73,13 @@ export async function createClientClinicAction(_: ActionState, form: FormData): 
     ownerPassword: form.get("ownerPassword"), chairs: form.get("chairs"), demo: form.get("demo") === "on",
   });
   if (!p.success) return { error: p.error.issues[0]?.message };
+  let profile;
+  try { profile = parseClinicProfile({ phone: form.get("contactPhone"), email: form.get("contactEmail"), website: form.get("website"), instagram: form.get("instagram"), address: form.get("address"), googleReviewUrl: form.get("googleReviewUrl") }); } catch (e) { if (e instanceof ContactError) return { error: e.message }; throw e; }
   const user = await adminCreateUser(p.data.ownerEmail, p.data.ownerPassword);
   if (!user.ok) return { error: user.error };
   const owner = { authUserId: user.userId, email: p.data.ownerEmail, name: p.data.ownerName };
   if (p.data.demo) await seedDemoClinic(db(), owner, p.data.clinicName);
-  else await createClinic(db(), { clinicName: p.data.clinicName, owner, chairs: p.data.chairs, professionals: [] });
+  else await createClinic(db(), { clinicName: p.data.clinicName, owner, chairs: p.data.chairs, professionals: [], profile });
   revalidatePath("/admin");
   return { ok: true, message: "Clínica criada. Envie o e-mail e a senha provisória ao cliente." };
 }

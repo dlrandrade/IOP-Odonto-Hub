@@ -25,6 +25,13 @@ export const env = {
     get gatewayUrl() { return opt("WACLI_GATEWAY_URL"); },
     get gatewayToken() { return opt("WACLI_GATEWAY_TOKEN"); },
   },
+  /** Google Places API (nota e total de avaliações do Perfil da Empresa). Opcional: sem ela, a clínica registra à mão. */
+  get googlePlacesKey() { return opt("GOOGLE_PLACES_API_KEY"); },
+  /** E-mail transacional das automações (Resend). Remetente verificado no Resend, ex.: "Clínica <avisos@seudominio.com.br>". */
+  email: {
+    get resendKey() { return opt("RESEND_API_KEY"); },
+    get from() { return opt("EMAIL_FROM"); },
+  },
   wa: {
     get verifyToken() { return opt("WHATSAPP_VERIFY_TOKEN"); },
     get appSecret() { return opt("WHATSAPP_APP_SECRET"); },

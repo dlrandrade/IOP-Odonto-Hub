@@ -52,7 +52,7 @@ export default async function PlatformPage() {
           <p className="eyebrow mb-2 text-bone-mute">Operador da plataforma</p>
           <h1 className="display text-[40px] leading-none">Suas clínicas</h1>
         </div>
-        <Modal trigger="Nova clínica cliente" title="Nova clínica cliente" description="Cria a clínica com o responsável como administrador e uma senha provisória para você entregar a ele." triggerClass={buttonClass("accent")}>
+        <Modal trigger="Nova clínica cliente" title="Nova clínica cliente" description="Cria a clínica com o responsável como administrador e uma senha provisória para você entregar a ele." wide triggerClass={buttonClass("accent")}>
           <ActionForm action={createClientClinicAction} className="space-y-4" resetOnDone={false}>
             <Field label="Nome da clínica"><Input name="clinicName" required /></Field>
             <div className="grid gap-6 sm:grid-cols-2">
@@ -61,6 +61,18 @@ export default async function PlatformPage() {
             </div>
             <Field label="E-mail do responsável"><Input name="ownerEmail" type="email" required /></Field>
             <Field label="Senha provisória" hint="Entregue ao cliente por um canal seguro; ele entra como administrador da clínica."><Input name="ownerPassword" type="text" minLength={8} required autoComplete="off" /></Field>
+<fieldset className="space-y-4 rounded-lg border border-line p-4">
+              <legend className="eyebrow px-1.5 text-bone-mute">Dados da contratação (opcional)</legend>
+              <p className="t-small">Configuram a conta já na criação: contatos e endereço para a assistente, Google com QR code e a automação de pedir avaliação.</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Telefone da clínica"><Input name="contactPhone" inputMode="tel" /></Field>
+                <Field label="E-mail da clínica"><Input name="contactEmail" type="email" /></Field>
+                <Field label="Instagram"><Input name="instagram" placeholder="@clinica" /></Field>
+                <Field label="Site"><Input name="website" /></Field>
+              </div>
+              <Field label="Endereço"><Input name="address" /></Field>
+              <Field label="Link de avaliação do Google"><Input name="googleReviewUrl" placeholder="https://g.page/r/…/review" /></Field>
+            </fieldset>
             <Checkbox name="demo" label="Criar com dados de demonstração" hint="Pacientes, consultas e funil fictícios — ideal para apresentações de venda." />
             <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Criar clínica</Button></div>
           </ActionForm>

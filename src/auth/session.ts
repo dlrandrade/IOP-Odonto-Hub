@@ -17,6 +17,8 @@ export type ClinicRow = {
   alert_keywords: string[]; alert_message: string | null; alert_after_hours_message: string | null;
   alert_approved_at: Date | null; alert_approved_by: string | null;
   settings: unknown; status: string; is_demo: boolean; onboarding_completed_at: Date | null; created_at: Date;
+  contact_phone: string | null; contact_email: string | null; website_url: string | null; instagram_handle: string | null;
+  google_business_url: string | null; google_review_url: string | null; google_place_id: string | null;
 };
 
 export type Ctx = {

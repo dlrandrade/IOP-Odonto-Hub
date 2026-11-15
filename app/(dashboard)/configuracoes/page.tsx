@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Bot, Building2, CalendarDays, Eye, MessageCircle, Plus, ScrollText, Users, type LucideIcon } from "lucide-react";
+import { Bot, Building2, CalendarDays, Eye, MessageCircle, Plus, ScrollText, Star, Users, type LucideIcon } from "lucide-react";
+import { CORES } from "@/lib/tema";
 import type { CSSProperties } from "react";
 import { VistaSwitch } from "@/components/vista";
 import { requireCtx, q } from "@/auth/session";
@@ -10,21 +11,26 @@ import { formatShort, WEEKDAY_KEYS, WEEKDAY_LABELS, type BusinessHours } from "@
 import { env } from "@/lib/env";
 import { cn } from "@/lib/format";
 import { LlmPanel, WhatsAppPanel } from "./panels";
-import { inviteUserAction, saveAiAction, saveClinicAction, saveProfessionalAction, saveResourceAction, saveWhatsAppAction, updateUserAction } from "./actions";
+import { GooglePlaceSearch } from "./google-search";
+import { GoogleShare } from "@/components/google-share";
+import { qrDataUrl, reviewLink } from "@/services/google-reviews";
+import { inviteUserAction, saveAiAction, saveClinicAction, saveGoogleAction, saveProfessionalAction, saveResourceAction, saveWhatsAppAction, updateUserAction } from "./actions";
 
 export const metadata = { title: "Configurações" };
 
-const TABS = [["clinica", "Clínica"], ["equipe", "Equipe"], ["agenda", "Agenda"], ["whatsapp", "WhatsApp"], ["ia", "Assistente"], ["visualizacao", "Visualização"], ["auditoria", "Auditoria"]] as const;
+const TABS = [["clinica", "Clínica"], ["equipe", "Equipe"], ["agenda", "Agenda"], ["whatsapp", "WhatsApp"], ["google", "Google"], ["ia", "Assistente"], ["visualizacao", "Visualização"], ["auditoria", "Auditoria"]] as const;
 type TabKey = (typeof TABS)[number][0];
 /** Cada seção é um bloco com ícone colorido, como nos Ajustes do iPhone. */
 const TAB_ICON: Record<TabKey, { icon: LucideIcon; rgb: string; text: string }> = {
-  clinica: { icon: Building2, rgb: "232 181 75", text: "Nome, endereço e horários" },
-  equipe: { icon: Users, rgb: "87 166 240", text: "Acessos de cada pessoa" },
-  agenda: { icon: CalendarDays, rgb: "124 131 245", text: "Dentistas e cadeiras" },
-  whatsapp: { icon: MessageCircle, rgb: "37 190 100", text: "Conectar o número" },
-  ia: { icon: Bot, rgb: "167 139 250", text: "Como a assistente atende" },
-  visualizacao: { icon: Eye, rgb: "124 141 166", text: "Simples ou com detalhes" },
-  auditoria: { icon: ScrollText, rgb: "124 141 166", text: "Quem alterou o quê" },
+  // cada seção usa a cor do recurso que ela configura (src/lib/tema.ts); equipe e bastidores têm tons próprios
+  clinica: { icon: Building2, rgb: CORES.hoje.rgb, text: "Nome, contato e horários" },
+  equipe: { icon: Users, rgb: "196 142 94", text: "Acessos de cada pessoa" },
+  agenda: { icon: CalendarDays, rgb: CORES.agenda.rgb, text: "Dentistas e cadeiras" },
+  whatsapp: { icon: MessageCircle, rgb: CORES.conversas.rgb, text: "Conectar o número" },
+  google: { icon: Star, rgb: CORES.indicadores.rgb, text: "Avaliações e QR code" },
+  ia: { icon: Bot, rgb: CORES.simulador.rgb, text: "Como ela atende" },
+  visualizacao: { icon: Eye, rgb: CORES.ajustes.rgb, text: "Simples ou com detalhes" },
+  auditoria: { icon: ScrollText, rgb: "110 120 135", text: "Quem alterou o quê" },
 };
 const ranges = (list?: [string, string][]) => (list ?? []).map(([a, b]) => `${a}-${b}`).join(", ");
 
@@ -63,6 +69,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       select id, actor_label, action, entity, before, after, created_at from audit_events order by created_at desc limit 100` : [],
   }));
 
+  const googleLink = reviewLink(ctx.clinic);
+  const googleQr = tab === "google" && googleLink ? await qrDataUrl(googleLink) : null;
+
   const ProfessionalForm = ({ p }: { p?: (typeof data.professionals)[number] }) => (
     <ActionForm action={saveProfessionalAction} className="space-y-4" resetOnDone={!p}>
       {p && <input type="hidden" name="professionalId" value={p.id} />}
@@ -95,7 +104,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
       <PageHeader title="Configurações" subtitle="Tudo é ajustável por aqui, sem mexer em código." />
       <div className="space-y-8">
         {/* Seções em blocos quadrados: alvo grande, ícone e uma linha dizendo o que tem dentro. Auditoria só na visualização detalhada. */}
-        <nav aria-label="Seções de configuração" className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7 lg:gap-4 simples:lg:grid-cols-6">
+        <nav aria-label="Seções de configuração" className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8 lg:gap-4 simples:lg:grid-cols-7">
           {TABS.filter(([k]) => (isAdmin || k === "auditoria" || k === "visualizacao")).map(([k, label]) => {
             const t = TAB_ICON[k];
             return (
@@ -127,6 +136,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <Field label="Nome da assistente virtual" hint="Ela sempre se apresenta como assistente virtual."><Input name="assistantName" defaultValue={ctx.clinic.assistant_name} required /></Field>
               <Field label="Endereço da unidade"><Input name="address" defaultValue={data.unit?.address ?? ""} /></Field>
             </div>
+            <fieldset className="rounded-lg border border-line p-4">
+              <legend className="eyebrow px-1.5 text-bone-mute">Contato e redes</legend>
+              <p className="t-small mb-4">Usados pela assistente para informar o paciente e como resposta dos e-mails automáticos.</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Telefone da clínica"><Input name="contactPhone" defaultValue={ctx.clinic.contact_phone ?? ""} inputMode="tel" placeholder="(11) 3333-4444" /></Field>
+                <Field label="E-mail da clínica"><Input name="contactEmail" type="email" defaultValue={ctx.clinic.contact_email ?? ""} placeholder="contato@clinica.com.br" /></Field>
+                <Field label="Instagram"><Input name="instagram" defaultValue={ctx.clinic.instagram_handle ? `@${ctx.clinic.instagram_handle}` : ""} placeholder="@clinicasorriso" /></Field>
+                <Field label="Site"><Input name="website" defaultValue={ctx.clinic.website_url ?? ""} placeholder="www.clinica.com.br" /></Field>
+              </div>
+            </fieldset>
             <Field label="Acessibilidade da unidade"><Input name="accessibility" defaultValue={data.unit?.accessibility_info ?? ""} placeholder="Ex.: rampa, elevador, vaga reservada" /></Field>
             <fieldset className="rounded-md border border-line p-4">
               <legend className="eyebrow px-1.5 text-bone-mute">Horário de atendimento humano</legend>
@@ -280,12 +299,37 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </Card>
       )}
 
+      {allowed && tab === "google" && (
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <Card>
+            <CardTitle hint="Com o Google cadastrado, a clínica ganha o link e o QR code de avaliação, a origem “Google” nos pacientes e o histórico de avaliações em Indicadores.">Google Meu Negócio</CardTitle>
+            <ActionForm action={saveGoogleAction} className="space-y-5" resetOnDone={false}>
+              <Field label="Link para pedir avaliação" hint="No Google: Perfil da Empresa → Pedir avaliações → copiar link (g.page/r/…).">
+                <Input name="reviewUrl" defaultValue={ctx.clinic.google_review_url ?? ""} placeholder="https://g.page/r/…/review" />
+              </Field>
+              <Field label="Link do perfil no Google Maps (opcional)"><Input name="businessUrl" defaultValue={ctx.clinic.google_business_url ?? ""} placeholder="https://maps.app.goo.gl/…" /></Field>
+              <Field label="Place ID (opcional)" hint={env.googlePlacesKey ? "Com ele, nota e total de avaliações são atualizados todo dia sozinhos. Use a busca abaixo para preencher." : "Identificador do Google para a atualização automática diária, quando ativada na plataforma."} className="simples:hidden">
+                <Input name="placeId" defaultValue={ctx.clinic.google_place_id ?? ""} placeholder="ChIJ…" className="font-mono text-[13px]" />
+              </Field>
+              {env.googlePlacesKey && <div className="simples:hidden"><GooglePlaceSearch defaultQuery={ctx.clinic.name} /></div>}
+              <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>
+            </ActionForm>
+          </Card>
+          <Card>
+            <CardTitle hint="Imprima no balcão, mande no WhatsApp ou use na automação “Pedir avaliação no Google”.">Compartilhar</CardTitle>
+            {googleLink && googleQr ? <GoogleShare reviewUrl={googleLink} profileUrl={ctx.clinic.google_business_url} qr={googleQr} clinicName={ctx.clinic.name} />
+              : <Empty title="Cole o link de avaliação ao lado">O link e o QR code aparecem aqui assim que salvar.</Empty>}
+            {googleLink && <p className="t-small mt-auto pt-5">Para pedir avaliação depois de cada consulta, crie em <Link className="underline underline-offset-2" href="/automacoes">Automações</Link> o modelo “Pedir avaliação no Google”.</p>}
+          </Card>
+        </div>
+      )}
+
       {allowed && tab === "ia" && (
         <div className="space-y-6">
         {data.wa && (
           <Card className="hidden h-auto detalhado:hidden simples:flex">
             <div className="flex flex-wrap items-center gap-4">
-              <span className="icone-app size-12 rounded-[14px]" style={{ "--icone-rgb": "167 139 250" } as CSSProperties}><Bot size={24} aria-hidden /></span>
+              <span className="icone-app size-12 rounded-[14px]" style={{ "--icone-rgb": CORES.simulador.rgb } as CSSProperties}><Bot size={24} aria-hidden /></span>
               <div className="min-w-0 flex-1">
                 <p className="t-h3">Inteligência artificial: {{ platform: "a da plataforma", anthropic: "Claude (chave própria)", openrouter: "OpenRouter", openai_compatible: "provedor próprio" }[data.wa.llm_provider]}</p>
                 <p className="t-small">Para trocar de provedor ou de modelo, ligue “Mostrar detalhes técnicos” em <Link href="/configuracoes?aba=visualizacao" className="underline underline-offset-2">Visualização</Link>.</p>

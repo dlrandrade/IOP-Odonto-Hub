@@ -36,7 +36,7 @@ function Item({ item, onNavigate }: { item: NavEntry; onNavigate?: () => void })
         <Icon size={15} aria-hidden strokeWidth={2.1} />
       </span>
       <span className="flex-1 truncate">{item.label}</span>
-      {!!item.badge && <span className="min-w-5 rounded-full bg-danger px-1.5 py-px text-center text-[10.5px] font-semibold text-on-danger">{item.badge}</span>}
+      {!!item.badge && <span title="Conversas esperando a equipe" className="flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9.5px] font-bold leading-none text-on-danger">{item.badge > 99 ? "99+" : item.badge}</span>}
     </Link>
   );
 }

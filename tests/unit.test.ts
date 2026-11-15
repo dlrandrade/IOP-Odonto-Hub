@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { extractPlaceId, normalizeGoogleUrl, normalizeInstagram, normalizePhone, normalizeUrl, parseClinicProfile } from "@/domain/contact";
 import { addDays, clampToQuietHours, formatFull, isWithinBusinessHours, localDate, localTime, weekdayOf, zonedToUtc } from "@/lib/datetime";
 import { computeSlots, pickOffers, type SlotQuery } from "@/domain/slots";
 import { canTransitionAppointment, validateStageMove } from "@/domain/states";
@@ -182,5 +183,23 @@ describe("segurança de canal", () => {
     expect(parseBrlToCents("R$ 1.250,50")).toBe(125050);
     expect(parseBrlToCents("120")).toBe(12000);
     expect(parseBrlToCents("")).toBeNull();
+  });
+});
+
+
+describe("dados de contato da clínica", () => {
+  it("normaliza Instagram, site e Google; recusa link que não é do Google", () => {
+    expect(normalizeInstagram("https://www.instagram.com/Clinica.Sorriso/")).toBe("clinica.sorriso");
+    expect(normalizeInstagram("@clinica")).toBe("clinica");
+    expect(() => normalizeInstagram("clínica sorriso")).toThrow();
+    expect(normalizeUrl("www.clinica.com.br")).toBe("https://www.clinica.com.br/");
+    expect(() => normalizeUrl("javascript:alert(1)")).toThrow();
+    expect(normalizeGoogleUrl("g.page/r/CbX/review")).toBe("https://g.page/r/CbX/review");
+    expect(normalizeGoogleUrl("https://maps.app.goo.gl/abc")).toBe("https://maps.app.goo.gl/abc");
+    expect(() => normalizeGoogleUrl("https://evil.com/g.page")).toThrow();
+    expect(extractPlaceId("https://search.google.com/local/writereview?placeid=ChIJN1t_tDeuEmsRUsoyG83frY4")).toBe("ChIJN1t_tDeuEmsRUsoyG83frY4");
+    expect(normalizePhone("(11) 3333-4444")).toBe("(11) 3333-4444");
+    expect(() => normalizePhone("123")).toThrow();
+    expect(parseClinicProfile({ phone: "", email: "", instagram: "" })).toEqual({ phone: null, email: null, website: null, instagram: null, address: null, googleReviewUrl: null });
   });
 });

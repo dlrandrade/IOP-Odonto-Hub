@@ -10,7 +10,17 @@ export type NewClinicInput = {
   professionals: { name: string; specialty: string | null }[];
   businessHours?: BusinessHours;
   isDemo?: boolean;
+  /** Dados informados na contratação: já configuram a conta (contato, endereço, Google, automação de avaliação). */
+  profile?: ClinicProfile;
 };
+
+export type ClinicProfile = {
+  phone?: string | null; email?: string | null; website?: string | null; instagram?: string | null; address?: string | null;
+  googleReviewUrl?: string | null; googleBusinessUrl?: string | null;
+};
+
+/** Texto da automação de avaliação criada quando a clínica informa o Google na contratação. */
+export const REVIEW_REQUEST_TEXT = "Olá, {primeiro_nome}! Obrigado por escolher a {clinica}. Se puder, conte como foi sua experiência no Google — leva menos de um minuto e ajuda muito: {link_avaliacao}";
 
 const DEFAULT_HOURS: BusinessHours = {
   mon: [["08:00", "18:00"]], tue: [["08:00", "18:00"]], wed: [["08:00", "18:00"]], thu: [["08:00", "18:00"]],
@@ -45,14 +55,16 @@ export async function createClinic(sql: Sql, input: NewClinicInput): Promise<str
   return inTx(sql, async (tx) => {
     const hours = input.businessHours ?? DEFAULT_HOURS;
     const [clinic] = await tx<{ id: string }[]>`
-      insert into clinics (name, timezone, business_hours, is_demo, alert_keywords, onboarding_completed_at)
+      insert into clinics (name, timezone, business_hours, is_demo, alert_keywords, onboarding_completed_at,
+                           contact_phone, contact_email, website_url, instagram_handle, google_review_url, google_business_url)
       values (${input.clinicName}, ${input.timezone ?? "America/Sao_Paulo"}, ${tx.json(hours as never)}, ${input.isDemo ?? false},
-              ${SUGGESTED_ALERT_KEYWORDS}, now())
+              ${SUGGESTED_ALERT_KEYWORDS}, now(), ${input.profile?.phone ?? null}, ${input.profile?.email ?? null}, ${input.profile?.website ?? null},
+              ${input.profile?.instagram ?? null}, ${input.profile?.googleReviewUrl ?? null}, ${input.profile?.googleBusinessUrl ?? null})
       returning id`;
     if (!clinic) throw new Error("Falha ao criar clínica");
     const clinicId = clinic.id;
     await tx`insert into clinic_integrations (clinic_id) values (${clinicId})`;
-    const [unit] = await tx<{ id: string }[]>`insert into units (clinic_id, name) values (${clinicId}, 'Unidade principal') returning id`;
+    const [unit] = await tx<{ id: string }[]>`insert into units (clinic_id, name, address) values (${clinicId}, 'Unidade principal', ${input.profile?.address ?? null}) returning id`;
     if (input.owner) {
       await tx`
         insert into app_users (clinic_id, auth_user_id, email, name, role)
@@ -90,6 +102,11 @@ export async function createClinic(sql: Sql, input: NewClinicInput): Promise<str
     }
     for (const title of KNOWLEDGE_TEMPLATES) await tx`insert into knowledge_docs (clinic_id, title) values (${clinicId}, ${title})`;
     for (const t of MESSAGE_TEMPLATES) await tx`insert into message_templates (clinic_id, name, body) values (${clinicId}, ${t.name}, ${t.body})`;
+    // Google informado na contratação: a automação de pedir avaliação já nasce pronta (3 h depois da consulta concluída).
+    if (input.profile?.googleReviewUrl) {
+      await tx`insert into automation_rules (clinic_id, name, trigger, offset_minutes, action, channel, body, position)
+               values (${clinicId}, 'Pedir avaliação no Google', 'after_appointment', 180, 'message', 'whatsapp', ${REVIEW_REQUEST_TEXT}, 1)`;
+    }
     return clinicId;
   });
 }

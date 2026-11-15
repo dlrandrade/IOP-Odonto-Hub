@@ -7,6 +7,7 @@ import { act, actorOf, optStr, str, UserError } from "@/lib/action";
 import { encryptField } from "@/lib/crypto";
 import { normalizePhone } from "@/lib/format";
 import { audit } from "@/services/audit";
+import { ContactError, normalizeEmail, PATIENT_SOURCES } from "@/domain/contact";
 
 const id = z.string().uuid();
 const optDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable();
@@ -18,17 +19,20 @@ export async function savePatientAction(_: ActionState, form: FormData): Promise
     const birth = optDate.parse(optStr(form, "birthDate"));
     const patientId = optStr(form, "patientId");
     const cpf = optStr(form, "cpf");
+    let email: string | null;
+    try { email = normalizeEmail(optStr(form, "email")); } catch (e) { if (e instanceof ContactError) throw new UserError(e.message); throw e; }
+    const source = z.enum(PATIENT_SOURCES).nullable().catch(null).parse(optStr(form, "source"));
     await q(ctx, async (tx) => {
       if (patientId) {
-        await tx`update patients set full_name = ${fullName}, birth_date = ${birth}, notes = ${optStr(form, "notes")} where id = ${id.parse(patientId)}`;
+        await tx`update patients set full_name = ${fullName}, birth_date = ${birth}, notes = ${optStr(form, "notes")}, email = ${email}, source = ${source} where id = ${id.parse(patientId)}`;
         // CPF é opcional e só gravado criptografado; campo vazio mantém o valor atual.
         if (cpf) await tx`update patients set cpf_encrypted = ${encryptField(cpf.replace(/\D/g, ""))} where id = ${patientId}`;
         await audit(tx, actorOf(ctx), "patient.update", "patients", patientId, null, { full_name: fullName, cpf_changed: !!cpf });
         return;
       }
       const [p] = await tx<{ id: string }[]>`
-        insert into patients (clinic_id, full_name, birth_date, notes, cpf_encrypted)
-        values (${ctx.clinicId}, ${fullName}, ${birth}, ${optStr(form, "notes")}, ${cpf ? encryptField(cpf.replace(/\D/g, "")) : null}) returning id`;
+        insert into patients (clinic_id, full_name, birth_date, notes, cpf_encrypted, email, source)
+        values (${ctx.clinicId}, ${fullName}, ${birth}, ${optStr(form, "notes")}, ${cpf ? encryptField(cpf.replace(/\D/g, "")) : null}, ${email}, ${source}) returning id`;
       const phone = optStr(form, "phone");
       if (p && phone) {
         const [c] = await tx<{ id: string }[]>`

@@ -7,6 +7,7 @@ import { getIdentity } from "@/auth/session";
 import { db } from "@/db/client";
 import type { ActionState } from "@/components/client";
 import { createClinic } from "@/services/clinic-setup";
+import { ContactError, parseClinicProfile } from "@/domain/contact";
 import { seedDemoClinic } from "@/services/demo";
 
 const credentials = z.object({
@@ -56,6 +57,8 @@ export async function onboardingAction(_: ActionState, form: FormData): Promise<
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
   const owner = { authUserId: me.authUserId, email: me.email, name: parsed.data.ownerName };
+  let profile;
+  try { profile = parseClinicProfile({ phone: form.get("contactPhone"), email: form.get("contactEmail"), website: form.get("website"), instagram: form.get("instagram"), address: form.get("address"), googleReviewUrl: form.get("googleReviewUrl") }); } catch (e) { if (e instanceof ContactError) return { error: e.message }; throw e; }
   if (parsed.data.demo) {
     await seedDemoClinic(db(), owner, `${parsed.data.clinicName} (demo)`);
   } else {
@@ -63,7 +66,7 @@ export async function onboardingAction(_: ActionState, form: FormData): Promise<
       const [name, specialty] = line.split(/[;,–-]\s*/, 2);
       return { name: (name ?? line).trim(), specialty: specialty?.trim() || null };
     });
-    await createClinic(db(), { clinicName: parsed.data.clinicName, owner, chairs: parsed.data.chairs, professionals });
+    await createClinic(db(), { clinicName: parsed.data.clinicName, owner, chairs: parsed.data.chairs, professionals, profile });
   }
   redirect("/");
 }

@@ -19,6 +19,9 @@ import { randomBytes } from "node:crypto";
 import { ensureEvolutionInstance, evolutionLogout, evolutionQr, evolutionState, setEvolutionWebhook, type EvolutionConfig } from "@/integrations/whatsapp/evolution";
 import { WEEKDAY_KEYS, type BusinessHours } from "@/lib/datetime";
 import { audit, diff } from "@/services/audit";
+import { ContactError, extractPlaceId, normalizeEmail, normalizeGoogleUrl, normalizeInstagram, normalizePhone, normalizeUrl } from "@/domain/contact";
+import { searchPlaces } from "@/integrations/google/places";
+import { reviewLink } from "@/services/google-reviews";
 
 const id = z.string().uuid();
 const PATH = "/configuracoes";
@@ -42,9 +45,17 @@ export async function saveClinicAction(_: ActionState, form: FormData): Promise<
     try { new Intl.DateTimeFormat("pt-BR", { timeZone: timezone }); } catch { throw new UserError("Fuso horário inválido."); }
     const hours: BusinessHours = {};
     for (const key of WEEKDAY_KEYS) hours[key] = parseRanges(str(form, `hours_${key}`));
+    let contact;
+    try {
+      contact = {
+        contact_phone: normalizePhone(optStr(form, "contactPhone")), contact_email: normalizeEmail(optStr(form, "contactEmail")),
+        website_url: normalizeUrl(optStr(form, "website"), "Site"), instagram_handle: normalizeInstagram(optStr(form, "instagram")),
+      };
+    } catch (e) { if (e instanceof ContactError) throw new UserError(e.message); throw e; }
     const next = {
       name: z.string().min(2, "Informe o nome da clínica.").parse(str(form, "name")), timezone,
       assistant_name: z.string().min(2).parse(str(form, "assistantName")), after_hours_message: z.string().min(5).parse(str(form, "afterHours")),
+      ...contact,
     };
     const current = parseSettings(ctx.clinic.settings);
     const settings = settingsSchema.parse({ ...current, minLeadMinutes: form.get("minLeadMinutes"), maxAdvanceDays: form.get("maxAdvanceDays") });
@@ -428,3 +439,49 @@ export async function testLlmAction(form: FormData): Promise<{ ok: boolean; mess
     return { ok: false, message: msg };
   }
 }
+
+// ───────────── Google Meu Negócio ─────────────
+
+export async function saveGoogleAction(_: ActionState, form: FormData): Promise<ActionState> {
+  return act("settings.manage", [PATH, "/indicadores", "/automacoes"], async (ctx) => {
+    let next: { google_business_url: string | null; google_review_url: string | null; google_place_id: string | null };
+    try {
+      next = {
+        google_business_url: normalizeGoogleUrl(optStr(form, "businessUrl"), "Link do perfil"),
+        google_review_url: normalizeGoogleUrl(optStr(form, "reviewUrl"), "Link de avaliação"),
+        google_place_id: extractPlaceId(optStr(form, "placeId")),
+      };
+    } catch (e) { if (e instanceof ContactError) throw new UserError(e.message); throw e; }
+    await q(ctx, async (tx) => {
+      await tx`update clinics set ${tx(next)} where id = ${ctx.clinicId}`;
+      await audit(tx, actorOf(ctx), "clinic.google", "clinics", ctx.clinicId, null, next);
+    });
+    return { ok: true, message: reviewLink(next) ? "Google salvo. O link e o QR code já estão prontos." : "Google salvo." };
+  });
+}
+
+/** Procura a clínica no Google pelo nome/endereço (precisa de GOOGLE_PLACES_API_KEY). */
+export async function searchGooglePlaceAction(query: string): Promise<{ error?: string; places: { id: string; name: string; address: string; rating: number | null; reviewCount: number }[] }> {
+  await actionCtx("settings.manage");
+  if (!env.googlePlacesKey) return { error: "A busca automática não está ativa na plataforma. Cole o link de avaliação.", places: [] };
+  const term = query.trim().slice(0, 200);
+  if (term.length < 3) return { error: "Digite o nome da clínica e a cidade.", places: [] };
+  try { return { places: await searchPlaces(term) }; } catch (e) { return { error: e instanceof Error ? e.message : "Falha ao buscar no Google.", places: [] }; }
+}
+
+/** Registro manual da nota e do total de avaliações (quando não há busca automática ou para corrigir o dia). */
+export async function saveReviewSnapshotAction(_: ActionState, form: FormData): Promise<ActionState> {
+  return act("settings.manage", ["/indicadores", PATH], async (ctx) => {
+    const count = z.coerce.number({ message: "Informe o total de avaliações." }).int("Use um número inteiro.").min(0).max(1_000_000).parse(form.get("count"));
+    const ratingRaw = optStr(form, "rating");
+    const rating = ratingRaw == null ? null : z.coerce.number({ message: "Nota inválida." }).min(1, "A nota vai de 1 a 5.").max(5, "A nota vai de 1 a 5.").parse(ratingRaw.replace(",", "."));
+    const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida.").parse(str(form, "day"));
+    await q(ctx, async (tx) => {
+      await tx`insert into google_review_snapshots (clinic_id, taken_on, rating, review_count, source, created_by)
+               values (${ctx.clinicId}, ${day}, ${rating == null ? null : Math.round(rating * 10) / 10}, ${count}, 'manual', ${ctx.userId})
+               on conflict (clinic_id, taken_on) do update set rating = excluded.rating, review_count = excluded.review_count, source = 'manual', created_by = excluded.created_by`;
+    });
+    return { ok: true, message: "Avaliações registradas." };
+  });
+}
+

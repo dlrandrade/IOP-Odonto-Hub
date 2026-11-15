@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { PATIENT_SOURCE_LABELS, PATIENT_SOURCES, type PatientSource } from "@/domain/contact";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal } from "@/components/client";
 import { Avatar, Badge, Button, buttonClass, Card, CardTitle, Empty, Field, Input, Notice, Select, Table, Textarea } from "@/components/ui";
@@ -21,8 +22,8 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
   const seesConversations = can(ctx.role, "conversations.view");
   const data = await q(ctx, async (tx) => {
     const [own] = ctx.role === "dentista" && ctx.userId ? await tx<{ id: string }[]>`select id from professionals where app_user_id = ${ctx.userId}` : [];
-    const [patient] = await tx<{ id: string; full_name: string; birth_date: string | null; notes: string | null; has_cpf: boolean; merged_into_patient_id: string | null; created_at: Date }[]>`
-      select id, full_name, birth_date::text, notes, cpf_encrypted is not null as has_cpf, merged_into_patient_id, created_at from patients where id = ${id}
+    const [patient] = await tx<{ id: string; full_name: string; birth_date: string | null; notes: string | null; has_cpf: boolean; merged_into_patient_id: string | null; created_at: Date; email: string | null; source: PatientSource | null }[]>`
+      select id, full_name, birth_date::text, notes, cpf_encrypted is not null as has_cpf, merged_into_patient_id, created_at, email, source from patients where id = ${id}
         ${ctx.role === "dentista" ? tx`and exists (select 1 from appointments a where a.patient_id = patients.id and a.professional_id = ${own?.id ?? null})` : tx``}`;
     if (!patient) return null;
     const links = await tx<{ id: string; contact_id: string; phone_e164: string; wa_profile_name: string | null; relationship: string; is_guardian: boolean; is_payer: boolean; verified_at: Date | null; opted_out_at: Date | null }[]>`
@@ -69,7 +70,7 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
           <Avatar name={p.full_name} size={56} />
           <div className="min-w-0 flex-1">
             <h1 className="t-h1 text-[28px] lg:text-[30px]">{p.full_name}</h1>
-            <p className="t-small mt-1">Cadastro desde {new Intl.DateTimeFormat("pt-BR").format(p.created_at)} · CPF {p.has_cpf ? "cadastrado (criptografado)" : "não informado"}</p>
+            <p className="t-small mt-1">Cadastro desde {new Intl.DateTimeFormat("pt-BR").format(p.created_at)}{p.source ? ` · veio por ${PATIENT_SOURCE_LABELS[p.source]}` : ""}{p.email ? ` · ${p.email}` : ""}<span className="simples:hidden"> · CPF {p.has_cpf ? "cadastrado (criptografado)" : "não informado"}</span></p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {canWrite && (
@@ -80,6 +81,8 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
                   <div className="grid gap-6 sm:grid-cols-2">
                     <Field label="Data de nascimento"><Input type="date" name="birthDate" defaultValue={p.birth_date ?? ""} /></Field>
                     <Field label="CPF (opcional)" hint="Fica criptografado e nunca vai para a IA. Em branco mantém o atual."><Input name="cpf" inputMode="numeric" autoComplete="off" /></Field>
+                    <Field label="E-mail"><Input name="email" type="email" defaultValue={p.email ?? ""} /></Field>
+                    <Field label="Como conheceu a clínica"><Select name="source" defaultValue={p.source ?? ""}><option value="">Não informado</option>{PATIENT_SOURCES.map((k) => <option key={k} value={k}>{PATIENT_SOURCE_LABELS[k]}</option>)}</Select></Field>
                   </div>
                   <Field label="Observações administrativas"><Textarea name="notes" defaultValue={p.notes ?? ""} className="min-h-16" /></Field>
                   <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>

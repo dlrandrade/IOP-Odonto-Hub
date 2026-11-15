@@ -156,7 +156,6 @@ export default async function ConversationsPage({ searchParams }: { searchParams
                     </div>
                     <div className="mt-0.5 flex items-center justify-between gap-3">
                       <p className={cn("t-small truncate", r.unread_count > 0 && "text-bone-dim")}>{r.last_message_preview ?? "—"}</p>
-                      {r.unread_count > 0 && <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-acento px-1.5 font-mono text-[10.5px] font-semibold text-on" aria-label={`${r.unread_count} não lidas`}>{r.unread_count}</span>}
                     </div>
                     <div className="mt-2 flex items-center gap-1.5">
                       <StateTag state={r.state} urgent={urgent} assignee={r.assignee} />

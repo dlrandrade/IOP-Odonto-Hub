@@ -5,6 +5,14 @@ import { SubmitOnChange } from "@/components/client";
 import { Card, CardTitle, Empty, Input, PageHeader, Select, Table, buttonClass } from "@/components/ui";
 import { addDays, formatShort, localDate, WEEKDAY_LABELS } from "@/lib/datetime";
 import { loadDashboard } from "@/services/dashboard";
+import { Star, TrendingUp } from "lucide-react";
+import { ActionForm, Modal } from "@/components/client";
+import { GoogleShare } from "@/components/google-share";
+import { Button, Field } from "@/components/ui";
+import { can } from "@/domain/permissions";
+import { PATIENT_SOURCE_LABELS, type PatientSource } from "@/domain/contact";
+import { loadReviewHistory, qrDataUrl, reviewLink } from "@/services/google-reviews";
+import { saveReviewSnapshotAction } from "../configuracoes/actions";
 
 export const metadata = { title: "Indicadores" };
 
@@ -31,9 +39,23 @@ export default async function IndicatorsPage({ searchParams }: { searchParams: P
     const dash = await loadDashboard(tx, { clinicId: ctx.clinicId, tz: ctx.tz, from, to, professionalId });
     const tasks = await tx<{ id: string; title: string; detail: string | null; conversation_id: string | null; created_at: Date }[]>`
       select id, title, detail, conversation_id, created_at from tasks where status = 'open' order by created_at desc limit 6`;
-    return { professionals, dash, tasks, professionalId };
+    const reviews = await loadReviewHistory(tx, 400);
+    const sources = await tx<{ source: PatientSource | null; n: number }[]>`
+      select source, count(*)::int as n from patients
+      where merged_into_patient_id is null and created_at >= ${from}::date and created_at < ${to}::date + 1
+      group by source order by n desc`;
+    return { professionals, dash, tasks, professionalId, reviews, sources };
   });
   const d = data.dash;
+  const reviews = data.reviews;
+  const canManage = can(ctx.role, "settings.manage");
+  const googleLink = reviewLink(ctx.clinic);
+  const googleQr = googleLink ? await qrDataUrl(googleLink) : null;
+  // Uma barra por mês (último registro de cada mês), até 12 meses.
+  const MONTH = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+  const byMonth = new Map<string, number>();
+  for (const pt of reviews.points) byMonth.set(pt.day.slice(0, 7), pt.count);
+  const monthly = [...byMonth.entries()].slice(-12).map(([ym, count]) => ({ label: MONTH[Number(ym.slice(5)) - 1] ?? ym, hint: `${MONTH[Number(ym.slice(5)) - 1]}/${ym.slice(0, 4)}`, count }));
   const showFunnel = ["admin", "gestor", "comercial", "recepcao"].includes(ctx.role);
   const financeOnly = ctx.role === "financeiro";
 
@@ -64,6 +86,68 @@ export default async function IndicatorsPage({ searchParams }: { searchParams: P
               <Stat tone="navy" label="Contato → avaliação" value={d.conversion.rate == null ? "—" : `${Math.round(d.conversion.rate * 100)}%`}
                 note={`${d.conversion.converted} de ${d.conversion.eligible} em 30 dias${d.conversion.partial ? " · parcial" : ""}`} />
             )}
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <Card>
+              <CardTitle hint="Nota e total de avaliações no Google Meu Negócio, mês a mês. Atualiza sozinho todo dia quando o Google está ligado; dá para registrar à mão."
+                action={canManage ? (
+                  <Modal trigger="Registrar números" title="Avaliações no Google" description="Copie a nota e o total que aparecem no seu perfil do Google." triggerClass={buttonClass("outline", "sm")}>
+                    <ActionForm action={saveReviewSnapshotAction} className="space-y-5" resetOnDone={false}>
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <Field label="Data"><Input type="date" name="day" defaultValue={today} max={today} required /></Field>
+                        <Field label="Total de avaliações"><Input type="number" name="count" min={0} defaultValue={reviews.latest?.count ?? ""} required /></Field>
+                        <Field label="Nota (1 a 5)"><Input name="rating" inputMode="decimal" placeholder="4,8" defaultValue={reviews.latest?.rating?.toString().replace(".", ",") ?? ""} /></Field>
+                      </div>
+                      <div className="flex justify-end border-t border-line pt-5"><Button type="submit">Salvar</Button></div>
+                    </ActionForm>
+                  </Modal>) : undefined}>
+                Avaliações no Google
+              </CardTitle>
+              {reviews.points.length === 0 && !googleLink ? (
+                <Empty title="Google Meu Negócio ainda não cadastrado" action={canManage ? <Link href="/configuracoes?aba=google" className={buttonClass("outline", "sm")}>Cadastrar o Google</Link> : undefined}>
+                  Cadastre o link de avaliação para ganhar o QR code e acompanhar o crescimento das avaliações aqui.
+                </Empty>
+              ) : (
+                <div className="flex flex-1 flex-col gap-6">
+                  <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-md bg-line/70">
+                    {[
+                      ["Nota", reviews.latest?.rating != null ? reviews.latest.rating.toFixed(1).replace(".", ",") : "—", <Star key="s" size={18} className="text-gold" aria-hidden />],
+                      ["Avaliações", reviews.latest ? String(reviews.latest.count) : "—", null],
+                      ["Últimos 30 dias", reviews.growth30 == null ? "—" : `${reviews.growth30 >= 0 ? "+" : ""}${reviews.growth30}`, <TrendingUp key="t" size={18} className="text-ok" aria-hidden />],
+                    ].map(([k, v, icon]) => (
+                      <div key={String(k)} className="flex flex-col justify-between gap-3 bg-surface/90 p-5">
+                        <dt className="eyebrow text-bone-mute">{k}</dt>
+                        <dd className="display num flex items-center gap-2 text-[30px] leading-none">{v}{icon}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <Bars label="Total de avaliações no Google ao fim de cada mês" emptyText="Registre os números para ver o crescimento."
+                    data={monthly.map((m) => ({ key: m.label, hint: m.hint, value: m.count }))} />
+                  {googleLink && googleQr && <div className="border-t border-line pt-5"><GoogleShare reviewUrl={googleLink} profileUrl={ctx.clinic.google_business_url} qr={googleQr} clinicName={ctx.clinic.name} compact /></div>}
+                </div>
+              )}
+            </Card>
+            <Card>
+              <CardTitle hint="Como os pacientes cadastrados no período conheceram a clínica (campo da ficha).">Origem dos pacientes</CardTitle>
+              {data.sources.length === 0 ? <Empty title="Nenhum paciente novo no período" /> : (
+                <ul className="space-y-3">
+                  {data.sources.map((r) => {
+                    const total = data.sources.reduce((a, b) => a + b.n, 0);
+                    return (
+                      <li key={r.source ?? "nd"}>
+                        <div className="mb-1.5 flex items-baseline justify-between gap-3 text-[13.5px]">
+                          <span className={r.source === "google" ? "font-semibold" : ""}>{r.source ? PATIENT_SOURCE_LABELS[r.source] : "Não informado"}</span>
+                          <span className="num text-bone-dim">{r.n} · {Math.round((r.n / total) * 100)}%</span>
+                        </div>
+                        <span className="block h-2 overflow-hidden rounded-full bg-bone/[0.06]"><span className={`block h-full rounded-full ${r.source ? "bg-acento" : "bg-bone-mute/40"}`} style={{ width: `${(r.n / total) * 100}%` }} /></span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              <p className="t-small mt-auto pt-5">Preencha “Como conheceu a clínica” no cadastro do paciente para este gráfico ficar completo.</p>
+            </Card>
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
