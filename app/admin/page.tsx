@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getIdentity } from "@/auth/session";
 import { Logo } from "@/components/brand";
@@ -5,7 +6,7 @@ import { ThemeToggle } from "@/components/nav";
 import { ProfileForm } from "../perfil/profile-form";
 import { Stat } from "@/components/charts";
 import { ActionForm, Modal } from "@/components/client";
-import { Avatar, Badge, Button, buttonClass, Card, CardTitle, Checkbox, Empty, Field, Input, Select, Table } from "@/components/ui";
+import { Avatar, Badge, Button, buttonClass, Card, Checkbox, Empty, Field, InfoTip, Input, Select } from "@/components/ui";
 import { db } from "@/db/client";
 import { missingEnv } from "@/lib/env";
 import { logoutAction } from "../(auth)/actions";
@@ -34,12 +35,11 @@ export default async function PlatformPage() {
   const acting = clinics.find((c) => c.id === me.actingClinicId);
 
   return (
-    <main className="mx-auto max-w-6xl p-4 py-6 sm:p-6">
+    <main className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6 lg:px-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <Logo />
         <div className="flex items-center gap-2">
           <span className="hidden text-xs text-bone-mute sm:inline">{me.email}</span>
-          {acting && <form action={leaveClinicAction}><Button size="sm" variant="outline">Sair de “{acting.name}”</Button></form>}
           <Modal trigger={<><Avatar name={me.platformName ?? me.email} src={me.platformAvatar} size={26} /> <span className="hidden sm:inline">{me.platformName ?? "Meu perfil"}</span></>} title="Meu perfil" description="Seu nome e sua foto aparecem quando você entra nas clínicas como suporte." wide triggerClass={buttonClass("ghost", "sm")} triggerTitle="Meu perfil">
             <ProfileForm name={me.platformName ?? ""} email={me.email} avatar={me.platformAvatar} roleLabel="Operador da plataforma" />
           </Modal>
@@ -47,6 +47,15 @@ export default async function PlatformPage() {
           <form action={logoutAction}><Button size="sm" variant="ghost">Sair</Button></form>
         </div>
       </div>
+      {acting && (
+        <div className="vidro mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg px-5 py-3.5">
+          <p className="text-[14px]">Você está acessando <strong>{acting.name}</strong> como suporte.</p>
+          <div className="flex items-center gap-2">
+            <Link href="/" className={buttonClass("primary", "sm")}>Voltar para a clínica</Link>
+            <form action={leaveClinicAction}><Button size="sm" variant="ghost">Sair da clínica</Button></form>
+          </div>
+        </div>
+      )}
       <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="eyebrow mb-2 text-bone-mute">Operador da plataforma</p>
@@ -78,40 +87,80 @@ export default async function PlatformPage() {
           </ActionForm>
         </Modal>
       </div>
-      <div className="mb-4 grid gap-6 sm:grid-cols-3">
+      <div className="mb-10 grid gap-6 sm:grid-cols-3">
         <Stat label="Clínicas" value={String(clinics.length)} note={`${clinics.filter((c) => c.status === "active").length} ativas · ${clinics.filter((c) => c.status === "trial").length} em teste`} />
         <Stat label="Conversas (30 dias)" value={String(clinics.reduce((a, c) => a + c.conversations_30d, 0))} tone="sun" />
         <Stat label="Consultas marcadas (30 dias)" value={String(clinics.reduce((a, c) => a + c.appointments_30d, 0))} tone="navy" />
       </div>
-      <Card>
-        <CardTitle hint="Apenas números agregados; para ver dados de uma clínica é preciso entrar nela (o acesso fica registrado na auditoria da clínica).">Clientes</CardTitle>
-        {clinics.length === 0 ? <Empty title="Nenhuma clínica ainda">Crie a primeira clínica cliente ou uma demonstração.</Empty> : (
-          <Table head={["Clínica", "Situação", "Usuários", "Conversas 30d", "Consultas 30d", "WhatsApp", "IA", ""]}>
+      <section aria-labelledby="clientes">
+        <div className="mb-4 flex items-end justify-between gap-4">
+          <div>
+            <h2 id="clientes" className="t-h2 flex items-center gap-1.5">Clientes <InfoTip text="Apenas números agregados; para ver dados de uma clínica é preciso entrar nela (o acesso fica registrado na auditoria da clínica)." /></h2>
+            <p className="t-small mt-1">{clinics.length} clínica{clinics.length === 1 ? "" : "s"} · números dos últimos 30 dias</p>
+          </div>
+        </div>
+        {clinics.length === 0 ? <Card><Empty title="Nenhuma clínica ainda">Crie a primeira clínica cliente ou uma demonstração.</Empty></Card> : (
+          // Um cartão por clínica (em vez de tabela larga): identidade, números e uma ação principal; o resto em "Gerenciar".
+          <ul className="space-y-4">
             {clinics.map((c) => (
-              <tr key={c.id}>
-                <td><p className="font-semibold">{c.name}</p><p className="text-[11px] text-bone-mute">desde {new Intl.DateTimeFormat("pt-BR").format(c.created_at)}{c.is_demo ? " · demo" : ""}</p></td>
-                <td>
-                  <ActionForm action={clinicStatusAction} className="flex items-center gap-1">
-                    <input type="hidden" name="clinicId" value={c.id} />
-                    <Select name="status" defaultValue={c.status} aria-label={`Situação de ${c.name}`} className="h-8 w-auto text-xs">{Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>
-                    <Button size="sm" variant="ghost">ok</Button>
-                  </ActionForm>
-                </td>
-                <td>{c.users}</td><td>{c.conversations_30d}</td><td>{c.appointments_30d}</td>
-                <td><Badge tone={c.wa ? "ok" : "neutral"}>{c.wa ? "conectado" : "pendente"}</Badge></td>
-                <td><Badge tone={c.ai_enabled ? "ok" : "neutral"}>{c.ai_enabled ? "ativa" : "desligada"}</Badge></td>
-                <td>
-                  <div className="flex items-center justify-end gap-2">
-                    {c.is_demo && <form action={demoActivityAction}><input type="hidden" name="clinicId" value={c.id} /><Button size="sm" variant="outline" title="Cria conversas, tarefas e consultas de hoje (fictícias)">Movimentar demo</Button></form>}
-                    <form action={enterClinicAction}><input type="hidden" name="clinicId" value={c.id} /><input type="hidden" name="vista" value="simples" /><Button size="sm" variant="outline" title="Abre a clínica na visualização simples, como a equipe dela vê">Ver como cliente</Button></form>
-                    <form action={enterClinicAction}><input type="hidden" name="clinicId" value={c.id} /><Button size="sm" title="Abre a clínica com todos os detalhes">Entrar</Button></form>
+              <li key={c.id} className="vidro grid items-center gap-5 rounded-lg p-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1.6fr)_auto] lg:gap-8">
+                <div className="flex min-w-0 items-center gap-4">
+                  <span className="icone-app size-12 shrink-0 rounded-[14px] font-display text-[17px] font-bold">{c.name.split(/\s+/).filter((w) => w.length > 2).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "C"}</span>
+                  <div className="min-w-0">
+                    <p className="t-h3 truncate text-[16px]" title={c.name}>{c.name}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <Badge tone={c.status === "active" ? "ok" : c.status === "suspended" ? "danger" : "warn"}>{STATUS_LABEL[c.status] ?? c.status}</Badge>
+                      {c.is_demo && <Badge tone="sun">Demo</Badge>}
+                      <span className="t-small">desde {new Intl.DateTimeFormat("pt-BR").format(c.created_at)}</span>
+                    </div>
                   </div>
-                </td>
-              </tr>
+                </div>
+                <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-md bg-line/60 sm:grid-cols-5">
+                  {([
+                    ["Usuários", String(c.users)],
+                    ["Conversas", String(c.conversations_30d)],
+                    ["Consultas", String(c.appointments_30d)],
+                    ["WhatsApp", c.wa ? "Conectado" : "Pendente", c.wa ? "bg-ok" : "bg-bone-mute/50"],
+                    ["IA", c.ai_enabled ? "Ativa" : "Desligada", c.ai_enabled ? "bg-ok" : "bg-bone-mute/50"],
+                  ] as [string, string, string?][]).map(([k, v, dot]) => (
+                    <div key={k} className="flex flex-col gap-1 bg-surface/80 px-3 py-2.5">
+                      <dt className="t-small truncate text-[11.5px]">{k}</dt>
+                      <dd className={dot ? "flex items-center gap-1.5 text-[13px] font-medium" : "display num text-[20px] leading-none"}>{dot && <span aria-hidden className={`size-2 shrink-0 rounded-full ${dot}`} />}{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+                <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                  <form action={enterClinicAction}><input type="hidden" name="clinicId" value={c.id} /><Button title="Abre a clínica com todos os detalhes">Entrar</Button></form>
+                  <Modal trigger="Gerenciar" title={c.name} description="Situação da conta, visão do cliente e dados de demonstração." triggerClass={buttonClass("outline")}>
+                    <div className="space-y-6">
+                      <form action={enterClinicAction} className="flex items-center justify-between gap-4 rounded-lg border border-line p-4">
+                        <input type="hidden" name="clinicId" value={c.id} /><input type="hidden" name="vista" value="simples" />
+                        <span><span className="t-h3 block">Ver como cliente</span><span className="t-small">Abre na visualização simples, como a equipe da clínica vê.</span></span>
+                        <Button variant="outline" size="sm">Abrir</Button>
+                      </form>
+                      <ActionForm action={clinicStatusAction} className="space-y-4" resetOnDone={false}>
+                        <input type="hidden" name="clinicId" value={c.id} />
+                        <Field label="Situação da conta" hint="Suspensa: a equipe da clínica perde o acesso até reativar.">
+                          <Select name="status" defaultValue={c.status}>{Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</Select>
+                        </Field>
+                        <div className="flex justify-end"><Button type="submit" size="sm">Salvar situação</Button></div>
+                      </ActionForm>
+                      {c.is_demo && (
+                        <form action={demoActivityAction} className="flex items-center justify-between gap-4 rounded-lg border border-line p-4">
+                          <input type="hidden" name="clinicId" value={c.id} />
+                          <span><span className="t-h3 block">Movimentar demonstração</span><span className="t-small">Cria conversas, tarefas e consultas de hoje (fictícias).</span></span>
+                          <Button variant="outline" size="sm">Movimentar</Button>
+                        </form>
+                      )}
+                      <p className="t-small border-t border-line pt-4">Custo estimado de IA (30 dias): US$ {(Number(c.ai_cost) / 100).toFixed(2).replace(".", ",")}</p>
+                    </div>
+                  </Modal>
+                </div>
+              </li>
             ))}
-          </Table>
+          </ul>
         )}
-      </Card>
+      </section>
     </main>
   );
 }
