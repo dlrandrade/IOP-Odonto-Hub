@@ -98,7 +98,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
     const [template] = await tx`select 1 from message_templates where name = 'retomada_contato' and wa_template_status = 'approved'`;
     const [integ] = await db()<{ wa_provider: string }[]>`select wa_provider from clinic_integrations where clinic_id = ${ctx.clinicId}`;
     if (selected.unread_count > 0 && selected.assigned_to === ctx.userId) await tx`update conversations set unread_count = 0 where id = ${selected.id}`;
-    return { rows, selected, detail: detail!, messages, patients, appointments, users, allPatients, hasTemplate: !!template, windowRule: integ?.wa_provider !== "evolution" };
+    return { rows, selected, detail: detail!, messages, patients, appointments, users, allPatients, hasTemplate: !!template, windowRule: integ?.wa_provider !== "evolution" && integ?.wa_provider !== "wacli" };
   });
 
   const href = (params: Record<string, string | null>) => {

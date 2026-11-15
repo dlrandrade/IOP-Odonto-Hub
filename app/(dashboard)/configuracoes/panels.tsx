@@ -5,7 +5,7 @@ import { Check, Loader2, QrCode, Smartphone, TriangleAlert } from "lucide-react"
 import { ActionForm } from "@/components/client";
 import { Badge, Button, Field, Input, Notice, Select } from "@/components/ui";
 import { cn } from "@/lib/format";
-import { evolutionLogoutAction, evolutionQrAction, evolutionStatusAction, listModelsAction, saveEvolutionAction, saveLlmAction, testLlmAction, useOfficialWhatsAppAction } from "./actions";
+import { connectWacliAction, evolutionLogoutAction, evolutionQrAction, evolutionStatusAction, listFreeModelsAction, listModelsAction, saveEvolutionAction, saveLlmAction, testLlmAction, useOfficialWhatsAppAction, wacliLogoutAction, wacliStatusAction } from "./actions";
 
 /** Escolha entre opções do mesmo peso: cartões do mesmo tamanho, lado a lado. */
 export function ChoiceCards<T extends string>({ name, value, onChange, options }: {
@@ -33,21 +33,23 @@ export function ChoiceCards<T extends string>({ name, value, onChange, options }
 
 // ───────────── WhatsApp ─────────────
 
-export function WhatsAppPanel({ provider, official, evolution }: {
-  provider: "cloud" | "evolution";
+export function WhatsAppPanel({ provider, official, evolution, wacli }: {
+  provider: "cloud" | "evolution" | "wacli";
   official: ReactNode;
   evolution: { baseUrl: string; instance: string; hasKey: boolean; webhookUrl: string; connected: boolean };
+  wacli: { platformGateway: boolean; ownUrl: string; hasOwnToken: boolean; connected: boolean };
 }) {
   const [choice, setChoice] = useState(provider);
   return (
     <div className="space-y-8">
       <ChoiceCards name="channel" value={choice} onChange={setChoice} options={[
         { value: "cloud", title: "WhatsApp oficial (Meta)", text: "Número verificado pela Meta. Estável e sem risco de bloqueio. Exige cadastro na Meta e mensagens prontas aprovadas.", tag: <Badge tone="ok">Recomendado</Badge> },
-        { value: "evolution", title: "Conexão por QR Code", text: "Usa o WhatsApp de um celular comum, pela Evolution API. Rápido de ligar, mas não é oficial.", tag: <Badge tone="warn">Não oficial</Badge> },
+        { value: "wacli", title: "QR Code direto (wacli)", text: "Leia um QR Code com o celular da clínica e pronto. Roda no gateway da plataforma, sem servidor extra.", tag: <Badge tone="warn">Não oficial</Badge> },
+        { value: "evolution", title: "QR Code pela Evolution API", text: "Para quem já tem um servidor Evolution API próprio. Também não é oficial.", tag: <Badge tone="warn">Não oficial</Badge> },
       ]} />
       {choice === "cloud" ? (
         <div className="space-y-6">
-          {provider === "evolution" && (
+          {provider !== "cloud" && (
             <ActionForm action={useOfficialWhatsAppAction} className="flex flex-wrap items-center justify-between gap-4 rounded-md border border-line p-5">
               <p className="t-body text-bone-dim">Hoje a clínica usa a conexão por QR Code. Quer voltar ao WhatsApp oficial?</p>
               <Button>Usar o oficial</Button>
@@ -55,7 +57,91 @@ export function WhatsAppPanel({ provider, official, evolution }: {
           )}
           {official}
         </div>
-      ) : <EvolutionSetup {...evolution} active={provider === "evolution"} />}
+      ) : choice === "wacli" ? <WacliSetup {...wacli} active={provider === "wacli"} /> : <EvolutionSetup {...evolution} active={provider === "evolution"} />}
+    </div>
+  );
+}
+
+const RISK = (
+  <Notice tone="sun">
+    <span className="flex gap-3"><TriangleAlert size={18} className="mt-0.5 shrink-0 text-gold" aria-hidden />
+      <span>Esta conexão não é oficial: ela viola os termos do WhatsApp e <strong>o número pode ser bloqueado</strong>, principalmente se mandar muitas mensagens para quem não salvou o contato. Use um número só da clínica, mantenha o celular ligado e na internet, e prefira o oficial quando puder. As regras de descadastro e limite de mensagens continuam valendo.</span>
+    </span>
+  </Notice>
+);
+
+function WacliSetup({ platformGateway, ownUrl, hasOwnToken, connected, active }: { platformGateway: boolean; ownUrl: string; hasOwnToken: boolean; connected: boolean; active: boolean }) {
+  const [status, setStatus] = useState<{ state: string; image: string | null; pairCode: string | null; error: string | null }>({ state: connected ? "connected" : "idle", image: null, pairCode: null, error: null });
+  const [byPhone, setByPhone] = useState(false);
+  const [ownGateway, setOwnGateway] = useState(!!ownUrl || !platformGateway);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [, start] = useTransition();
+
+  const poll = () => {
+    if (timer.current) clearInterval(timer.current);
+    const tick = () => start(async () => {
+      const s = await wacliStatusAction();
+      setStatus(s);
+      if (["connected", "error", "disconnected", "idle"].includes(s.state) && timer.current) { clearInterval(timer.current); timer.current = null; }
+    });
+    tick();
+    timer.current = setInterval(tick, 3000);
+  };
+  useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
+  useEffect(() => { if (active) start(async () => setStatus(await wacliStatusAction())); }, [active]);
+
+  const on = status.state === "connected";
+  return (
+    <div className="space-y-6">
+      {RISK}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="flex h-full flex-col rounded-md border border-line p-6">
+          <h3 className="t-h3 mb-1">1. Conectar</h3>
+          <p className="t-small mb-5">{platformGateway ? "A plataforma já mantém o servidor que conversa com o WhatsApp. É só gerar o QR Code." : "Informe o servidor (gateway wacli) que a sua equipe instalou."}</p>
+          <ActionForm action={connectWacliAction} resetOnDone={false} className="flex flex-1 flex-col gap-5">
+            {platformGateway && (
+              <label className="flex items-center gap-2.5 text-[13.5px]"><input type="checkbox" checked={ownGateway} onChange={(e) => setOwnGateway(e.target.checked)} className="size-4 accent-[var(--color-gold)]" /> Usar um gateway próprio</label>
+            )}
+            {ownGateway && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field label="Endereço do gateway"><Input name="gatewayUrl" type="url" defaultValue={ownUrl} placeholder="https://wa.suaclinica.com.br" required /></Field>
+                <Field label="Chave do gateway" hint={hasOwnToken ? "Já salva. Preencha só para trocar." : "Fica guardada criptografada."}><Input name="gatewayToken" type="password" autoComplete="off" placeholder={hasOwnToken ? "••••••••" : ""} /></Field>
+              </div>
+            )}
+            <label className="flex items-center gap-2.5 text-[13.5px]"><input type="checkbox" checked={byPhone} onChange={(e) => setByPhone(e.target.checked)} className="size-4 accent-[var(--color-gold)]" /> Prefiro digitar um código no celular em vez de ler o QR Code</label>
+            {byPhone && <Field label="Número do WhatsApp da clínica" hint="Com DDI e DDD, ex.: 55 11 98765-4321."><Input name="phone" inputMode="tel" required /></Field>}
+            <div className="mt-auto flex justify-end border-t border-line pt-5">
+              <Button type="submit" onClick={() => setTimeout(poll, 1200)} disabled={on}>{byPhone ? "Gerar código" : <><QrCode aria-hidden /> Gerar QR Code</>}</Button>
+            </div>
+          </ActionForm>
+        </section>
+        <section className="flex h-full flex-col rounded-md border border-line p-6">
+          <div className="mb-1 flex items-center justify-between gap-3">
+            <h3 className="t-h3">2. Ler com o celular da clínica</h3>
+            {on ? <Badge tone="ok">Conectado</Badge> : status.state === "pairing" ? <Badge tone="warn">Aguardando leitura</Badge> : <Badge>Desconectado</Badge>}
+          </div>
+          <p className="t-small mb-5">No celular: WhatsApp → Configurações → Aparelhos conectados → Conectar aparelho{status.pairCode ? " → Conectar com número de telefone" : ""}.</p>
+          <div className="flex min-h-64 flex-1 items-center justify-center rounded-sm bg-surface-2/50 p-5">
+            {on ? (
+              <p className="flex flex-col items-center gap-3 text-center"><Smartphone size={32} className="text-ok" aria-hidden /><span className="t-h3">Celular conectado</span><span className="t-small">As mensagens já chegam em Conversas e as automações já enviam por aqui.</span></p>
+            ) : status.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={status.image} alt="QR Code para conectar o WhatsApp" className="size-60 rounded-sm bg-white p-2" />
+            ) : status.pairCode ? (
+              <p className="text-center"><span className="t-small block">Digite este código no celular</span><span className="display mt-2 block text-[32px] tracking-[0.2em]">{status.pairCode}</span></p>
+            ) : status.state === "pairing" ? (
+              <Loader2 size={28} className="animate-spin text-bone-mute" aria-label="Gerando" />
+            ) : (
+              <p className="flex flex-col items-center gap-3 text-center"><QrCode size={32} className="text-bone-mute" aria-hidden /><span className="t-small max-w-xs">{status.error ?? "Clique em “Gerar QR Code”. O código se renova sozinho até o celular ler."}</span></p>
+            )}
+          </div>
+          {on && (
+            <div className="mt-5 flex justify-end border-t border-line pt-5">
+              <ActionForm action={wacliLogoutAction}><Button variant="danger">Desconectar celular</Button></ActionForm>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   );
 }
@@ -83,11 +169,7 @@ function EvolutionSetup({ baseUrl, instance, hasKey, webhookUrl, connected, acti
 
   return (
     <div className="space-y-6">
-      <Notice tone="sun">
-        <span className="flex gap-3"><TriangleAlert size={18} className="mt-0.5 shrink-0 text-gold" aria-hidden />
-          <span>Esta conexão não é oficial: ela viola os termos do WhatsApp e <strong>o número pode ser bloqueado</strong>, principalmente se mandar muitas mensagens para quem não salvou o contato. Use um número só da clínica, mantenha o celular ligado e na internet, e prefira o oficial quando puder. As regras de descadastro e limite de mensagens continuam valendo.</span>
-        </span>
-      </Notice>
+      {RISK}
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="flex h-full flex-col rounded-md border border-line p-6">
           <h3 className="t-h3 mb-1">1. Servidor Evolution API</h3>
@@ -135,11 +217,16 @@ function EvolutionSetup({ baseUrl, instance, hasKey, webhookUrl, connected, acti
 
 // ───────────── Provedor de IA ─────────────
 
-export function LlmPanel({ provider, model, baseUrl, hasKey, checkedAt, lastError, platformReady }: {
+export function LlmPanel({ provider, model, baseUrl, hasKey, checkedAt, lastError, platformReady, freeAuto, fallbackModels }: {
   provider: "platform" | "anthropic" | "openrouter" | "openai_compatible"; model: string; baseUrl: string; hasKey: boolean; checkedAt: string | null; lastError: string | null; platformReady: boolean;
+  freeAuto: boolean; fallbackModels: string[];
 }) {
   const [choice, setChoice] = useState(provider);
-  const [models, setModels] = useState<string[]>(model ? [model] : []);
+  const [mode, setMode] = useState<"pick" | "free">(freeAuto ? "free" : "pick");
+  const [free, setFree] = useState<{ id: string; context: number }[]>([]);
+  const [pinned, setPinned] = useState<string[]>(freeAuto ? fallbackModels : []);
+  const [reserves, setReserves] = useState<string[]>(freeAuto ? ["", ""] : [fallbackModels[0] ?? "", fallbackModels[1] ?? ""]);
+  const [models, setModels] = useState<string[]>([...new Set([model, ...fallbackModels].filter(Boolean))]);
   const [selected, setSelected] = useState(model);
   const [note, setNote] = useState<{ ok: boolean; message: string } | null>(lastError ? { ok: false, message: lastError } : null);
   const [pending, start] = useTransition();
@@ -151,7 +238,13 @@ export function LlmPanel({ provider, model, baseUrl, hasKey, checkedAt, lastErro
     if (r.error) setNote({ ok: false, message: r.error });
     else { setModels(r.models); setNote({ ok: true, message: `${r.models.length} modelos encontrados.` }); if (!r.models.includes(selected)) setSelected(""); }
   });
+  const loadFree = () => start(async () => {
+    const r = await listFreeModelsAction(data());
+    if (r.error) setNote({ ok: false, message: r.error });
+    else { setFree(r.models); setNote({ ok: true, message: r.models.length ? `${r.models.length} modelos gratuitos com suporte a ferramentas agora.` : "Nenhum modelo gratuito com ferramentas disponível agora." }); }
+  });
   const test = () => start(async () => setNote(await testLlmAction(data())));
+  const freeMode = choice === "openrouter" && mode === "free";
   const keyHint = hasKey && choice === provider ? "Já salva. Preencha só para trocar." : "Fica guardada criptografada; ninguém consegue ver depois.";
 
   return (
@@ -166,7 +259,42 @@ export function LlmPanel({ provider, model, baseUrl, hasKey, checkedAt, lastErro
         {choice !== "platform" && (
           <div className="grid gap-5 lg:grid-cols-2">
             {choice === "openai_compatible" && <Field label="Endereço da API" className="lg:col-span-2" hint="Até o /v1, sem /chat/completions."><Input name="baseUrl" type="url" defaultValue={baseUrl} placeholder="https://api.exemplo.com/v1" /></Field>}
-            <Field label="Chave de API" hint={keyHint}><Input name="apiKey" type="password" autoComplete="off" placeholder={hasKey && choice === provider ? "••••••••" : ""} /></Field>
+            {choice === "openrouter" && (
+              <div className="lg:col-span-2">
+                <ChoiceCards name="orMode" value={mode} onChange={setMode} options={[
+                  { value: "pick", title: "Eu escolho o modelo", text: "Um modelo principal e, se quiser, até dois reservas para quando ele falhar." },
+                  { value: "free", title: "Só modelos gratuitos, em rodízio", text: "O sistema usa os modelos gratuitos do momento e troca sozinho quando um atinge o limite ou sai do ar.", tag: <Badge tone="ok">Custo zero</Badge> },
+                ]} />
+                {freeMode && <input type="hidden" name="freeAuto" value="on" />}
+              </div>
+            )}
+            <Field label="Chave de API" hint={keyHint} className={freeMode ? "lg:col-span-2" : undefined}><Input name="apiKey" type="password" autoComplete="off" placeholder={hasKey && choice === provider ? "••••••••" : ""} /></Field>
+            {freeMode ? (
+              <div className="space-y-4 lg:col-span-2">
+                <Notice tone="sun">Modelos gratuitos têm limite diário de uso e podem ficar mais lentos ou sair do ar sem aviso. O rodízio contorna isso, mas a qualidade das respostas varia de um modelo para outro. Se nenhum responder, a conversa vai para a equipe, como sempre.</Notice>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="t-small">Opcional: marque os que devem ser tentados primeiro. Os demais entram na fila automaticamente.</p>
+                  <Button type="button" variant="outline" onClick={loadFree} disabled={pending}>{pending ? <Loader2 className="animate-spin" aria-hidden /> : null}Ver gratuitos de agora</Button>
+                </div>
+                {(free.length > 0 || pinned.length > 0) && (
+                  <ul className="grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2">
+                    {[...new Set([...pinned, ...free.map((m) => m.id)])].map((id) => {
+                      const info = free.find((m) => m.id === id);
+                      const on = pinned.includes(id);
+                      return (
+                        <li key={id}>
+                          <label className={cn("flex h-14 cursor-pointer items-center gap-3 rounded-md border px-3", on ? "border-acento bg-acento/[0.07]" : "border-line hover:border-bone-mute/50")}>
+                            <input type="checkbox" name="fallback" value={id} checked={on} onChange={(e) => setPinned((p) => e.target.checked ? [...p, id].slice(0, 5) : p.filter((x) => x !== id))} className="size-4 accent-[var(--color-gold)]" />
+                            <span className="min-w-0"><span className="block truncate font-mono text-[12.5px]">{id}</span><span className="t-small">{info ? `contexto de ${Math.round(info.context / 1000)} mil tokens` : "fora da lista de agora"}</span></span>
+                            {on && <span className="ml-auto font-mono text-[11px] text-acento">{pinned.indexOf(id) + 1}º</span>}
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            ) : (
             <Field label="Modelo" hint="Carregue a lista e escolha. O modelo precisa aceitar ferramentas (tool calling).">
               <div className="flex gap-3">
                 <Select name="model" value={selected} onChange={(e) => setSelected(e.target.value)} className="min-w-0 flex-1">
@@ -176,6 +304,19 @@ export function LlmPanel({ provider, model, baseUrl, hasKey, checkedAt, lastErro
                 <Button type="button" variant="outline" onClick={load} disabled={pending}>{pending ? <Loader2 className="animate-spin" aria-hidden /> : null}Carregar modelos</Button>
               </div>
             </Field>
+            )}
+            {!freeMode && choice !== "anthropic" && models.length > 0 && (
+              <div className="grid gap-5 sm:grid-cols-2 lg:col-span-2">
+                {[0, 1].map((i) => (
+                  <Field key={i} label={`Reserva ${i + 1} (opcional)`} hint={i === 0 ? "Usado se o principal falhar por limite ou instabilidade." : "Tentado depois da reserva 1."}>
+                    <Select name="fallback" value={reserves[i]} onChange={(e) => setReserves((r) => r.map((x, j) => (j === i ? e.target.value : x)))}>
+                      <option value="">Nenhum</option>
+                      {models.filter((m) => m !== selected).map((m) => <option key={m} value={m}>{m}</option>)}
+                    </Select>
+                  </Field>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {note && <p role="status" className={cn("rounded-sm border-l-2 px-4 py-3 text-[14px]", note.ok ? "border-ok bg-ok-soft text-ok" : "border-danger bg-danger-soft text-danger")}>{note.message}</p>}

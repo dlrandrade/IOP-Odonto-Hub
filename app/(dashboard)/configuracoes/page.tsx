@@ -32,13 +32,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     rules: tab === "agenda" ? await tx<{ professional_id: string; weekday: number; start_time: string; end_time: string }[]>`select professional_id, weekday, start_time::text, end_time::text from availability_rules order by start_time` : [],
     resources: tab === "agenda" ? await tx<{ id: string; name: string; kind: string; active: boolean }[]>`select id, name, kind, active from resources where kind <> 'professional' order by kind, name` : [],
     wa: (tab === "whatsapp" || tab === "ia") && isAdmin ? (await tx<{
-      wa_provider: "cloud" | "evolution"; wa_phone_number_id: string | null; wa_business_account_id: string | null; wa_display_phone: string | null; has_token: boolean; has_secret: boolean;
+      wa_provider: "cloud" | "evolution" | "wacli"; wacli_gateway_url: string | null; has_wacli_token: boolean; wacli_connected_at: Date | null; wa_phone_number_id: string | null; wa_business_account_id: string | null; wa_display_phone: string | null; has_token: boolean; has_secret: boolean;
       wa_verify_token: string; wa_connected_at: Date | null; wa_last_inbound_at: Date | null; evo_base_url: string | null; evo_instance: string | null; has_evo_key: boolean; evo_webhook_token: string; evo_connected_at: Date | null;
-      llm_provider: "platform" | "anthropic" | "openrouter" | "openai_compatible"; llm_model: string | null; llm_base_url: string | null; has_llm_key: boolean; llm_checked_at: Date | null; llm_last_error: string | null;
+      llm_provider: "platform" | "anthropic" | "openrouter" | "openai_compatible"; llm_free_auto: boolean; llm_fallback_models: string[]; llm_model: string | null; llm_base_url: string | null; has_llm_key: boolean; llm_checked_at: Date | null; llm_last_error: string | null;
     }[]>`
       select wa_provider, wa_phone_number_id, wa_business_account_id, wa_display_phone, wa_access_token_enc is not null as has_token, wa_app_secret_enc is not null as has_secret, wa_verify_token, wa_connected_at, wa_last_inbound_at,
              evo_base_url, evo_instance, evo_api_key_enc is not null as has_evo_key, evo_webhook_token, evo_connected_at,
-             llm_provider, llm_model, llm_base_url, llm_api_key_enc is not null as has_llm_key, llm_checked_at, llm_last_error
+             wacli_gateway_url, wacli_gateway_token_enc is not null as has_wacli_token, wacli_connected_at,
+             llm_provider, llm_free_auto, llm_fallback_models, llm_model, llm_base_url, llm_api_key_enc is not null as has_llm_key, llm_checked_at, llm_last_error
       from clinic_integrations`)[0] : undefined,
     ops: tab === "ia" ? (await tx<{ cost: string; runs: number; failed: number; discarded: number }[]>`
       select (select coalesce(sum(cost_cents), 0)::text from ai_runs where created_at >= date_trunc('month', now())) as cost,
@@ -214,6 +215,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           <WhatsAppPanel
             provider={data.wa.wa_provider}
             evolution={{ baseUrl: data.wa.evo_base_url ?? "", instance: data.wa.evo_instance ?? "", hasKey: data.wa.has_evo_key, connected: !!data.wa.evo_connected_at, webhookUrl: `${env.appUrl}/api/webhooks/evolution/${data.wa.evo_webhook_token}` }}
+            wacli={{ platformGateway: !!(env.wacli.gatewayUrl && env.wacli.gatewayToken), ownUrl: data.wa.wacli_gateway_url ?? "", hasOwnToken: data.wa.has_wacli_token, connected: !!data.wa.wacli_connected_at }}
             official={
               <div className="grid gap-6 lg:grid-cols-2">
                 <section className="flex h-full flex-col rounded-md border border-line p-6">
@@ -258,7 +260,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         {data.wa && (
           <Card>
             <CardTitle hint="Escolha qual inteligência artificial responde os pacientes. A chave fica criptografada.">Provedor de IA</CardTitle>
-            <LlmPanel provider={data.wa.llm_provider} model={data.wa.llm_model ?? ""} baseUrl={data.wa.llm_base_url ?? ""} hasKey={data.wa.has_llm_key}
+            <LlmPanel provider={data.wa.llm_provider} model={data.wa.llm_model ?? ""} baseUrl={data.wa.llm_base_url ?? ""} hasKey={data.wa.has_llm_key} freeAuto={data.wa.llm_free_auto} fallbackModels={data.wa.llm_fallback_models}
               checkedAt={data.wa.llm_checked_at ? formatShort(data.wa.llm_checked_at, ctx.tz) : null} lastError={data.wa.llm_last_error} platformReady={!!env.anthropicKey} />
           </Card>
         )}

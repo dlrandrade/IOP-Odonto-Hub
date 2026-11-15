@@ -99,9 +99,9 @@ export class OpenAiCompatibleProvider implements LlmProvider {
       throw new LlmUnavailableError("Provedor de IA fora do ar", true);
     }
     const json: unknown = await res.json().catch(() => ({}));
-    if (res.status === 401 || res.status === 403) throw new LlmUnavailableError("Chave da IA recusada pelo provedor", false);
-    if (res.status === 429 || res.status >= 500) throw new LlmUnavailableError(`Provedor de IA indisponível (${res.status})`, true);
-    if (!res.ok) throw new LlmUnavailableError(`Provedor de IA recusou a requisição (${res.status})`, false);
+    if (res.status === 401 || res.status === 403) throw new LlmUnavailableError("Chave da IA recusada pelo provedor", false, res.status);
+    if (res.status === 429 || res.status >= 500) throw new LlmUnavailableError(`Provedor de IA indisponível (${res.status})`, true, res.status);
+    if (!res.ok) throw new LlmUnavailableError(`Provedor de IA recusou a requisição (${res.status})`, false, res.status);
     return fromOpenAiResponse(json, this.model);
   }
 }
@@ -115,4 +115,83 @@ export async function listOpenAiModels(baseUrl: string, apiKey: string | null): 
   if (!res.ok) throw new LlmUnavailableError(`Não foi possível listar os modelos (${res.status})`, false);
   const parsed = z.object({ data: z.array(z.object({ id: z.string() }).passthrough()) }).safeParse(await res.json());
   return parsed.success ? parsed.data.data.map((m) => m.id).sort() : [];
+}
+
+/* ───────────── OpenRouter: modelos gratuitos e rotação ───────────── */
+
+export type FreeModel = { id: string; context: number };
+const openRouterModel = z.object({
+  id: z.string(),
+  context_length: z.number().nullish(),
+  pricing: z.object({ prompt: z.union([z.string(), z.number()]).nullish(), completion: z.union([z.string(), z.number()]).nullish() }).partial().nullish(),
+  supported_parameters: z.array(z.string()).nullish(),
+}).passthrough();
+
+/**
+ * Filtra os modelos gratuitos que aceitam ferramentas (a assistente precisa de tool calling para consultar
+ * agenda e preços). Gratuito = sufixo ":free" ou preço zero de entrada e saída. Maior contexto primeiro.
+ */
+export function pickFreeToolModels(json: unknown): FreeModel[] {
+  const parsed = z.object({ data: z.array(z.unknown()) }).safeParse(json);
+  if (!parsed.success) return [];
+  const out: FreeModel[] = [];
+  for (const raw of parsed.data.data) {
+    const m = openRouterModel.safeParse(raw);
+    if (!m.success) continue;
+    const zero = (v: unknown) => v !== null && v !== undefined && Number(v) === 0;
+    const free = m.data.id.endsWith(":free") || (zero(m.data.pricing?.prompt) && zero(m.data.pricing?.completion));
+    if (!free || !(m.data.supported_parameters ?? []).includes("tools")) continue;
+    if (m.data.id === "openrouter/auto") continue;
+    out.push({ id: m.data.id, context: m.data.context_length ?? 0 });
+  }
+  return out.sort((a, b) => b.context - a.context || a.id.localeCompare(b.id));
+}
+
+let freeCache: { at: number; models: FreeModel[] } | null = null;
+/** Lista atual de modelos gratuitos do OpenRouter (cache de 1 h: a lista muda com frequência). */
+export async function listOpenRouterFreeModels(baseUrl: string, apiKey: string | null, now = Date.now()): Promise<FreeModel[]> {
+  if (freeCache && now - freeCache.at < 60 * 60 * 1000 && freeCache.models.length) return freeCache.models;
+  const res = await fetch(`${baseUrl.replace(/\/+$/, "")}/models`, { headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {}, signal: AbortSignal.timeout(20_000) })
+    .catch(() => { throw new LlmUnavailableError("Não foi possível consultar os modelos gratuitos", true); });
+  if (!res.ok) throw new LlmUnavailableError(`Não foi possível consultar os modelos gratuitos (${res.status})`, res.status >= 500);
+  const models = pickFreeToolModels(await res.json());
+  freeCache = { at: now, models };
+  return models;
+}
+export function resetFreeModelCache(): void { freeCache = null; }
+
+/** Modelos que falharam há pouco ficam de fora por 10 min (cota esgotada, fora do ar, removido). */
+const cooldown = new Map<string, number>();
+const COOLDOWN_MS = 10 * 60 * 1000;
+export function resetModelCooldown(): void { cooldown.clear(); }
+
+/**
+ * Tenta os modelos em ordem e passa para o próximo quando um falha por cota (429), instabilidade (5xx),
+ * modelo indisponível (404) ou rede. Chave recusada (401/403) para tudo: trocar de modelo não resolve.
+ */
+export class RoutingProvider implements LlmProvider {
+  readonly name = "openrouter_rotation";
+  constructor(private readonly candidates: () => Promise<string[]>, private readonly make: (model: string) => LlmProvider, private readonly maxTries = 4) {}
+
+  async complete(req: LlmRequest): Promise<LlmResponse> {
+    const all = await this.candidates();
+    if (all.length === 0) throw new LlmUnavailableError("Nenhum modelo gratuito com suporte a ferramentas disponível agora", true);
+    const now = Date.now();
+    const fresh = all.filter((m) => (cooldown.get(m) ?? 0) <= now);
+    // Se todos estão em espera, tenta mesmo assim (melhor do que não responder).
+    const order = (fresh.length ? fresh : all).slice(0, this.maxTries);
+    let last: unknown = null;
+    for (const model of order) {
+      try {
+        return await this.make(model).complete(req);
+      } catch (e) {
+        last = e;
+        if (e instanceof LlmUnavailableError && (e.status === 401 || e.status === 403)) throw e;
+        const switchable = !(e instanceof LlmUnavailableError) || e.retryable || e.status === 404 || e.status === 400;
+        if (!switchable) throw e;
+        cooldown.set(model, now + COOLDOWN_MS);
+      }
+    }
+    throw last instanceof LlmUnavailableError ? new LlmUnavailableError(`Todos os modelos tentados falharam: ${last.message}`, true, last.status) : new LlmUnavailableError("Todos os modelos tentados falharam", true);
+  }
 }

@@ -8,7 +8,7 @@ Especificação completa: [docs/PRD.md](docs/PRD.md). Decisões e desvios: [docs
 - Next.js 15 (App Router) + React 19 + TypeScript estrito + Tailwind v4. Deploy na Vercel.
 - Supabase: Postgres (com RLS), Auth, Storage privado e Realtime.
 - Acesso ao banco no servidor por SQL direto (`postgres`), sempre dentro de `asUser()` (RLS do usuário) ou, em webhooks/jobs, pela conexão de sistema filtrando `clinic_id`.
-- IA: `LlmProvider` configurável por clínica (Claude da plataforma, Anthropic, OpenRouter ou compatível com OpenAI), sempre com tool use. WhatsApp atrás de `WhatsAppProvider`: Cloud API oficial (padrão) ou Evolution API (QR code, não oficial). Transcrição atrás de `TranscriptionProvider`.
+- IA: `LlmProvider` configurável por clínica (Claude da plataforma, Anthropic, OpenRouter ou compatível com OpenAI), sempre com tool use. WhatsApp atrás de `WhatsAppProvider`: Cloud API oficial (padrão), gateway wacli ou Evolution API (QR code, não oficiais). Transcrição atrás de `TranscriptionProvider`.
 - Fila: tabela `scheduled_jobs` + worker (`/api/jobs/run`, cron) com `FOR UPDATE SKIP LOCKED`.
 
 ## Comandos
@@ -49,6 +49,7 @@ app/                      Next.js (App Router)
   onboarding/ setup/      criação da clínica; checagem de instalação
   api/webhooks/whatsapp   webhook da Cloud API
   api/webhooks/evolution  webhook da Evolution API (token secreto na URL)
+  api/webhooks/wacli      webhook do gateway wacli (token na URL + HMAC)
   api/jobs/run            worker (protegido por CRON_SECRET)
   api/media/[id]          mídia privada
 src/
@@ -59,6 +60,7 @@ src/
   auth/                   provedor de auth (Supabase | local) e sessão/contexto
   db/                     cliente Postgres (asUser, inTx)
   components/             UI (design system IOP Business em app/globals.css)
+gateway/wacli             gateway WhatsApp Web (wacli) multi-clínica, roda fora da Vercel (Docker)
 supabase/migrations       schema, RLS, views de indicadores
 supabase/local/shim.sql   só para Postgres puro (papéis e auth.users)
 tests/                    unit, integration e providers (.test.ts)

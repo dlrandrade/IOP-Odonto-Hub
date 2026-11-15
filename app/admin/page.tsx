@@ -27,7 +27,7 @@ export default async function PlatformPage() {
       (select count(*)::int from app_users u where u.clinic_id = c.id and u.active) as users,
       (select count(*)::int from conversations v where v.clinic_id = c.id and v.created_at > now() - interval '30 days') as conversations_30d,
       (select count(*)::int from appointments a where a.clinic_id = c.id and a.created_at > now() - interval '30 days') as appointments_30d,
-      exists (select 1 from clinic_integrations i where i.clinic_id = c.id and i.wa_phone_number_id is not null) as wa,
+      exists (select 1 from clinic_integrations i where i.clinic_id = c.id and case i.wa_provider when 'evolution' then i.evo_connected_at is not null when 'wacli' then i.wacli_connected_at is not null else i.wa_phone_number_id is not null end) as wa,
       (select coalesce(sum(cost_cents), 0)::text from ai_runs r where r.clinic_id = c.id and r.created_at > now() - interval '30 days') as ai_cost
     from clinics c order by c.created_at desc`;
   const acting = clinics.find((c) => c.id === me.actingClinicId);

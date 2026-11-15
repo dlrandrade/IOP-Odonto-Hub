@@ -9,8 +9,11 @@ import { parseSettings, settingsSchema } from "@/domain/settings";
 import { act, actorOf, bool, optStr, str, UserError } from "@/lib/action";
 import { decryptField, encryptField } from "@/lib/crypto";
 import { env } from "@/lib/env";
-import { buildProvider, listClaudeModels, listOpenAiModels, LlmUnavailableError, OPENROUTER_URL, type LlmSettings } from "@/integrations/llm";
-import { evolutionConfig } from "@/integrations/whatsapp";
+import { buildProvider, listClaudeModels, listOpenAiModels, listOpenRouterFreeModels, LlmUnavailableError, OPENROUTER_URL, type LlmSettings } from "@/integrations/llm";
+import { evolutionConfig, wacliGateway } from "@/integrations/whatsapp";
+import { wacliConnect, wacliLogout, wacliStatus } from "@/integrations/whatsapp/wacli";
+import QRCode from "qrcode";
+import { randomBytes } from "node:crypto";
 import { ensureEvolutionInstance, evolutionLogout, evolutionQr, evolutionState, setEvolutionWebhook, type EvolutionConfig } from "@/integrations/whatsapp/evolution";
 import { WEEKDAY_KEYS, type BusinessHours } from "@/lib/datetime";
 import { audit, diff } from "@/services/audit";
@@ -268,6 +271,72 @@ export async function useOfficialWhatsAppAction(): Promise<ActionState> {
   });
 }
 
+// ───────────── WhatsApp por QR Code no gateway wacli ─────────────
+
+async function wacliSetup(ctx: { authUserId: string; clinicId: string }) {
+  const [row] = await q(ctx, (tx) => tx<{ wacli_gateway_url: string | null; wacli_gateway_token_enc: string | null; wacli_webhook_token: string; wacli_webhook_secret_enc: string | null }[]>`
+    select wacli_gateway_url, wacli_gateway_token_enc, wacli_webhook_token, wacli_webhook_secret_enc from clinic_integrations`);
+  if (!row) return null;
+  const gateway = wacliGateway(ctx.clinicId, row);
+  return gateway ? { gateway, row } : null;
+}
+
+/** Usa o gateway da plataforma ou o informado pela clínica, cria o segredo do webhook e começa o pareamento. */
+export async function connectWacliAction(_: ActionState, form: FormData): Promise<ActionState> {
+  return act("integrations.manage", [PATH, "/"], async (ctx) => {
+    const url = optStr(form, "gatewayUrl")?.replace(/\/+$/, "") ?? null;
+    const token = optStr(form, "gatewayToken");
+    if (url && !/^https:\/\//.test(url) && !url.startsWith("http://localhost")) throw new UserError("Use um endereço https:// para o gateway.");
+    const phone = optStr(form, "phone")?.replace(/\D/g, "") ?? null;
+    if (phone && (phone.length < 12 || phone.length > 13)) throw new UserError("Informe o número com DDI e DDD, ex.: 55 11 98765-4321.");
+    await q(ctx, async (tx) => {
+      const [cur] = await tx<{ wacli_gateway_token_enc: string | null; wacli_webhook_secret_enc: string | null }[]>`select wacli_gateway_token_enc, wacli_webhook_secret_enc from clinic_integrations`;
+      const secret = cur?.wacli_webhook_secret_enc ?? encryptField(randomBytes(32).toString("hex"));
+      await tx`update clinic_integrations set wa_provider = 'wacli', wacli_webhook_secret_enc = ${secret}, wa_last_error = null,
+                 wacli_gateway_url = ${url}, wacli_gateway_token_enc = ${url ? (token ? encryptField(token) : cur?.wacli_gateway_token_enc ?? null) : null}
+               where clinic_id = ${ctx.clinicId}`;
+      await audit(tx, actorOf(ctx), "whatsapp.wacli", "clinic_integrations", ctx.clinicId, null, { own_gateway: !!url, by_phone_code: !!phone });
+    });
+    const setup = await wacliSetup(ctx);
+    if (!setup) throw new UserError("Não há gateway wacli configurado. Peça ao suporte da plataforma ou informe o endereço e a chave do seu.");
+    const secret = decryptField(setup.row.wacli_webhook_secret_enc);
+    if (!secret) throw new UserError("Não foi possível preparar o segredo do webhook.");
+    try {
+      const r = await wacliConnect(setup.gateway, `${env.appUrl}/api/webhooks/wacli/${setup.row.wacli_webhook_token}`, secret, phone);
+      return { ok: true, message: r.state === "connected" ? "WhatsApp já estava pareado e foi religado." : phone ? "Pronto. Veja o código ao lado e digite no celular." : "Pronto. Leia o QR Code ao lado com o celular da clínica." };
+    } catch (e) {
+      throw new UserError(`O gateway não respondeu como esperado: ${e instanceof Error ? e.message : "erro"}`);
+    }
+  });
+}
+
+/** Estado do pareamento, com o QR Code já desenhado como imagem. */
+export async function wacliStatusAction(): Promise<{ state: string; image: string | null; pairCode: string | null; error: string | null }> {
+  const ctx = await actionCtx("integrations.manage");
+  const setup = await wacliSetup(ctx);
+  if (!setup) return { state: "idle", image: null, pairCode: null, error: "Gateway wacli não configurado." };
+  try {
+    const s = await wacliStatus(setup.gateway);
+    const image = s.qr ? await QRCode.toDataURL(s.qr, { margin: 1, width: 280 }) : null;
+    if (s.state === "connected") await q(ctx, (tx) => tx`update clinic_integrations set wacli_connected_at = coalesce(wacli_connected_at, now()) where clinic_id = ${ctx.clinicId}`);
+    return { state: s.state, image, pairCode: s.pairCode, error: s.error };
+  } catch (e) {
+    return { state: "error", image: null, pairCode: null, error: e instanceof Error ? e.message : "Gateway inacessível." };
+  }
+}
+
+export async function wacliLogoutAction(): Promise<ActionState> {
+  return act("integrations.manage", PATH, async (ctx) => {
+    const setup = await wacliSetup(ctx);
+    if (setup) await wacliLogout(setup.gateway).catch(() => undefined);
+    await q(ctx, async (tx) => {
+      await tx`update clinic_integrations set wacli_connected_at = null where clinic_id = ${ctx.clinicId}`;
+      await audit(tx, actorOf(ctx), "whatsapp.wacli_logout", "clinic_integrations", ctx.clinicId, null, null);
+    });
+    return { ok: true, message: "WhatsApp desconectado e sessão apagada do gateway." };
+  });
+}
+
 // ───────────── Provedor de IA ─────────────
 
 const llmSchema = z.object({
@@ -282,7 +351,9 @@ async function llmFromForm(ctx: { authUserId: string }, form: FormData): Promise
   const [row] = await q(ctx, (tx) => tx<{ llm_provider: string; llm_api_key_enc: string | null }[]>`select llm_provider, llm_api_key_enc from clinic_integrations`);
   // Chave em branco = mantém a salva, desde que seja do mesmo provedor.
   const stored = row?.llm_provider === p.provider ? decryptField(row.llm_api_key_enc) : null;
-  return { provider: p.provider, apiKey: typed ?? stored, model: p.model ?? null, baseUrl: p.provider === "openai_compatible" ? p.baseUrl ?? null : null };
+  const freeAuto = p.provider === "openrouter" && bool(form, "freeAuto");
+  const fallbackModels = [...new Set(form.getAll("fallback").map((v) => String(v).trim()).filter((v) => v && v.length <= 120))].slice(0, 5);
+  return { provider: p.provider, apiKey: typed ?? stored, model: freeAuto ? null : p.model ?? null, baseUrl: p.provider === "openai_compatible" ? p.baseUrl ?? null : null, freeAuto, fallbackModels: p.provider === "anthropic" ? [] : fallbackModels };
 }
 
 export async function saveLlmAction(_: ActionState, form: FormData): Promise<ActionState> {
@@ -290,15 +361,16 @@ export async function saveLlmAction(_: ActionState, form: FormData): Promise<Act
     const s = await llmFromForm(ctx, form);
     if (s.provider !== "platform") {
       if (!s.apiKey) throw new UserError("Informe a chave de API do provedor.");
-      if (!s.model) throw new UserError("Escolha o modelo (use “Carregar modelos”).");
+      if (!s.model && !s.freeAuto) throw new UserError("Escolha o modelo (use “Carregar modelos”).");
       if (s.provider === "openai_compatible" && !s.baseUrl) throw new UserError("Informe o endereço da API.");
     }
     const typed = optStr(form, "apiKey");
     await q(ctx, async (tx) => {
       await tx`update clinic_integrations set llm_provider = ${s.provider}, llm_model = ${s.model}, llm_base_url = ${s.baseUrl},
+                 llm_free_auto = ${!!s.freeAuto}, llm_fallback_models = ${s.fallbackModels ?? []},
                  llm_api_key_enc = ${s.provider === "platform" ? null : typed ? encryptField(typed) : tx`llm_api_key_enc`}, llm_last_error = null
                where clinic_id = ${ctx.clinicId}`;
-      await audit(tx, actorOf(ctx), "ai.provider", "clinic_integrations", ctx.clinicId, null, { provider: s.provider, model: s.model, key_changed: !!typed });
+      await audit(tx, actorOf(ctx), "ai.provider", "clinic_integrations", ctx.clinicId, null, { provider: s.provider, model: s.model, free_auto: !!s.freeAuto, fallback_models: s.fallbackModels ?? [], key_changed: !!typed });
     });
     return { ok: true, message: "Provedor de IA salvo. Vale a partir da próxima resposta." };
   });
@@ -318,6 +390,18 @@ export async function listModelsAction(form: FormData): Promise<{ models: string
     return { models: await listOpenAiModels(base, s.apiKey) };
   } catch (e) {
     return { models: [], error: e instanceof ZodError ? e.issues[0]?.message ?? "Dados inválidos." : "Não foi possível carregar os modelos. Confira a chave e o endereço." };
+  }
+}
+
+/** Modelos gratuitos do OpenRouter com suporte a ferramentas, do maior contexto para o menor. */
+export async function listFreeModelsAction(form: FormData): Promise<{ models: { id: string; context: number }[]; error?: string }> {
+  const ctx = await actionCtx("ai.configure");
+  try {
+    const s = await llmFromForm(ctx, form);
+    if (!s.apiKey) return { models: [], error: "Informe a chave do OpenRouter primeiro." };
+    return { models: await listOpenRouterFreeModels(OPENROUTER_URL, s.apiKey) };
+  } catch {
+    return { models: [], error: "Não foi possível consultar o OpenRouter. Confira a chave." };
   }
 }
 

@@ -42,6 +42,9 @@ Registro das decisões tomadas na construção. Defaults da seção 17 do PRD fo
 | Automações fixas (follow-ups, lembrete, confirmação) | Além das quatro nativas, a clínica cria as suas no construtor visual (`automation_rules`): antes/depois da consulta, falta e aniversário, enviando mensagem ou criando tarefa | Pedido do dono do produto. As regras passam pelas mesmas checagens (opt-out, horário, limite diário, janela de 24 h); aniversário é varrido pelo worker com idempotência anual |
 | Tema único escuro | Escuro (padrão da marca) e claro, escolhido por usuário em cookie e aplicado no servidor | Pedido do dono do produto; tokens redefinidos para AA nos dois temas |
 
+| Só Cloud API oficial | Terceira opção: **gateway wacli** (`gateway/wacli`), uma sessão de WhatsApp Web por clínica num servidor sempre ligado, com webhook assinado por HMAC | Pedido do dono do produto: cada clínica conecta o próprio número com um QR Code, sem servidor por clínica. O wacli precisa de processo contínuo e disco, por isso não roda na Vercel. Mesmo risco de bloqueio da Evolution |
+| Um modelo de IA por clínica | OpenRouter com modelos reserva ou em **rodízio de modelos gratuitos** (lista com ferramentas, atualizada a cada hora; troca em 429/5xx/404; espera de 10 min para o que falhou) | Pedido do dono do produto: custo zero para clínicas pequenas. Modelos gratuitos variam em qualidade e limite; sem resposta, a conversa vai para a equipe |
+
 ## Decisões técnicas complementares
 
 - **Modelo de IA:** `claude-opus-5-5` por padrão (`ANTHROPIC_MODEL`), pensamento adaptativo, `effort: low` (chat), cache do prompt de sistema e fallback de recusa do lado do servidor. Sem chave configurada, a conversa vai para a equipe.

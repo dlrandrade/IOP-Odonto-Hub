@@ -20,6 +20,11 @@ export const env = {
   get mediaDir() { return opt("MEDIA_DIR") ?? ".data/media"; },
   /** Login local (Postgres puro) só quando pedido explicitamente; nunca é o padrão. */
   get authMode(): "supabase" | "local" { return opt("AUTH_MODE") === "local" ? "local" : "supabase"; },
+  /** Gateway wacli da plataforma (WhatsApp por QR Code, não oficial). A clínica pode usar um próprio. */
+  wacli: {
+    get gatewayUrl() { return opt("WACLI_GATEWAY_URL"); },
+    get gatewayToken() { return opt("WACLI_GATEWAY_TOKEN"); },
+  },
   wa: {
     get verifyToken() { return opt("WHATSAPP_VERIFY_TOKEN"); },
     get appSecret() { return opt("WHATSAPP_APP_SECRET"); },

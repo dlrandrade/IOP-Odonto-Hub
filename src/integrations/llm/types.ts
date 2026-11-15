@@ -24,7 +24,8 @@ export interface LlmProvider {
 }
 
 export class LlmUnavailableError extends Error {
-  constructor(message: string, readonly retryable: boolean) {
+  /** status: código HTTP do provedor, quando houver (a rotação de modelos usa para decidir se tenta o próximo). */
+  constructor(message: string, readonly retryable: boolean, readonly status?: number) {
     super(message);
     this.name = "LlmUnavailableError";
   }

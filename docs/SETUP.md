@@ -91,6 +91,17 @@ No Meta for Developers, com um app do tipo Business e o produto WhatsApp:
 5. Em WhatsApp → Configuração → **Webhook**, informe a URL de callback e o token de verificação mostrados na tela e assine o campo **messages**.
 6. Crie no WhatsApp Manager os templates `lembrete_consulta`, `confirmacao_consulta` e `retomada_contato` (categoria Utilidade, pt_BR) com o texto exibido em Automações. Quando a Meta aprovar, marque "Aprovado" em Automações.
 
+### WhatsApp por QR Code direto (gateway wacli — não oficial)
+
+O jeito mais simples de cada clínica ligar o próprio WhatsApp sem a Meta. **Risco:** o WhatsApp pode bloquear o número; use um chip dedicado.
+
+1. Suba o gateway de `gateway/wacli` (Docker) numa máquina sempre ligada, com disco persistente e HTTPS. Veja `gateway/wacli/README.md`.
+2. Na Vercel, cadastre como **Sensitive** `WACLI_GATEWAY_URL` (ex.: `https://wa.suaplataforma.com.br`) e `WACLI_GATEWAY_TOKEN` (o mesmo `GATEWAY_TOKEN` do container).
+3. Cada clínica, em Configurações → WhatsApp, escolhe **QR Code direto (wacli)**, clica em **Gerar QR Code** e lê com o celular (Aparelhos conectados). Há também a opção de código de 8 letras.
+4. Uma clínica pode usar um gateway próprio: marque “Usar um gateway próprio” e informe endereço e chave.
+
+Mensagens chegam assinadas (HMAC por clínica) em `/api/webhooks/wacli/<token>` e passam pelo mesmo atendimento, inbox e automações. Sem janela de 24 h nem templates.
+
 ### WhatsApp por QR code (Evolution API — não oficial)
 
 Alternativa para quem não tem acesso ao Business Manager. **Risco:** o WhatsApp pode banir o número; use um chip dedicado à clínica.
@@ -104,7 +115,9 @@ Alternativa para quem não tem acesso ao Business Manager. **Risco:** o WhatsApp
 
 - **Padrão da plataforma:** usa `ANTHROPIC_API_KEY` da Vercel.
 - **Claude (Anthropic):** chave própria da clínica.
-- **OpenRouter:** crie a chave em openrouter.ai/keys, cole, clique em **Carregar modelos**, escolha (ex.: `anthropic/claude-sonnet-5-5`) e **Testar conexão**.
+- **OpenRouter:** crie a chave em openrouter.ai/keys e escolha um modo:
+  - **Eu escolho o modelo:** clique em **Carregar modelos**, escolha o principal (ex.: `anthropic/claude-sonnet-5-5`) e, se quiser, até dois reservas.
+  - **Só modelos gratuitos, em rodízio:** o sistema consulta a lista de gratuitos que aceitam ferramentas (atualizada a cada hora), tenta os que você priorizou e troca sozinho quando um bate no limite (429), cai (5xx) ou some (404). Um modelo que falhou fica 10 min fora da fila.
 - **Outro compatível:** URL base no formato OpenAI (`https://.../v1`), chave e modelo.
 
 O modelo precisa suportar *tool calling*. Chaves ficam criptografadas e nunca voltam para a tela.

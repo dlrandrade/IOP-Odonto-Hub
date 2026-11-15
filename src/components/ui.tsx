@@ -77,7 +77,7 @@ const TONES: Record<Tone, string> = {
 };
 
 export function Badge({ tone = "neutral", className, ...props }: ComponentProps<"span"> & { tone?: Tone }) {
-  return <span className={cn("inline-flex h-[22px] items-center gap-1 rounded-sm px-2 font-mono text-[10.5px] font-medium uppercase leading-none tracking-[0.08em] [&_svg]:size-3", TONES[tone], className)} {...props} />;
+  return <span className={cn("inline-flex h-[22px] shrink-0 items-center gap-1 whitespace-nowrap rounded-sm px-2 font-mono text-[10.5px] font-medium uppercase leading-none tracking-[0.08em] [&_svg]:size-3", TONES[tone], className)} {...props} />;
 }
 
 /** Alternador padrão (abas de visualização): mesma altura dos botões, segmentos de largura igual. */

@@ -11,7 +11,8 @@ export async function setupSteps(tx: postgres.TransactionSql, ctx: Ctx): Promise
     select (select count(*)::int from services where status = 'published') as services,
            (select count(*)::int from knowledge_docs where status = 'published' and body <> '') as docs,
            (select count(*)::int from availability_rules) as rules,
-           coalesce((select wa_phone_number_id is not null and wa_access_token_enc is not null from clinic_integrations limit 1), false) as wa`;
+           coalesce((select case wa_provider when 'evolution' then evo_connected_at is not null when 'wacli' then wacli_connected_at is not null
+                    else wa_phone_number_id is not null and wa_access_token_enc is not null end from clinic_integrations limit 1), false) as wa`;
   return [
     { done: (c?.rules ?? 0) > 0, label: "Dentistas com expediente", href: "/configuracoes?aba=agenda" },
     { done: (c?.services ?? 0) > 0, label: "Publicar serviços e preços", href: "/servicos" },

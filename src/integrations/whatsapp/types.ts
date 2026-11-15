@@ -1,4 +1,4 @@
-/** Contrato do canal. Produção usa somente a Cloud API oficial; APIs não oficiais são proibidas. */
+/** Contrato do canal: Cloud API oficial (padrão) ou os alternativos não oficiais Evolution e wacli, escolhidos pela clínica. */
 export type SendResult = { waMessageId: string };
 
 export class ProviderError extends Error {
