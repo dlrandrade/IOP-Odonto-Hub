@@ -12,7 +12,19 @@ O wacli é um programa que fica rodando o tempo todo, com a sessão e o históri
 A Vercel só roda funções curtas e sem disco, então o gateway precisa de uma máquina sempre ligada com disco persistente
 (VPS, Railway, Fly.io, Render com disco etc.). Um gateway atende todas as clínicas da plataforma.
 
-## Subir num servidor (recomendado: Docker Compose + HTTPS automático)
+## Instalação em um comando (VPS Ubuntu/Debian, ex.: Hostinger)
+
+1. No DNS do seu domínio, crie um registro **A** (ex.: `wa.seudominio.com.br`) apontando para o IP da VPS.
+2. No terminal da VPS (na Hostinger: hPanel → VPS → Terminal do navegador), rode:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dlrandrade/IOP-Odonto-Hub/claude/zen-knuth-faaxij/gateway/wacli/install.sh | sudo bash -s -- wa.seudominio.com.br
+```
+
+O script confere o DNS e as portas, instala o Docker se faltar, sobe gateway + HTTPS e mostra os dois valores para a Vercel.
+Rodar de novo atualiza, mantendo a chave e as sessões das clínicas.
+
+## Subir num servidor manualmente (Docker Compose + HTTPS automático)
 
 Num VPS Linux com Docker (2 GB de RAM bastam para dezenas de clínicas):
 
