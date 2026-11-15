@@ -5,6 +5,8 @@ import { ActionForm, Modal } from "@/components/client";
 import { Badge, Button, Card, CardTitle, Checkbox, Empty, Field, Input, Notice, PageHeader, Select, Table, Textarea, buttonClass } from "@/components/ui";
 import { formatShort } from "@/lib/datetime";
 import { cn } from "@/lib/format";
+import { db } from "@/db/client";
+import { env } from "@/lib/env";
 import { completeTaskAction, deleteRuleAction, reorderAutomationsAction, saveBuiltinAction, saveLimitsAction, saveRuleAction, saveTemplateAction, toggleAutomationAction } from "./actions";
 import { FlowList, RuleForm, Switch } from "./builder";
 import type { AutomationRule } from "@/services/automation-rules";
@@ -48,6 +50,12 @@ export default async function AutomationsPage() {
     rules: await tx<AutomationRule[]>`select * from automation_rules order by position, created_at`,
   }));
   const templateNames = data.templates.map((t) => t.name);
+  // A tabela de integrações só é legível pelo admin (RLS); aqui basta saber se há canal ligado.
+  const [channel] = await db()<{ ok: boolean }[]>`
+    select case wa_provider when 'evolution' then evo_connected_at is not null when 'wacli' then wacli_connected_at is not null
+                else wa_phone_number_id is not null and wa_access_token_enc is not null end as ok
+    from clinic_integrations where clinic_id = ${ctx.clinicId}`;
+  const waOn = !!channel?.ok || !!(env.wa.phoneNumberId && env.wa.accessToken);
 
   const BuiltinEdit = ({ k, hours, text }: { k: string; hours: number; text?: string }) => (
     <Modal trigger="Editar" title="Editar automação" description="Automação nativa: o texto do lembrete é montado com paciente, serviço, dentista e data." triggerClass={buttonClass("outline", "sm")}>
@@ -114,6 +122,14 @@ export default async function AutomationsPage() {
           <RuleForm templates={templateNames} action={saveRuleAction} />
         </Modal>
       </PageHeader>
+      {!waOn && (
+        <div className="mb-6">
+          <Notice tone="sun">
+            <strong>WhatsApp ainda não conectado.</strong> As automações já estão programadas, mas as mensagens só saem quando houver um canal ligado em{" "}
+            <Link className="underline underline-offset-2" href="/configuracoes?aba=whatsapp">Configurações → WhatsApp</Link>. Até lá, elas ficam como “não entregue”. Para testar agora, use o Simulador: lembretes e follow-ups de pacientes do simulador chegam lá normalmente. Automações que só criam tarefa funcionam sem WhatsApp.
+          </Notice>
+        </div>
+      )}
       {(data.counts?.failed ?? 0) > 0 && <div className="mb-6"><Notice tone="danger">{data.counts!.failed} automação(ões) falharam nos últimos 7 dias. Veja o histórico abaixo; cada falha virou uma tarefa para a equipe.</Notice></div>}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">

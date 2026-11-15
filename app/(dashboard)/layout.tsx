@@ -68,12 +68,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <span className="mt-2.5 block text-[12.5px] font-medium">{next.label}</span>
         </Link>
       )}
-      <div className="flex items-center gap-2.5 px-1">
-        <Avatar name={ctx.name} size={32} />
-        <span className="min-w-0 flex-1 leading-tight">
-          <span className="block truncate text-[13px] font-medium">{ctx.name}</span>
-          <span className="block truncate text-[11px] text-bone-mute">{ROLE_LABELS[ctx.role]} · {ctx.clinic.name}</span>
-        </span>
+      <div className="flex items-center gap-1 px-1">
+        <Link href="/perfil" title="Meu perfil: nome, foto e senha" className="group flex min-w-0 flex-1 items-center gap-2.5 rounded-sm p-1 transition-colors hover:bg-surface-2">
+          <Avatar name={ctx.name} src={ctx.avatar} size={32} />
+          <span className="min-w-0 flex-1 leading-tight">
+            <span className="block truncate text-[13px] font-medium group-hover:text-bone">{ctx.name}</span>
+            <span className="block truncate text-[11px] text-bone-mute">{ctx.actingAsPlatform ? "Plataforma" : ROLE_LABELS[ctx.role]} · {ctx.clinic.name}</span>
+          </span>
+        </Link>
         <form action={logoutAction}>
           <button aria-label="Sair" title="Sair" className="flex size-8 items-center justify-center rounded-sm text-bone-mute transition-colors hover:bg-surface-2 hover:text-bone"><LogOut size={15} /></button>
         </form>

@@ -28,4 +28,4 @@ export class UserError extends Error {}
 export const str = (f: FormData, k: string): string => String(f.get(k) ?? "").trim();
 export const optStr = (f: FormData, k: string): string | null => str(f, k) || null;
 export const bool = (f: FormData, k: string): boolean => f.get(k) === "on" || f.get(k) === "true";
-export const actorOf = (ctx: Ctx) => ({ clinicId: ctx.clinicId, userId: ctx.userId, label: ctx.name });
+export const actorOf = (ctx: Ctx) => ({ clinicId: ctx.clinicId, userId: ctx.userId, label: ctx.actingAsPlatform ? `${ctx.name} (plataforma)` : ctx.name });

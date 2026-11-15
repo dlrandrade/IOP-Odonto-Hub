@@ -89,8 +89,9 @@ export default async function SimulatorPage({ searchParams }: { searchParams: Pr
             <ActionForm action={simulateAction} className="mx-auto flex w-full max-w-[760px] flex-wrap items-center gap-3 px-6 py-5">
               <input type="hidden" name="phone" value={phone} />
               <Input name="text" placeholder="Escreva como se fosse o paciente…" aria-label="Mensagem do paciente" className="flex-1 basis-56" autoComplete="off" />
-              <Button type="submit" name="kind" value="image" variant="outline" title="Simula o envio de uma foto"><ImageIcon aria-hidden /> Foto</Button>
-              <Button type="submit" name="kind" value="text"><Send aria-hidden /> Enviar</Button>
+              {/* "Enviar" vem primeiro no HTML: é o botão que o Enter aciona. A foto fica à esquerda só visualmente. */}
+              <Button type="submit" name="kind" value="text" className="order-last"><Send aria-hidden /> Enviar</Button>
+              <Button type="submit" name="kind" value="image" variant="outline" title="Simula o envio de uma foto (sem texto, como um paciente mandando imagem)"><ImageIcon aria-hidden /> Simular foto</Button>
             </ActionForm>
           </div>
         </Card>

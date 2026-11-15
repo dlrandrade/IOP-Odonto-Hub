@@ -23,6 +23,8 @@ export type Ctx = {
   /** app_users.id; nulo quando é o operador da plataforma acessando a clínica. */
   userId: string | null;
   name: string;
+  /** Foto do perfil (data URL pequena) ou null para mostrar as iniciais. */
+  avatar: string | null;
   role: Role;
   isPlatformAdmin: boolean;
   actingAsPlatform: boolean;
@@ -38,7 +40,9 @@ function platformEmails(): string[] {
 
 export type Identity = {
   authUserId: string; email: string; isPlatformAdmin: boolean; actingClinicId: string | null;
-  appUser: { id: string; clinic_id: string; name: string; role: Role; active: boolean } | null;
+  appUser: { id: string; clinic_id: string; name: string; role: Role; active: boolean; avatar: string | null } | null;
+  /** Nome e foto do operador da plataforma (perfil próprio). */
+  platformName: string | null; platformAvatar: string | null;
 };
 
 /** Quem é o usuário logado (sem exigir clínica). */
@@ -56,9 +60,9 @@ const loadSession = cache(async (): Promise<{ identity: Identity; clinic: Clinic
   if (!user) return null;
   const sql = db();
   const [[row], [clinic]] = await Promise.all([
-    sql<{ pa: boolean; acting_clinic_id: string | null; au_id: string | null; au_clinic: string | null; au_name: string | null; au_role: Role | null; au_active: boolean | null }[]>`
-      select pa.auth_user_id is not null as pa, pa.acting_clinic_id,
-             au.id as au_id, au.clinic_id as au_clinic, au.name as au_name, au.role as au_role, au.active as au_active
+    sql<{ pa: boolean; acting_clinic_id: string | null; pa_name: string | null; pa_avatar: string | null; au_id: string | null; au_clinic: string | null; au_name: string | null; au_role: Role | null; au_active: boolean | null; au_avatar: string | null }[]>`
+      select pa.auth_user_id is not null as pa, pa.acting_clinic_id, pa.display_name as pa_name, pa.avatar_data as pa_avatar,
+             au.id as au_id, au.clinic_id as au_clinic, au.name as au_name, au.role as au_role, au.active as au_active, au.avatar_data as au_avatar
       from (select 1) one
       left join platform_admins pa on pa.auth_user_id = ${user.id}
       left join app_users au on au.auth_user_id = ${user.id}`,
@@ -73,8 +77,11 @@ const loadSession = cache(async (): Promise<{ identity: Identity; clinic: Clinic
     await sql`insert into platform_admins (auth_user_id, email) values (${user.id}, ${user.email}) on conflict (auth_user_id) do nothing`;
     isPlatformAdmin = true;
   }
-  const appUser = row?.au_id ? { id: row.au_id, clinic_id: row.au_clinic!, name: row.au_name!, role: row.au_role!, active: !!row.au_active } : null;
-  return { identity: { authUserId: user.id, email: user.email, isPlatformAdmin, actingClinicId: row?.acting_clinic_id ?? null, appUser }, clinic: clinic ?? null };
+  const appUser = row?.au_id ? { id: row.au_id, clinic_id: row.au_clinic!, name: row.au_name!, role: row.au_role!, active: !!row.au_active, avatar: row.au_avatar } : null;
+  return {
+    identity: { authUserId: user.id, email: user.email, isPlatformAdmin, actingClinicId: row?.acting_clinic_id ?? null, appUser, platformName: row?.pa_name ?? null, platformAvatar: row?.pa_avatar ?? null },
+    clinic: clinic ?? null,
+  };
 });
 
 export const getCtx = cache(async (): Promise<Ctx | null> => {
@@ -91,7 +98,8 @@ export const getCtx = cache(async (): Promise<Ctx | null> => {
   return {
     authUserId: me.authUserId, email: me.email,
     userId: acting ? null : member?.id ?? null,
-    name: acting ? "Suporte da plataforma" : member?.name ?? me.email,
+    name: acting ? me.platformName ?? "Suporte da plataforma" : member?.name ?? me.email,
+    avatar: acting ? me.platformAvatar : member?.avatar ?? null,
     role: acting ? "admin" : member?.role ?? "recepcao",
     isPlatformAdmin: me.isPlatformAdmin, actingAsPlatform: acting,
     clinicId, clinic, settings: parseSettings(clinic.settings), tz: clinic.timezone,

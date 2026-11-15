@@ -138,7 +138,11 @@ export function Empty({ title, children, action }: { title: string; children?: R
   );
 }
 
-export function Avatar({ name, color, size = 36 }: { name: string; color?: string; size?: number }) {
+export function Avatar({ name, color, size = 36, src }: { name: string; color?: string; size?: number; src?: string | null }) {
+  if (src) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={src} alt="" aria-hidden width={size} height={size} className="shrink-0 rounded-full object-cover" style={{ width: size, height: size }} />;
+  }
   const letters = name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join("");
   return (
     <span aria-hidden className="inline-flex shrink-0 items-center justify-center rounded-full font-display font-bold text-on"

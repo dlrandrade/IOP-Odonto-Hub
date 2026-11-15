@@ -78,6 +78,24 @@ describe("S0 — isolamento e permissões (RLS)", () => {
   });
 });
 
+describe("Perfil do próprio usuário", () => {
+  it("cada pessoa altera só o próprio nome e foto; papel e colegas ficam intactos", async () => {
+    const c = await makeClinic();
+    const a = await makeUser();
+    const b = await makeUser();
+    await sql`insert into app_users (clinic_id, auth_user_id, email, name, role) values (${c.clinicId}, ${a}, 'a@t.dev', 'Ana', 'recepcao'), (${c.clinicId}, ${b}, 'b@t.dev', 'Beto', 'recepcao')`;
+    // Pela RLS, recepção não escreve em app_users diretamente...
+    expect(await asUser(a, (tx) => tx`update app_users set name = 'Hack' where auth_user_id = ${b} returning id`)).toHaveLength(0);
+    // ...mas a função de perfil altera o próprio cadastro.
+    await asUser(a, (tx) => tx`select app.update_my_profile('Ana Paula', 'data:image/jpeg;base64,AAAA', false)`);
+    const rows = await sql<{ name: string; role: string; avatar_data: string | null }[]>`select name, role, avatar_data from app_users where clinic_id = ${c.clinicId} and auth_user_id in (${a}, ${b}) order by email`;
+    expect(rows).toEqual([{ name: "Ana Paula", role: "recepcao", avatar_data: "data:image/jpeg;base64,AAAA" }, { name: "Beto", role: "recepcao", avatar_data: null }]);
+    await asUser(a, (tx) => tx`select app.update_my_profile('Ana Paula', null, true)`);
+    expect((await sql<{ avatar_data: string | null }[]>`select avatar_data from app_users where auth_user_id = ${a}`)[0]?.avatar_data).toBe("data:image/jpeg;base64,AAAA");
+    await expect(asUser(a, (tx) => tx`select app.update_my_profile(' ', null, true)`)).rejects.toThrow(/nome inválido/);
+  });
+});
+
 describe("S2 — agenda", () => {
   it("duas reservas simultâneas do mesmo horário: uma vence, a outra recebe conflito (constraint EXCLUDE)", async () => {
     const c = await makeClinic();

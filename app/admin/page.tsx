@@ -2,9 +2,10 @@ import { redirect } from "next/navigation";
 import { getIdentity } from "@/auth/session";
 import { Logo } from "@/components/brand";
 import { ThemeToggle } from "@/components/nav";
+import { ProfileForm } from "../perfil/profile-form";
 import { Stat } from "@/components/charts";
 import { ActionForm, Modal } from "@/components/client";
-import { Badge, Button, buttonClass, Card, CardTitle, Checkbox, Empty, Field, Input, Select, Table } from "@/components/ui";
+import { Avatar, Badge, Button, buttonClass, Card, CardTitle, Checkbox, Empty, Field, Input, Select, Table } from "@/components/ui";
 import { db } from "@/db/client";
 import { missingEnv } from "@/lib/env";
 import { logoutAction } from "../(auth)/actions";
@@ -39,6 +40,9 @@ export default async function PlatformPage() {
         <div className="flex items-center gap-2">
           <span className="hidden text-xs text-bone-mute sm:inline">{me.email}</span>
           {acting && <form action={leaveClinicAction}><Button size="sm" variant="outline">Sair de “{acting.name}”</Button></form>}
+          <Modal trigger={<><Avatar name={me.platformName ?? me.email} src={me.platformAvatar} size={26} /> <span className="hidden sm:inline">{me.platformName ?? "Meu perfil"}</span></>} title="Meu perfil" description="Seu nome e sua foto aparecem quando você entra nas clínicas como suporte." wide triggerClass={buttonClass("ghost", "sm")} triggerTitle="Meu perfil">
+            <ProfileForm name={me.platformName ?? ""} email={me.email} avatar={me.platformAvatar} roleLabel="Operador da plataforma" />
+          </Modal>
           <ThemeToggle />
           <form action={logoutAction}><Button size="sm" variant="ghost">Sair</Button></form>
         </div>
