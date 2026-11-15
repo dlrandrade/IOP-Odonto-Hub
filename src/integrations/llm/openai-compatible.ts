@@ -144,7 +144,9 @@ export function pickFreeToolModels(json: unknown): FreeModel[] {
     if (m.data.id === "openrouter/auto") continue;
     out.push({ id: m.data.id, context: m.data.context_length ?? 0 });
   }
-  return out.sort((a, b) => b.context - a.context || a.id.localeCompare(b.id));
+  // Versões de prévia/experimentais costumam errar mais o formato das ferramentas: vão para o fim da fila.
+  const unstable = (id: string) => (/(preview|[-:]exp|experimental|beta|alpha|test)/i.test(id) ? 1 : 0);
+  return out.sort((a, b) => unstable(a.id) - unstable(b.id) || b.context - a.context || a.id.localeCompare(b.id));
 }
 
 let freeCache: { at: number; models: FreeModel[] } | null = null;

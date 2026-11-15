@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
 import type { Sql } from "@/db/client";
 import { pickOffers } from "@/domain/slots";
-import { addDays, formatFull, localDate } from "@/lib/datetime";
+import { addDays, formatFull, localDate, WEEKDAY_KEYS, WEEKDAY_LABELS, type BusinessHours } from "@/lib/datetime";
 import { brl, normalizeText } from "@/lib/format";
 import { bookAppointment, cancelAppointment, findSlots, rescheduleAppointment } from "@/services/booking";
 import { requestHuman } from "@/services/conversations";
@@ -79,11 +79,32 @@ async function resolveOffer(ctx: ToolCtx, token: string) {
   return { offer } as const;
 }
 
+/** Reduz a palavra ao radical simples (horários → horario, convênios → convenio) para a busca não falhar por plural. */
+function stem(word: string): string {
+  return word.length > 4 && word.endsWith("es") ? word.slice(0, -2) : word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word;
+}
+const STOP = new Set(["que", "qual", "quais", "como", "para", "com", "uma", "das", "dos", "voce", "voces", "vcs", "tem", "sobre", "clinica"]);
+function terms(text: string): string[] {
+  return normalizeText(text).replace(/[^a-z0-9 ]/g, " ").split(" ").filter((t) => t.length > 2 && !STOP.has(t)).map(stem);
+}
+function relevance(query: string[], title: string, body: string): number {
+  const t = terms(title);
+  const b = new Set(terms(body));
+  return query.reduce((n, q) => n + (t.some((w) => w.startsWith(q) || q.startsWith(w)) ? 3 : 0) + ([...b].some((w) => w.startsWith(q) || q.startsWith(w)) ? 1 : 0), 0);
+}
+
+/** Base pequena (o caso normal): a IA recebe tudo, sem depender de acertar a palavra da busca. */
+const SMALL_BASE_CHARS = 8000;
+
+function formatRanges(ranges: [string, string][] | undefined): string {
+  return ranges?.length ? ranges.map(([a, b]) => `${a.slice(0, 5)}–${b.slice(0, 5)}`).join(", ") : "fechado";
+}
+
 export const TOOLS = [
   def({
     name: "buscar_servicos",
     description: "Busca serviços publicados da clínica (nome, tipo, preço vigente, descrição aprovada, se agenda direto). Use antes de falar de qualquer serviço ou preço. Consulta vazia lista todos.",
-    schema: z.object({ consulta: z.string().max(200).default("") }),
+    schema: z.object({ consulta: z.coerce.string().max(200).default("") }),
     jsonSchema: { type: "object", properties: { consulta: { type: "string", description: "Termo livre, ex.: 'limpeza', 'implante'. Vazio lista tudo." } }, required: ["consulta"] },
     run: async ({ consulta }, ctx) => {
       const rows = await ctx.sql<{ id: string; name: string; specialty: string | null; kind: string; price_mode: string; price_min_cents: number | null; price_max_cents: number | null; bookable_directly: boolean; leads_to_evaluation_service_id: string | null; patient_description: string | null; preparation: string | null; duration_min: number }[]>`
@@ -107,20 +128,55 @@ export const TOOLS = [
   }),
   def({
     name: "consultar_conhecimento",
-    description: "Busca trechos aprovados da base de conhecimento da clínica: endereço, horários, formas de pagamento, convênios, acessibilidade, estacionamento, políticas.",
-    schema: z.object({ topico: z.string().min(1).max(200) }),
-    jsonSchema: { type: "object", properties: { topico: { type: "string" } }, required: ["topico"] },
+    description: "Busca textos aprovados da base de conhecimento da clínica: horário de funcionamento, endereço, formas de pagamento, convênios, acessibilidade, estacionamento, políticas. Se a base for pequena, devolve todos os textos.",
+    schema: z.object({ topico: z.coerce.string().max(300).default("") }),
+    jsonSchema: { type: "object", properties: { topico: { type: "string", description: "Assunto em poucas palavras, ex.: 'horário de funcionamento', 'convênios'." } }, required: ["topico"] },
     run: async ({ topico }, ctx) => {
       const docs = await ctx.sql<{ title: string; body: string }[]>`
-        select title, body from knowledge_docs where clinic_id = ${ctx.clinicId} and status = 'published' order by title`;
-      const terms = normalizeText(topico).split(" ").filter((t) => t.length > 2);
-      const scored = docs.map((d) => {
-        const hay = normalizeText(`${d.title} ${d.body}`);
-        return { d, score: terms.filter((t) => hay.includes(t)).length + (terms.some((t) => normalizeText(d.title).includes(t)) ? 2 : 0) };
-      }).filter((x) => x.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);
-      return scored.length
-        ? { trechos: scored.map((x) => ({ titulo: x.d.title, texto: x.d.body.slice(0, 1500) })) }
-        : { trechos: [], aviso: "Nada aprovado sobre isso. Diga que vai confirmar com a equipe e encaminhe.", titulos_disponiveis: docs.map((d) => d.title) };
+        select title, body from knowledge_docs where clinic_id = ${ctx.clinicId} and status = 'published' and length(trim(body)) > 0 order by title`;
+      if (docs.length === 0) return { trechos: [], aviso: "A clínica ainda não publicou textos na base de conhecimento. Diga que vai confirmar com a equipe e encaminhe." };
+      const q = terms(topico);
+      const ranked = docs.map((d) => ({ d, score: relevance(q, d.title, d.body) })).sort((a, b) => b.score - a.score);
+      const total = docs.reduce((n, d) => n + d.title.length + d.body.length, 0);
+      const chosen = total <= SMALL_BASE_CHARS ? ranked : ranked.filter((x) => x.score > 0).slice(0, 4);
+      if (chosen.length === 0) return { trechos: [], aviso: "Nada aprovado sobre isso. Diga que vai confirmar com a equipe e encaminhe.", titulos_disponiveis: docs.map((d) => d.title) };
+      return {
+        orientacao: "Use somente o que estiver nestes textos. Textos marcados [DEMO] são fictícios: avise que é uma clínica de demonstração.",
+        trechos: chosen.map((x) => ({ titulo: x.d.title, texto: x.d.body.slice(0, 2000), relevante: x.score > 0 })),
+      };
+    },
+  }),
+  def({
+    name: "informacoes_da_clinica",
+    description: "Dados cadastrados da clínica: nome, endereço, acessibilidade, horário de atendimento da recepção e a equipe de dentistas com especialidade, dias e horários de atendimento e serviços que cada um faz. Use para perguntas sobre dentistas, quem atende, dias e horários de funcionamento e endereço.",
+    schema: z.object({}).passthrough(),
+    jsonSchema: { type: "object", properties: {}, required: [] },
+    run: async (_input, ctx) => {
+      const [clinic] = await ctx.sql<{ name: string; business_hours: BusinessHours }[]>`select name, business_hours from clinics where id = ${ctx.clinicId}`;
+      const units = await ctx.sql<{ name: string; address: string | null; accessibility_info: string | null }[]>`
+        select name, address, accessibility_info from units where clinic_id = ${ctx.clinicId} order by created_at`;
+      const pros = await ctx.sql<{ id: string; name: string; specialty: string | null }[]>`
+        select id, name, specialty from professionals where clinic_id = ${ctx.clinicId} and active order by name`;
+      const rules = await ctx.sql<{ professional_id: string; weekday: number; start_time: string; end_time: string }[]>`
+        select professional_id, weekday, start_time::text, end_time::text from availability_rules where clinic_id = ${ctx.clinicId} order by weekday, start_time`;
+      const svc = await ctx.sql<{ professional_id: string; name: string }[]>`
+        select sp.professional_id, s.name from service_professionals sp join services s on s.id = sp.service_id
+        where s.clinic_id = ${ctx.clinicId} and s.status = 'published' order by s.name`;
+      const hours = clinic?.business_hours ?? {};
+      return {
+        clinica: clinic?.name,
+        unidades: units.map((u) => ({ nome: u.name, endereco: u.address || "não cadastrado", acessibilidade: u.accessibility_info || "não cadastrada" })),
+        horario_de_atendimento_da_recepcao: WEEKDAY_KEYS.map((k, i) => `${WEEKDAY_LABELS[i]}: ${formatRanges(hours[k])}`),
+        dentistas: pros.map((p) => {
+          const mine = rules.filter((r) => r.professional_id === p.id);
+          const days = WEEKDAY_LABELS.map((label, wd) => {
+            const r = mine.filter((x) => x.weekday === wd).map((x) => [x.start_time, x.end_time] as [string, string]);
+            return r.length ? `${label}: ${formatRanges(r)}` : null;
+          }).filter(Boolean);
+          return { nome: p.name, especialidade: p.specialty ?? "não informada", atende: days.length ? days : ["sem expediente cadastrado"], servicos: svc.filter((x) => x.professional_id === p.id).map((x) => x.name) };
+        }),
+        orientacao: "Isto mostra quando cada dentista trabalha, não horários livres. Para marcar, use consultar_disponibilidade, que traz só os horários realmente vagos.",
+      };
     },
   }),
   def({
@@ -317,11 +373,42 @@ export const TOOLS = [
 export const TOOL_SPECS: Anthropic.Beta.BetaTool[] = TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.jsonSchema }));
 
 /** Executa uma tool pedida pelo modelo. Entrada inválida ou erro vira resultado de erro — nunca exceção para o modelo. */
+/**
+ * Modelos menores às vezes erram o nome do campo ("query" em vez de "topico") ou mandam texto solto.
+ * Se a ferramenta espera um único campo de texto obrigatório e veio um único valor, aproveitamos esse valor.
+ */
+function coerceInput(tool: (typeof TOOLS)[number], input: unknown): unknown {
+  const required = (tool.jsonSchema.required ?? []) as string[];
+  const props = (tool.jsonSchema.properties ?? {}) as Record<string, { type?: string }>;
+  if (typeof input === "string") input = required.length === 1 ? { [required[0]!]: input } : {};
+  if (!input || typeof input !== "object" || Array.isArray(input)) return input ?? {};
+  const obj = { ...(input as Record<string, unknown>) };
+  if (typeof obj.__invalid_json === "string") {
+    const raw = obj.__invalid_json;
+    delete obj.__invalid_json;
+    try { return coerceInput(tool, JSON.parse(raw.replace(/'/g, '"').replace(/,\s*}/g, "}"))); } catch { if (required.length === 1) obj[required[0]!] = raw; }
+  }
+  if (required.length === 1 && props[required[0]!]?.type === "string" && !(required[0]! in obj)) {
+    const extras = Object.entries(obj).filter(([k, v]) => !(k in props) && typeof v === "string");
+    if (extras.length === 1) obj[required[0]!] = extras[0]![1];
+  }
+  return obj;
+}
+
 export async function runTool(name: string, input: unknown, ctx: ToolCtx): Promise<{ result: unknown; isError: boolean }> {
   const tool = TOOLS.find((t) => t.name === name);
   if (!tool) return { result: { erro: `Ferramenta desconhecida: ${name}` }, isError: true };
-  const parsed = tool.schema.safeParse(input);
-  if (!parsed.success) return { result: { erro: "Entrada inválida", detalhes: parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`) }, isError: true };
+  const parsed = tool.schema.safeParse(coerceInput(tool, input));
+  if (!parsed.success) {
+    return {
+      result: {
+        erro: "Entrada inválida. Chame de novo usando exatamente estes campos.",
+        detalhes: parsed.error.issues.map((i) => `${i.path.join(".") || "(raiz)"}: ${i.message}`),
+        campos_esperados: tool.jsonSchema.properties ?? {}, obrigatorios: tool.jsonSchema.required ?? [],
+      },
+      isError: true,
+    };
+  }
   try {
     const run = tool.run as (i: unknown, c: ToolCtx) => Promise<unknown>;
     return { result: await run(parsed.data, ctx), isError: false };

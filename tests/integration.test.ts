@@ -360,6 +360,28 @@ describe("S5 — agente (suíte roteirizada: entrada → tools → saída permit
     await sql`update knowledge_docs set status = 'published', body = 'Aceitamos Pix e cartão.' where clinic_id = ${c.clinicId} and title = 'Formas de pagamento'`;
     const kb2 = (await runTool("consultar_conhecimento", { topico: "formas de pagamento" }, ctx)).result as { trechos: { texto: string }[] };
     expect(kb2.trechos[0]?.texto).toContain("Pix");
+
+    // Caso real: documento "Horário de funcionamento", pergunta no plural e sem acento.
+    await sql`insert into knowledge_docs (clinic_id, title, body, status) values (${c.clinicId}, 'Horário de funcionamento', 'Segunda a sexta de 8h às 18h e sábado de 9h às 14h. Domingo fechado.', 'published')`;
+    for (const topico of ["horarios de atendimento", "que horas vocês abrem?", "funcionam no sabado"]) {
+      const r = (await runTool("consultar_conhecimento", { topico }, ctx)).result as { trechos: { titulo: string; texto: string; relevante: boolean }[] };
+      expect(r.trechos.find((t) => t.titulo === "Horário de funcionamento")?.texto, topico).toContain("sábado de 9h");
+    }
+    // Modelos menores trocam o nome do campo ou mandam texto solto: o servidor aproveita em vez de falhar.
+    expect((await runTool("consultar_conhecimento", { query: "horários" }, ctx)).isError).toBe(false);
+    expect((await runTool("consultar_conhecimento", { __invalid_json: "{'topico': 'horários'}" }, ctx)).isError).toBe(false);
+    expect((await runTool("consultar_conhecimento", {}, ctx)).isError).toBe(false);
+    const bad = await runTool("buscar_servicos", { consulta: 123, extra: { a: 1 } }, ctx);
+    expect(bad.isError).toBe(false); // número vira texto
+
+    // Dentistas, especialidade, dias de atendimento, serviços e endereço vêm de informacoes_da_clinica.
+    await sql`update units set address = 'Rua Teste, 100' where clinic_id = ${c.clinicId}`;
+    const info = (await runTool("informacoes_da_clinica", {}, ctx)).result as { unidades: { endereco: string }[]; dentistas: { nome: string; atende: string[]; servicos: string[] }[]; horario_de_atendimento_da_recepcao: string[] };
+    expect(info.unidades[0]?.endereco).toBe("Rua Teste, 100");
+    expect(info.dentistas[0]?.nome).toBe("Dr. Teste 1");
+    expect(info.dentistas[0]?.atende.some((d) => d.startsWith("Segunda: "))).toBe(true);
+    expect(info.dentistas[0]?.servicos.length).toBeGreaterThan(0);
+    expect(info.horario_de_atendimento_da_recepcao).toHaveLength(7);
   });
 
   it("sinal de alerta: sem venda, sem chamada ao modelo, encaminha com urgência", async () => {
