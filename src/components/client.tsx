@@ -105,8 +105,13 @@ export function SubmitOnChange({ children, className }: { children: ReactNode; c
   return <form className={className} onChange={(e) => e.currentTarget.requestSubmit()}>{children}</form>;
 }
 
+/** Rola só a caixa da conversa até o fim (nunca a página inteira, que scrollIntoView também rolaria). */
 export function ScrollToEnd({ dep }: { dep: string | number }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => { ref.current?.scrollIntoView({ block: "end" }); }, [dep]);
+  useEffect(() => {
+    let box = ref.current?.parentElement ?? null;
+    while (box && !/(auto|scroll)/.test(getComputedStyle(box).overflowY)) box = box.parentElement;
+    if (box) box.scrollTop = box.scrollHeight;
+  }, [dep]);
   return <div ref={ref} />;
 }

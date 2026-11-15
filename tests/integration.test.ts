@@ -4,7 +4,7 @@ import { addDays, addMinutes, localDate, zonedToUtc } from "@/lib/datetime";
 import { hmacHex, encryptField } from "@/lib/crypto";
 import { bookAppointment, cancelAppointment, findSlots, rescheduleAppointment, setAppointmentStatus } from "@/services/booking";
 import { handBack, ingestInbound, sendOutbound, takeOver } from "@/services/conversations";
-import { moveOpportunity, registerInterest } from "@/services/crm";
+import { moveOpportunity, registerInterest, syncOpportunityOnBooking } from "@/services/crm";
 import { runDueJobs } from "@/services/jobs";
 import { renderRuleText, sweepBirthdays } from "@/services/automation-rules";
 import { handleWhatsAppWebhook } from "@/services/webhook";
@@ -573,6 +573,49 @@ describe("S6 — CRM", () => {
     expect((await moveOpportunity(sql, { clinicId: c.clinicId, opportunityId: a, to: "lost", actor: "user", lostReason: "Preço" })).ok).toBe(true);
     const events = await sql`select 1 from opportunity_events where opportunity_id = ${a}`;
     expect(events.length).toBe(2);
+  });
+});
+
+describe("CRM ligado à agenda", () => {
+  const stages = (clinicId: string, patientId: string) => sql<{ stage: string; service_interest: string; contact_id: string | null }[]>`
+    select stage, service_interest, contact_id from opportunities where clinic_id = ${clinicId} and patient_id = ${patientId} order by created_at`;
+
+  it("paciente sem telefone com procedimento agendado pela equipe entra no CRM como aceito", async () => {
+    const c = await makeClinic();
+    const patientId = await makePatient(c.clinicId, "Daniel Luz");
+    await syncOpportunityOnBooking(sql, { clinicId: c.clinicId, patientId, contactId: null, serviceId: c.implantId, actor: "user", when: "seg, 10:00" });
+    expect(await stages(c.clinicId, patientId)).toEqual([{ stage: "accepted", service_interest: "Implante", contact_id: null }]);
+    const [ev] = await sql<{ note: string }[]>`select e.note from opportunity_events e join opportunities o on o.id = e.opportunity_id where o.patient_id = ${patientId}`;
+    expect(ev?.note).toContain("Procedimento agendado pela equipe");
+  });
+
+  it("avaliação cria ou avança a oportunidade; retorno não mexe; IA não promove procedimento a aceito", async () => {
+    const c = await makeClinic();
+    const p1 = await makePatient(c.clinicId, "Ana Avaliação");
+    await syncOpportunityOnBooking(sql, { clinicId: c.clinicId, patientId: p1, contactId: null, serviceId: c.evaluationId, actor: "ai", when: "x" });
+    expect((await stages(c.clinicId, p1)).map((o) => o.stage)).toEqual(["evaluation_scheduled"]);
+    // Segunda avaliação não duplica.
+    await syncOpportunityOnBooking(sql, { clinicId: c.clinicId, patientId: p1, contactId: null, serviceId: c.evaluationId, actor: "user", when: "x" });
+    expect(await stages(c.clinicId, p1)).toHaveLength(1);
+
+    const p2 = await makePatient(c.clinicId, "Bia Interesse");
+    const [contact] = await sql<{ id: string }[]>`insert into contacts (clinic_id, phone_e164) values (${c.clinicId}, '+5511966660001') returning id`;
+    await sql`insert into contact_patient_links (clinic_id, contact_id, patient_id) values (${c.clinicId}, ${contact!.id}, ${p2})`;
+    await registerInterest(sql, { clinicId: c.clinicId, contactId: contact!.id, serviceId: c.implantId, text: "implante", intent: "considerando", actor: "ai" });
+    const booked = await bookAppointment(sql, { clinicId: c.clinicId, patientId: p2, contactId: contact!.id, serviceId: c.evaluationId, professionalId: c.professionalIds[0]!, startsAt: at("10:00", 1), createdByType: "ai", now: NOW });
+    expect(booked.ok).toBe(true);
+    await syncOpportunityOnBooking(sql, { clinicId: c.clinicId, patientId: p2, contactId: contact!.id, serviceId: c.evaluationId, actor: "ai", when: "x" });
+    expect((await sql<{ stage: string }[]>`select stage from opportunities where contact_id = ${contact!.id}`).map((o) => o.stage)).toEqual(["evaluation_scheduled"]);
+
+    const p3 = await makePatient(c.clinicId, "Caio Limpeza");
+    await syncOpportunityOnBooking(sql, { clinicId: c.clinicId, patientId: p3, contactId: null, serviceId: c.cleaningId, actor: "ai", when: "x" });
+    expect((await stages(c.clinicId, p3)).map((o) => o.stage)).toEqual(["in_conversation"]);
+    const [ret] = await sql<{ id: string }[]>`select id from services where clinic_id = ${c.clinicId} and kind = 'return' limit 1`;
+    if (ret) {
+      const p4 = await makePatient(c.clinicId, "Davi Retorno");
+      await syncOpportunityOnBooking(sql, { clinicId: c.clinicId, patientId: p4, contactId: null, serviceId: ret.id, actor: "user", when: "x" });
+      expect(await stages(c.clinicId, p4)).toHaveLength(0);
+    }
   });
 });
 

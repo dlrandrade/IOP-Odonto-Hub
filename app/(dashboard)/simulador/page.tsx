@@ -37,15 +37,16 @@ export default async function SimulatorPage({ searchParams }: { searchParams: Pr
   const llmReady = llm && llm.llm_provider !== "platform" ? llm.has_key || llm.llm_provider === "openai_compatible" : !!env.anthropicKey;
 
   return (
-    <>
+    // Tela travada na altura da janela: só a conversa e os bastidores rolam, nunca a página.
+    <div className="flex flex-col lg:h-[calc(100dvh-10.5rem)] lg:min-h-[560px]">
       <LiveRefresh seconds={3} clinicId={ctx.clinicId} />
       <PageHeader title="Simulador de paciente" subtitle="Converse como se fosse um paciente. As mensagens passam pelo mesmo pipeline do WhatsApp, sem enviar nada para fora." />
       <div className="mb-6 space-y-3 empty:hidden">
         {!aiOn && <Notice tone="sun">A assistente está {ctx.clinic.ai_kill_switch ? "pausada" : "desligada"}: as mensagens entram na fila humana. <Link className="font-semibold underline" href="/configuracoes?aba=ia">Ativar a IA</Link></Notice>}
         {aiOn && !llmReady && <Notice tone="sun">Nenhuma inteligência artificial configurada: a conversa é encaminhada para a equipe (o restante do fluxo funciona normalmente). Configure em <Link className="underline underline-offset-2" href="/configuracoes?aba=ia">Configurações → Assistente</Link>.</Notice>}
       </div>
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <Card className="flex min-h-[65dvh] flex-col p-0">
+      <div className="grid gap-6 lg:min-h-0 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <Card className="flex min-h-[65dvh] flex-col p-0 lg:min-h-0">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-6 py-4">
             <form className="flex items-center gap-2" action="/simulador">
               <label className="t-small" htmlFor="tel">Telefone fictício</label>
@@ -96,10 +97,10 @@ export default async function SimulatorPage({ searchParams }: { searchParams: Pr
           </div>
         </Card>
 
-        <Card>
+        <Card className="lg:min-h-0">
           <CardTitle hint="O que a assistente consultou ou fez em cada resposta (só gestores veem).">Bastidores da IA</CardTitle>
           {data.runs.length === 0 ? <Empty title="Nenhuma execução ainda">As ferramentas chamadas e o desfecho aparecem aqui.</Empty> : (
-            <ul className="space-y-3">
+            <ul className="scroll-thin -mr-2 min-h-0 flex-1 space-y-3 overflow-y-auto pr-2">
               {data.runs.map((r) => (
                 <li key={r.id} className="rounded-md border border-line p-4">
                   <div className="flex items-center justify-between gap-2">
@@ -120,6 +121,6 @@ export default async function SimulatorPage({ searchParams }: { searchParams: Pr
           )}
         </Card>
       </div>
-    </>
+    </div>
   );
 }

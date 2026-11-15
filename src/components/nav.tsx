@@ -26,9 +26,9 @@ function Item({ item, onNavigate }: { item: NavEntry; onNavigate?: () => void })
   const Icon = ICONS[item.icon] ?? Sun;
   return (
     <Link href={item.href} onClick={onNavigate} aria-current={active ? "page" : undefined}
-      className={cn("group relative flex items-center gap-3 rounded-md px-3 py-2 text-[13.5px] font-medium transition-colors",
+      className={cn("group relative flex items-center gap-3 rounded-md py-2 pl-4 pr-3 text-[13.5px] font-medium transition-colors",
         active ? "bg-surface-2 text-bone" : "text-bone-dim hover:bg-surface-2/60 hover:text-bone")}>
-      <span aria-hidden className={cn("absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-acento transition-opacity", active ? "opacity-100" : "opacity-0")} />
+      <span aria-hidden className={cn("absolute left-1.5 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-acento transition-opacity", active ? "opacity-100" : "opacity-0")} />
       <Icon size={16} aria-hidden className={cn("shrink-0 transition-colors", active ? "text-acento" : "text-bone-mute group-hover:text-bone-dim")} />
       <span className="flex-1 truncate">{item.label}</span>
       {!!item.badge && <span className="rounded-sm bg-acento px-1.5 py-px font-mono text-[10px] font-medium text-on">{item.badge}</span>}

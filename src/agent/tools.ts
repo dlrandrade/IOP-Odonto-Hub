@@ -6,7 +6,7 @@ import { addDays, formatFull, localDate, WEEKDAY_KEYS, WEEKDAY_LABELS, type Busi
 import { brl, normalizeText } from "@/lib/format";
 import { bookAppointment, cancelAppointment, findSlots, rescheduleAppointment } from "@/services/booking";
 import { requestHuman } from "@/services/conversations";
-import { onEvaluationBooked, registerInterest } from "@/services/crm";
+import { registerInterest, syncOpportunityOnBooking } from "@/services/crm";
 import { cancelJobs } from "@/services/jobs-queue";
 import type { ConversationState } from "@/domain/states";
 
@@ -296,7 +296,7 @@ export const TOOLS = [
       }
       ctx.flags.booked = true;
       await cancelJobs(ctx.sql, ctx.clinicId, { conversationId: ctx.conversationId, types: ["followup_1", "followup_2"] });
-      if (svc.kind === "evaluation") await onEvaluationBooked(ctx.sql, ctx.clinicId, ctx.contactId, r.offer.service_id, "ai");
+      await syncOpportunityOnBooking(ctx.sql, { clinicId: ctx.clinicId, patientId: patient.id, contactId: ctx.contactId, serviceId: r.offer.service_id, actor: "ai", when: formatFull(booked.startsAt, ctx.tz) });
       return { sucesso: true, appointment_id: booked.appointmentId, paciente: patient.full_name, servico: svc.name, data_completa: formatFull(booked.startsAt, ctx.tz) };
     },
   }),

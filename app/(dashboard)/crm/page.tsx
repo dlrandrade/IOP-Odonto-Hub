@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { DragCard, DropColumn } from "@/components/kanban";
-import { Bot, CalendarClock, Plus, UserRound } from "lucide-react";
+import { Bot, CalendarCheck, CalendarClock, Hand, Info, Plus, UserRound } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal } from "@/components/client";
 import { Badge, Button, buttonClass, Field, Input, PageHeader, Select } from "@/components/ui";
@@ -10,11 +10,11 @@ import { formatShort } from "@/lib/datetime";
 import { cn, formatPhone } from "@/lib/format";
 import { createOpportunityAction, moveOpportunityAction, updateOpportunityAction } from "./actions";
 
-export const metadata = { title: "CRM" };
+export const metadata = { title: "Oportunidades" };
 
 type Opp = {
   id: string; stage: OpportunityStage; service_interest: string; intent: string | null; next_step: string | null; next_step_due: Date | null; lost_reason: string | null;
-  owner_id: string | null; owner: string | null; contact_id: string; phone_e164: string; wa_profile_name: string | null; patient: string | null; updated_at: Date; last_actor: string | null; conversation_id: string | null;
+  owner_id: string | null; owner: string | null; contact_id: string | null; phone_e164: string | null; wa_profile_name: string | null; patient: string | null; patient_id: string | null; updated_at: Date; last_actor: string | null; conversation_id: string | null;
 };
 const INTENT: Record<string, string> = { curioso: "Curioso", considerando: "Considerando", quer_agendar: "Quer agendar" };
 
@@ -26,12 +26,12 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     const [own] = ctx.role === "dentista" && ctx.userId ? await tx<{ id: string }[]>`select id from professionals where app_user_id = ${ctx.userId}` : [];
     const opps = await tx<Opp[]>`
       select o.id, o.stage, o.service_interest, o.intent, o.next_step, o.next_step_due, o.lost_reason, o.owner_id, u.name as owner, o.contact_id,
-             ct.phone_e164, ct.wa_profile_name, p.full_name as patient, o.updated_at,
+             ct.phone_e164, ct.wa_profile_name, p.full_name as patient, o.patient_id, o.updated_at,
              (select e.actor from opportunity_events e where e.opportunity_id = o.id order by e.created_at desc limit 1) as last_actor,
              (select c.id from conversations c where c.contact_id = o.contact_id order by c.created_at desc limit 1) as conversation_id
-      from opportunities o join contacts ct on ct.id = o.contact_id left join patients p on p.id = o.patient_id left join app_users u on u.id = o.owner_id
+      from opportunities o left join contacts ct on ct.id = o.contact_id left join patients p on p.id = o.patient_id left join app_users u on u.id = o.owner_id
       where (${showClosed} or o.stage not in ('accepted','lost') or o.updated_at > now() - interval '14 days')
-        ${ctx.role === "dentista" ? tx`and exists (select 1 from appointments a where a.contact_id = o.contact_id and a.professional_id = ${own?.id ?? null})` : tx``}
+        ${ctx.role === "dentista" ? tx`and exists (select 1 from appointments a where (a.contact_id = o.contact_id or a.patient_id = o.patient_id) and a.professional_id = ${own?.id ?? null})` : tx``}
       order by o.updated_at desc limit 400`;
     const services = await tx<{ id: string; name: string }[]>`select id, name from services order by name`;
     const users = await tx<{ id: string; name: string }[]>`select id, name from app_users where active order by name`;
@@ -42,7 +42,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
 
   return (
     <>
-      <PageHeader title="CRM" subtitle="Interesses por estágio. Interesse não é tratamento contratado; consulta e relacionamento têm registros próprios.">
+      <PageHeader title="Oportunidades" subtitle="Acompanhe cada paciente do primeiro contato até o tratamento aceito.">
         <Link href={showClosed ? "/crm" : "/crm?fechadas=1"} className={buttonClass("outline")}>{showClosed ? "Ocultar antigas" : "Mostrar todas as finalizadas"}</Link>
         {canWrite && (
           <Modal trigger={<><Plus size={15} aria-hidden /> Nova oportunidade</>} title="Nova oportunidade" description="Registre o interesse de um contato em um serviço. Entra na coluna “Novo”." triggerClass={buttonClass("accent")}>
@@ -57,7 +57,16 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
         )}
       </PageHeader>
 
-      <p className="t-small -mt-6 mb-6">Arraste um cartão para outra coluna para mudar o estágio, ou use “Mover / editar”.</p>
+      <ul className="-mt-4 mb-6 flex flex-wrap gap-2" aria-label="Como funciona">
+        {[
+          [Hand, "Arraste o cartão para mudar o estágio"],
+          [CalendarCheck, "Consultas agendadas entram aqui sozinhas"],
+          [Info, "Interesse não é tratamento contratado"],
+        ].map(([Icon, text]) => {
+          const I = Icon as typeof Hand;
+          return <li key={String(text)} className="inline-flex h-8 items-center gap-2 rounded-sm border border-line bg-surface/60 px-3 text-[12.5px] text-bone-dim"><I size={14} aria-hidden className="text-acento" />{String(text)}</li>;
+        })}
+      </ul>
       {/* Funil em largura total: as colunas dividem a tela igualmente, sem rolagem lateral escondida. */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 min-[1760px]:grid-cols-8">
           {OPPORTUNITY_STAGES.map((stage) => {
@@ -76,7 +85,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
                     const overdue = o.next_step_due && o.next_step_due < new Date() && !["accepted", "lost"].includes(o.stage);
                     return (
                       <DragCard key={o.id} id={o.id} enabled={canWrite} className="rounded-md border border-line bg-surface p-3.5 transition-colors hover:border-bone-mute/50">
-                        <p className="t-h3 truncate text-[14px]">{o.patient ?? o.wa_profile_name ?? formatPhone(o.phone_e164)}</p>
+                        {o.patient_id ? (
+                          <Link href={`/pacientes/${o.patient_id}`} draggable={false} className="t-h3 block truncate text-[14px] underline-offset-2 hover:underline" title="Abrir ficha do paciente">{o.patient ?? "Paciente"}</Link>
+                        ) : <p className="t-h3 truncate text-[14px]">{o.wa_profile_name ?? (o.phone_e164 ? formatPhone(o.phone_e164) : "Sem nome")}</p>}
                         <p className="t-small truncate">{o.service_interest}</p>
                         <div className="mt-2.5 flex flex-wrap gap-1">
                           {o.intent && <Badge>{INTENT[o.intent]}</Badge>}
@@ -90,9 +101,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
                         )}
                         {o.lost_reason && <p className="mt-2 text-[11px] text-bone-mute">Motivo: {o.lost_reason}</p>}
                         <div className="mt-3 flex items-center justify-between gap-2 border-t border-line pt-3">
-                          {o.conversation_id && can(ctx.role, "conversations.view") ? <Link href={`/conversas?c=${o.conversation_id}`} className={buttonClass("ghost", "sm")}>Conversa</Link> : <span />}
+                          {o.conversation_id && can(ctx.role, "conversations.view") ? <Link href={`/conversas?c=${o.conversation_id}`} className={buttonClass("ghost", "sm")}>Conversa</Link> : o.patient_id ? <Link href={`/pacientes/${o.patient_id}`} className={buttonClass("ghost", "sm")}>Ficha</Link> : <span />}
                           {canWrite && (
-                            <Modal trigger="Mover / editar" title={o.patient ?? o.wa_profile_name ?? formatPhone(o.phone_e164)} description={`${o.service_interest} · hoje em “${OPPORTUNITY_STAGE_LABELS[o.stage]}”`} triggerClass={buttonClass("outline", "sm")}>
+                            <Modal trigger="Mover / editar" title={o.patient ?? o.wa_profile_name ?? (o.phone_e164 ? formatPhone(o.phone_e164) : "Sem nome")} description={`${o.service_interest} · hoje em “${OPPORTUNITY_STAGE_LABELS[o.stage]}”`} triggerClass={buttonClass("outline", "sm")}>
                               <h3 className="t-h3 mb-4">Mudar de estágio</h3>
                               <ActionForm action={moveOpportunityAction} className="space-y-5">
                                 <input type="hidden" name="opportunityId" value={o.id} />

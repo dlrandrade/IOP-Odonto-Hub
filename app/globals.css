@@ -59,7 +59,7 @@
   --danger: #ff6b5a; --danger-soft: #3d2326; --on-danger: #0a0e13;
   --info: #6cb8f5; --info-soft: #172d40;
   --violet: #b9a3fb; --violet-soft: #2a2442;
-  --grid-rgb: 242 239 233; --grid-alpha: 0.028; --glow-alpha: 0.10;
+  --grid-rgb: 242 239 233; --grid-alpha: 0.028; --glow-alpha: 0.14;
   --acento-rgb: 232 181 75;
   color-scheme: dark;
 }
@@ -74,23 +74,24 @@
   --danger: #c93a2f; --danger-soft: #fde5e2; --on-danger: #ffffff;
   --info: #1f6fb2; --info-soft: #e2effb;
   --violet: #6a4fd1; --violet-soft: #ece7fd;
-  --grid-rgb: 21 25 30; --grid-alpha: 0.045; --glow-alpha: 0.14;
+  --grid-rgb: 21 25 30; --grid-alpha: 0.045; --glow-alpha: 0.18;
   color-scheme: light;
 }
 
 /* Cada página tinge superfícies e bordas com 4–12% da sua cor: a página muda de temperatura sem trocar o sistema. */
 @supports (background: color-mix(in oklab, red, blue)) {
+  /* Tintura um pouco mais presente: cada página tem um fundo delicado na cor do seu ícone. */
   [data-tema] {
-    --ink: color-mix(in oklab, var(--ink-base) 96%, rgb(var(--acento-rgb)));
-    --surface: color-mix(in oklab, var(--surface-base) 93%, rgb(var(--acento-rgb)));
-    --surface-2: color-mix(in oklab, var(--surface-2-base) 91%, rgb(var(--acento-rgb)));
-    --line: color-mix(in oklab, var(--line-base) 88%, rgb(var(--acento-rgb)));
+    --ink: color-mix(in oklab, var(--ink-base) 93%, rgb(var(--acento-rgb)));
+    --surface: color-mix(in oklab, var(--surface-base) 90%, rgb(var(--acento-rgb)));
+    --surface-2: color-mix(in oklab, var(--surface-2-base) 88%, rgb(var(--acento-rgb)));
+    --line: color-mix(in oklab, var(--line-base) 85%, rgb(var(--acento-rgb)));
   }
   :root[data-theme="light"] [data-tema] {
-    --ink: color-mix(in oklab, var(--ink-base) 97%, rgb(var(--acento-rgb)));
-    --surface: color-mix(in oklab, var(--surface-base) 98%, rgb(var(--acento-rgb)));
-    --surface-2: color-mix(in oklab, var(--surface-2-base) 95%, rgb(var(--acento-rgb)));
-    --line: color-mix(in oklab, var(--line-base) 90%, rgb(var(--acento-rgb)));
+    --ink: color-mix(in oklab, var(--ink-base) 93%, rgb(var(--acento-rgb)));
+    --surface: color-mix(in oklab, var(--surface-base) 97%, rgb(var(--acento-rgb)));
+    --surface-2: color-mix(in oklab, var(--surface-2-base) 92%, rgb(var(--acento-rgb)));
+    --line: color-mix(in oklab, var(--line-base) 86%, rgb(var(--acento-rgb)));
   }
 }
 

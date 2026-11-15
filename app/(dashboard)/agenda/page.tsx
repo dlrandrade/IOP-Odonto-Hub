@@ -5,7 +5,7 @@ import { ActionForm, Modal, SubmitOnChange } from "@/components/client";
 import { Badge, Button, buttonClass, Card, Checkbox, Empty, Field, Input, PageHeader, Segmented, Select } from "@/components/ui";
 import { can } from "@/domain/permissions";
 import { APPOINTMENT_STATUSES, APPOINTMENT_STATUS_LABELS, type AppointmentStatus } from "@/domain/states";
-import { addDays, formatDay, formatFull, localDate, localParts, localTime, weekdayOf, zonedToUtc } from "@/lib/datetime";
+import { addDays, formatDay, formatFull, formatShort, localDate, localParts, localTime, WEEKDAY_LABELS, weekdayOf, zonedToUtc } from "@/lib/datetime";
 import { cn } from "@/lib/format";
 import { appointmentStatusAction, createBlockAction, deleteBlockAction } from "./actions";
 import { BookingForm } from "./booking-form";
@@ -64,6 +64,12 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         and a.professional_id = any(${professionals.map((p) => p.id)}::uuid[])
         ${status ? tx`and a.status = ${status}` : tx`and a.status <> 'cancelled'`}
       order by a.starts_at`;
+    // Para a legenda clicável: todas as consultas do período visível, inclusive canceladas.
+    const byStatus = await tx<{ id: string; starts_at: Date; status: AppointmentStatus; patient: string; patient_id: string; service: string; professional: string }[]>`
+      select a.id, a.starts_at, a.status, p.full_name as patient, a.patient_id, s.name as service, pr.name as professional
+      from appointments a join services s on s.id = a.service_id join patients p on p.id = a.patient_id join professionals pr on pr.id = a.professional_id
+      where a.starts_at >= ${start} and a.starts_at < ${end} and a.professional_id = any(${professionals.map((p) => p.id)}::uuid[])
+      order by a.starts_at`;
     const blocks = await tx<{ id: string; professional_id: string | null; s: Date; e: Date; reason: string | null }[]>`
       select id, professional_id, lower(during) as s, upper(during) as e, reason from time_blocks
       where during && tstzrange(${start}, ${end}) and resource_id is null order by lower(during)`;
@@ -71,7 +77,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
       select s.id, s.name, coalesce(array_agg(sp.professional_id) filter (where sp.professional_id is not null), '{}') as professional_ids
       from services s left join service_professionals sp on sp.service_id = s.id group by s.id order by s.name` : [];
     const patients = canWrite ? await tx<{ id: string; name: string }[]>`select id, full_name as name from patients where merged_into_patient_id is null order by full_name limit 1000` : [];
-    return { professionals, allProfessionals, appts, blocks, services, patients, onlyProf };
+    return { professionals, allProfessionals, appts, blocks, services, patients, onlyProf, byStatus };
   });
 
   const href = (params: Record<string, string | null>) => {
@@ -228,8 +234,11 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
           {Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)).map((d) => {
             const list = data.appts.filter((a) => localDate(a.starts_at, ctx.tz) === d);
             return (
-              <Card key={d} className={cn("p-3", d === today && "ring-2 ring-gold")}>
-                <Link href={href({ d, v: null })} className="mb-2 block text-xs font-semibold capitalize hover:underline">{formatDay(d)} <span className="font-normal text-bone-mute">· {list.length}</span></Link>
+              <Card key={d} className={cn("min-w-0 p-3", d === today && "border-acento shadow-[0_0_0_1px_rgb(var(--acento-rgb))]")}>
+                <Link href={href({ d, v: null })} className="mb-2 flex items-baseline justify-between gap-2 whitespace-nowrap hover:underline">
+                  <span className="text-[13px] font-semibold">{WEEKDAY_LABELS[weekdayOf(d)]!.slice(0, 3)} <span className="font-mono text-[12px] font-normal text-bone-dim">{d.slice(8)}/{d.slice(5, 7)}</span></span>
+                  <span className="font-mono text-[11px] text-bone-mute">{list.length}</span>
+                </Link>
                 <div className="space-y-1.5">{list.length === 0 ? <p className="text-[11px] text-bone-mute">Livre</p> : list.map((a) => <ApptCard key={a.id} a={a} compact />)}</div>
               </Card>
             );
@@ -252,8 +261,33 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
         </Card>
       )}
 
-      <div className="mt-3 flex flex-wrap gap-2 text-xs" aria-label="Legenda de status">
-        {APPOINTMENT_STATUSES.map((s) => { const Icon = STATUS[s].icon; return <span key={s} className={cn("inline-flex h-7 items-center gap-1.5 rounded-sm border-l-2 px-2.5", STATUS[s].cls)}><Icon size={12} aria-hidden /> {APPOINTMENT_STATUS_LABELS[s]}</span>; })}
+      {/* Legenda clicável: cada situação abre a lista de quem está nela no período que está na tela. */}
+      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs" aria-label="Situações das consultas">
+        <span className="t-small mr-1">No período:</span>
+        {APPOINTMENT_STATUSES.map((st) => {
+          const Icon = STATUS[st].icon;
+          const list = data.byStatus.filter((a) => a.status === st);
+          return (
+            <Modal key={st} title={APPOINTMENT_STATUS_LABELS[st]} description={`${list.length} consulta${list.length === 1 ? "" : "s"} ${view === "dia" ? "neste dia" : view === "semana" ? "nesta semana" : "neste mês"}.`}
+              triggerTitle={`Ver consultas: ${APPOINTMENT_STATUS_LABELS[st]}`}
+              triggerClass={cn("inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-sm border-l-2 px-2.5 transition-[filter,box-shadow] hover:brightness-110 hover:shadow-[0_0_0_1px_rgb(var(--acento-rgb)/0.6)]", STATUS[st].cls)}
+              trigger={<><Icon size={12} aria-hidden /> {APPOINTMENT_STATUS_LABELS[st]} <span className="font-mono opacity-70">{list.length}</span></>}>
+              {list.length === 0 ? <p className="t-small">Nenhuma consulta nesta situação no período.</p> : (
+                <ul className="divide-y divide-line">
+                  {list.map((a) => (
+                    <li key={a.id} className="flex min-h-14 items-center justify-between gap-4 py-2.5">
+                      <div className="min-w-0">
+                        <Link href={`/pacientes/${a.patient_id}`} className="t-h3 block truncate hover:underline">{a.patient}</Link>
+                        <p className="t-small truncate">{a.service} · {a.professional}</p>
+                      </div>
+                      <Link href={href({ d: localDate(a.starts_at, ctx.tz), v: null })} className={cn(buttonClass("ghost", "sm"), "shrink-0 font-mono normal-case tracking-normal")}>{formatShort(a.starts_at, ctx.tz)}</Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Modal>
+          );
+        })}
       </div>
     </>
   );

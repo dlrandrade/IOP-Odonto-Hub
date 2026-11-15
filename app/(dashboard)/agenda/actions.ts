@@ -9,7 +9,8 @@ import { actionCtx } from "@/auth/session";
 import { addDays, localTime, zonedToUtc } from "@/lib/datetime";
 import { audit } from "@/services/audit";
 import { bookAppointment, cancelAppointment, findSlots, rescheduleAppointment, setAppointmentStatus } from "@/services/booking";
-import { onEvaluationBooked } from "@/services/crm";
+import { syncOpportunityOnBooking } from "@/services/crm";
+import { formatFull } from "@/lib/datetime";
 
 const PATH = "/agenda";
 const id = z.string().uuid();
@@ -56,8 +57,7 @@ export async function createAppointmentAction(_: ActionState, form: FormData): P
         createdByType: "user", createdByUserId: ctx.userId, notes: optStr(form, "notes"), ignoreLeadTime: true,
       });
       if (!r.ok) throw new UserError(r.reason === "conflict" || r.reason === "unavailable" ? "Esse horário acabou de ser ocupado. Escolha outro." : r.message);
-      const [svc] = await tx<{ kind: string }[]>`select kind from services where id = ${serviceId}`;
-      if (svc?.kind === "evaluation" && link?.contact_id) await onEvaluationBooked(tx, ctx.clinicId, link.contact_id, serviceId, "user");
+      await syncOpportunityOnBooking(tx, { clinicId: ctx.clinicId, patientId, contactId: link?.contact_id ?? null, serviceId, actor: "user", actorUserId: ctx.userId, when: formatFull(r.startsAt, ctx.tz) });
     });
   });
 }

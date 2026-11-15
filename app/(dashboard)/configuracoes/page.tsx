@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Bot, Building2, CalendarDays, MessageCircle, Plus, ScrollText, Users, type LucideIcon } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal } from "@/components/client";
 import { Badge, Button, buttonClass, Card, CardTitle, Checkbox, Empty, Field, Input, Notice, PageHeader, Select, Table, Textarea } from "@/components/ui";
@@ -13,6 +13,7 @@ import { inviteUserAction, saveAiAction, saveClinicAction, saveProfessionalActio
 export const metadata = { title: "Configurações" };
 
 const TABS = [["clinica", "Clínica"], ["equipe", "Equipe"], ["agenda", "Agenda"], ["whatsapp", "WhatsApp"], ["ia", "Assistente (IA)"], ["auditoria", "Auditoria"]] as const;
+const TAB_ICON: Record<(typeof TABS)[number][0], LucideIcon> = { clinica: Building2, equipe: Users, agenda: CalendarDays, whatsapp: MessageCircle, ia: Bot, auditoria: ScrollText };
 const ranges = (list?: [string, string][]) => (list ?? []).map(([a, b]) => `${a}-${b}`).join(", ");
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ aba?: string }> }) {
@@ -81,11 +82,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Configurações" subtitle="Tudo é ajustável por aqui, sem mexer em código." />
       <div className="grid gap-6 lg:grid-cols-[200px_minmax(0,1fr)] lg:gap-10">
-        <nav aria-label="Seções de configuração" className="scroll-thin -mx-4 flex gap-1 overflow-x-auto px-4 lg:mx-0 lg:block lg:space-y-0.5 lg:overflow-visible lg:px-0">
+        <nav aria-label="Seções de configuração" className="scroll-thin -mx-4 flex gap-1 overflow-x-auto px-4 lg:mx-0 lg:flex lg:flex-col lg:gap-1 lg:overflow-visible lg:px-0">
           {TABS.filter(([k]) => isAdmin || k === "auditoria").map(([k, label]) => (
             <Link key={k} href={`/configuracoes?aba=${k}`} aria-current={tab === k ? "page" : undefined}
-              className={cn("relative shrink-0 rounded-md px-3 py-2 text-[13.5px] font-medium transition-colors lg:block", tab === k ? "bg-surface-2 text-bone" : "text-bone-mute hover:text-bone")}>
-              {tab === k && <span aria-hidden className="absolute inset-y-1.5 left-0 hidden w-0.5 rounded-full bg-acento lg:block" />}
+              className={cn("group relative flex shrink-0 items-center gap-3 rounded-md py-2 pl-4 pr-3 text-[13.5px] font-medium transition-colors", tab === k ? "bg-surface-2 text-bone" : "text-bone-dim hover:bg-surface-2/60 hover:text-bone")}>
+              {tab === k && <span aria-hidden className="absolute left-1.5 top-1/2 hidden h-4 w-[3px] -translate-y-1/2 rounded-full bg-acento lg:block" />}
+              {(() => { const Icon = TAB_ICON[k]; return <span className={cn("flex size-7 shrink-0 items-center justify-center rounded-sm transition-colors", tab === k ? "bg-acento/15 text-acento" : "bg-surface-2/70 text-bone-mute group-hover:text-bone-dim")}><Icon size={15} aria-hidden /></span>; })()}
               {label}
             </Link>
           ))}

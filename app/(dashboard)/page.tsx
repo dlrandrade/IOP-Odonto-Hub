@@ -63,39 +63,49 @@ export default async function TodayPage() {
   const open = data.appts.filter((a) => ["scheduled", "confirmed", "arrived", "in_service"].includes(a.status)).length;
 
   const actions = [
-    can(ctx.role, "agenda.write") && { href: "/agenda?nova=1", icon: CalendarPlus, title: "Agendar consulta", text: "Escolha o paciente, o serviço e um horário livre." },
-    can(ctx.role, "patients.write") && { href: "/pacientes?novo=1", icon: UserPlus, title: "Cadastrar paciente", text: "Nome, nascimento e WhatsApp. Leva 1 minuto." },
-    seesChats && { href: "/conversas", icon: MessageCircle, title: "Responder conversas", text: data.waiting.length ? `${data.waiting.length} esperando a equipe agora.` : "Veja o que a assistente está respondendo." },
+    can(ctx.role, "agenda.write") && { href: "/agenda?nova=1", icon: CalendarPlus, title: "Agendar consulta", text: "Paciente, serviço e horário." },
+    can(ctx.role, "patients.write") && { href: "/pacientes?novo=1", icon: UserPlus, title: "Cadastrar paciente", text: "Leva menos de 1 minuto." },
+    seesChats && { href: "/conversas", icon: MessageCircle, title: "Responder conversas", text: data.waiting.length ? `${data.waiting.length} esperando agora.` : "Acompanhe a assistente." },
   ].filter((x): x is { href: string; icon: LucideIcon; title: string; text: string } => !!x);
-  const cols = ["", "sm:grid-cols-1", "sm:grid-cols-2", "sm:grid-cols-3"][actions.length] ?? "sm:grid-cols-3";
 
   return (
     <div className="space-y-10">
-      <header className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
-        <div>
-          <p className="t-small first-letter:uppercase">{formatDay(today)}</p>
-          <h1 className="t-h1 mt-1">{greeting}, {ctx.name.split(" ")[0]}</h1>
-        </div>
-        <p className="t-body max-w-sm text-bone-dim">
-          {seesChats && ctx.role !== "dentista" ? (data.waiting.length > 0 ? `${data.waiting.length === 6 ? "6 ou mais" : data.waiting.length} conversa${data.waiting.length > 1 ? "s" : ""} esperando você. ` : "Nenhuma conversa esperando. ") : ""}
-          {seesAgenda ? `${open} consulta${open === 1 ? "" : "s"} por atender hoje.` : ""}
-        </p>
+      <header>
+        <p className="t-small first-letter:uppercase">{formatDay(today)}</p>
+        <h1 className="t-h1 mt-1">{greeting}, {ctx.name.split(" ")[0]}</h1>
       </header>
 
-      {actions.length > 0 && (
-        <nav aria-label="Atalhos" className={`grid gap-6 ${cols}`}>
-          {actions.map((a) => (
-            <Link key={a.href} href={a.href} className="group fio-topo flex h-[104px] items-center gap-4 rounded-lg border border-line bg-surface/70 px-5 transition-colors hover:border-bone-mute/50 hover:bg-surface">
-              <span className="flex size-11 shrink-0 items-center justify-center rounded-md bg-acento/12 text-acento"><a.icon size={20} aria-hidden /></span>
-              <span className="min-w-0 flex-1">
-                <span className="t-h3 block">{a.title}</span>
-                <span className="t-small mt-1 line-clamp-2 block">{a.text}</span>
-              </span>
-              <ArrowRight size={16} aria-hidden className="shrink-0 text-bone-mute transition-transform group-hover:translate-x-0.5 group-hover:text-bone" />
-            </Link>
-          ))}
-        </nav>
-      )}
+      {/* Quatro caixas de 25%: duas a duas, alinham com os blocos de 50% logo abaixo. */}
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <section aria-label="Agora" className="fio-topo flex h-[104px] items-center gap-4 rounded-lg border border-acento/30 bg-acento/[0.07] px-5">
+          <div className="grid w-full grid-cols-2 divide-x divide-line">
+            {seesChats && ctx.role !== "dentista" ? (
+              <Link href="/conversas?f=nao-atribuidas" className="group pr-4">
+                <span className="eyebrow block text-bone-mute">Esperando</span>
+                <span className="mt-1 flex items-baseline gap-1.5"><span className={`display num text-[30px] leading-none ${data.waiting.length ? "text-gold" : ""}`}>{data.waiting.length === 6 ? "6+" : data.waiting.length}</span><span className="t-small group-hover:text-bone">conversa{data.waiting.length === 1 ? "" : "s"}</span></span>
+              </Link>
+            ) : <div className="pr-4"><span className="eyebrow block text-bone-mute">Hoje</span><span className="t-small mt-1 block">{formatDay(today)}</span></div>}
+            {seesAgenda ? (
+              <Link href={`/agenda?d=${today}`} className="group pl-4">
+                <span className="eyebrow block text-bone-mute">Por atender</span>
+                <span className="mt-1 flex items-baseline gap-1.5"><span className="display num text-[30px] leading-none">{open}</span><span className="t-small group-hover:text-bone">consulta{open === 1 ? "" : "s"} hoje</span></span>
+              </Link>
+            ) : <div className="pl-4" />}
+          </div>
+        </section>
+        {actions.map((a) => (
+          <Link key={a.href} href={a.href} className="group fio-topo flex h-[104px] flex-col justify-between rounded-lg border border-line bg-surface/70 px-5 py-4 transition-colors hover:border-bone-mute/50 hover:bg-surface">
+            <span className="flex items-center justify-between">
+              <span className="flex size-8 items-center justify-center rounded-md bg-acento/12 text-acento"><a.icon size={17} aria-hidden /></span>
+              <ArrowRight size={16} aria-hidden className="text-bone-mute transition-transform group-hover:translate-x-0.5 group-hover:text-bone" />
+            </span>
+            <span className="min-w-0">
+              <span className="t-h3 block truncate">{a.title}</span>
+              <span className="t-small block truncate">{a.text}</span>
+            </span>
+          </Link>
+        ))}
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         {seesChats && ctx.role !== "dentista" && (
