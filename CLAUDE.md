@@ -22,6 +22,7 @@ npm run db:local     # idem, em Postgres puro (cria o shim de auth local)
 npm run db:seed      # cria a "Clínica Sorriso Demo" (dados fictícios)
 npm run setup:admin  # cria o operador da plataforma (ADMIN_EMAIL / ADMIN_PASSWORD)
 npm run eval:agent   # conversas roteirizadas contra o modelo real (exige ANTHROPIC_API_KEY)
+npm run pwa:assets   # regenera ícones e telas de abertura do app (public/pwa) a partir de scripts/pwa/icon.svg
 ```
 
 Desenvolvimento sem Supabase: Postgres local + `AUTH_MODE=local` no `.env.local`.

@@ -35,7 +35,7 @@ export default async function PlatformPage() {
   const acting = clinics.find((c) => c.id === me.actingClinicId);
 
   return (
-    <main className="mx-auto max-w-[1320px] px-4 py-6 sm:px-6 lg:px-10">
+    <main className="mx-auto max-w-[1320px] px-4 pb-6 pt-[max(1.5rem,env(safe-area-inset-top))] sm:px-6 lg:px-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <Logo />
         <div className="flex items-center gap-2">

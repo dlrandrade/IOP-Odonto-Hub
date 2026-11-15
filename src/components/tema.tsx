@@ -12,7 +12,8 @@ export function TemaPagina() {
     document.body.style.setProperty("--acento-rgb", t.rgb);
     document.documentElement.style.setProperty("--acento-rgb", t.rgb);
     document.body.dataset.tema = t.hex;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", "#0a0e13");
+    // Cor da barra do sistema (Android/desktop) acompanha o tema escolhido.
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", document.documentElement.dataset.theme === "light" ? "#f5f3ee" : "#0a0e13");
   }, [caminho]);
   return null;
 }

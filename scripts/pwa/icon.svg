@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Ícone do app: dente em mostarda (marca) sobre grafite. Quadrado cheio: o iOS arredonda sozinho. -->
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="28%" r="85%">
+      <stop offset="0" stop-color="#1f2833"/>
+      <stop offset="0.55" stop-color="#121820"/>
+      <stop offset="1" stop-color="#0a0e13"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="46%" r="42%">
+      <stop offset="0" stop-color="#E8B54B" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#E8B54B" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#F7D488"/>
+      <stop offset="0.45" stop-color="#E8B54B"/>
+      <stop offset="1" stop-color="#B88A2E"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <rect width="1024" height="1024" fill="url(#glow)"/>
+  <path fill="url(#gold)" d="M512 262C455 232 382 214 332 244C270 281 262 366 282 436C300 498 318 546 330 614C345 702 354 790 402 806C450 822 460 732 472 672C482 622 493 594 512 594C531 594 542 622 552 672C564 732 574 822 622 806C670 790 679 702 694 614C706 546 724 498 742 436C762 366 754 281 692 244C642 214 569 232 512 262Z"/>
+  <path fill="url(#shine)" opacity="0.7" d="M340 284C374 262 428 270 474 292C432 300 396 322 376 360C362 388 356 420 356 452C336 406 318 318 340 284Z"/>
+  <path fill="#F7D488" d="M760 196l13 38 38 13-38 13-13 38-13-38-38-13 38-13z"/>
+  <circle cx="808" cy="318" r="9" fill="#F7D488" opacity="0.8"/>
+</svg>

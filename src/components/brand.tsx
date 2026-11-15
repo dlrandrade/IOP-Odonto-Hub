@@ -21,7 +21,7 @@ const FATOS = [
 /** Moldura das telas de entrada: painel escuro com a proposta + formulário. */
 export function AuthFrame({ title, subtitle, children }: { title: string; highlight?: string; subtitle: string; children: React.ReactNode }) {
   return (
-    <main className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
+    <main className="grid min-h-dvh pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] lg:grid-cols-[1.1fr_1fr]">
       <section className="relative hidden flex-col justify-between overflow-hidden border-r border-line bg-surface p-12 lg:flex">
         <div aria-hidden className="pointer-events-none absolute inset-0" style={{ background: "radial-gradient(60% 45% at 20% 0%, rgb(var(--acento-rgb) / 0.14), transparent 70%)" }} />
         <Logo className="relative" />

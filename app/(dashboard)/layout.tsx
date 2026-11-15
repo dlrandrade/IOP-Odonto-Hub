@@ -6,6 +6,7 @@ import { Logo } from "@/components/brand";
 import { Frame, MobileTabs, ThemeToggle, SearchBox, Sidebar, type NavEntry, type NavGroup } from "@/components/nav";
 import { Avatar, Badge } from "@/components/ui";
 import { VerComoCliente } from "@/components/vista";
+import { InstallHint } from "@/components/pwa";
 import { can, ROLE_LABELS } from "@/domain/permissions";
 import { setupSteps } from "@/services/setup-progress";
 import { logoutAction } from "../(auth)/actions";
@@ -87,14 +88,18 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   return (
     // data-vista: "simples" esconde o que é técnico (classes simples:hidden); "detalhada" mostra tudo.
     <div className="min-h-dvh lg:pl-64" data-vista={ctx.detailed ? "detalhada" : "simples"}>
-      <aside className="vidro-forte fixed inset-y-0 left-0 z-30 hidden w-64 border-r lg:block">
+      <aside className="vidro-forte fixed inset-y-0 left-0 z-30 hidden w-64 border-r pt-[env(safe-area-inset-top)] lg:block">
         <div className="flex h-14 items-center border-b border-line/70 px-6"><Link href="/" aria-label="Início"><Logo /></Link></div>
         <div className="h-[calc(100%-3.5rem)]"><Sidebar groups={groups} settings={settings} footer={footer} /></div>
       </aside>
       <div className="flex min-h-dvh flex-col">
-        <header className="vidro-forte sticky top-0 z-20 border-x-0 border-t-0 border-b">
+        <header className="vidro-forte sticky top-0 z-20 border-x-0 border-t-0 border-b pt-[env(safe-area-inset-top)]">
           <Frame className="flex h-14 items-center gap-3">
-          <Link href="/" aria-label="Início" className="shrink-0 lg:hidden"><Logo /></Link>
+          <Link href="/" aria-label="Início" className="flex shrink-0 items-center gap-2.5 lg:hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/pwa/icon-96.png" alt="" width={32} height={32} className="size-8 rounded-[9px]" />
+            <span className="hidden sm:inline"><Logo /></span>
+          </Link>
           <div className="ml-auto flex min-w-0 flex-1 items-center justify-end gap-2 lg:ml-0 lg:justify-between lg:gap-6">
             <div className="hidden min-w-0 max-w-[480px] flex-1 lg:block"><SearchBox pages={flat} /></div>
             <div className="flex items-center gap-2">
@@ -106,7 +111,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
               <Link href={can(ctx.role, "ai.configure") ? "/configuracoes?aba=ia" : "/conversas"} className="hidden sm:block">
                 <Badge tone={aiOn ? "ok" : "warn"}><Bot size={11} aria-hidden /> IA {ctx.clinic.ai_kill_switch ? "pausada" : aiOn ? "ativa" : "desligada"}</Badge>
               </Link>
-              {ctx.clinic.is_demo && <Badge tone="sun" className="hidden md:inline-flex">Demonstração</Badge>}
+              {ctx.clinic.is_demo && <span className="hidden md:inline-flex"><Badge tone="sun">Demonstração</Badge></span>}
               {ctx.isPlatformAdmin && <VerComoCliente detailed={ctx.detailed} />}
               {ctx.isPlatformAdmin && (
                 <Link href="/admin" aria-label="Painel da plataforma" className="flex h-8 items-center gap-1.5 rounded-sm border border-line px-2.5 font-mono text-[10.5px] font-medium uppercase tracking-[0.08em] text-bone-dim transition-colors hover:border-gold hover:text-gold">
@@ -122,6 +127,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
         <main className="entrada flex-1 pb-28 pt-8 lg:pb-16 lg:pt-12"><Frame>{children}</Frame></main>
       </div>
       <MobileTabs primary={primary} more={more} />
+      <InstallHint />
     </div>
   );
 }

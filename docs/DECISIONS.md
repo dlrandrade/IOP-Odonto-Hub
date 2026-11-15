@@ -52,6 +52,7 @@ Registro das decisões tomadas na construção. Defaults da seção 17 do PRD fo
 | Automações só por WhatsApp | Canal por automação: **WhatsApp, E-mail (Resend) ou Instagram** (`automation_rules.channel`); Instagram e e-mail sem configuração viram tarefa com texto pronto | Instagram Direct ainda não integrado (pendente de app da Meta); nunca descartar um envio em silêncio. |
 | Cadastro mínimo na contratação | Onboarding e painel da plataforma recebem telefone, e-mail, Instagram, site, endereço e link do Google; `createClinic` grava, preenche a unidade e cria a automação "Pedir avaliação no Google" | Pedido: a conta já nasce configurada com os dados do cliente. |
 | Cores por página repetidas entre recursos | Uma cor por recurso, espaçadas na roda a partir da mostarda (`src/lib/tema.ts`, com o significado de cada uma) | Pedido de cores distintas com base em psicologia das cores. |
+| Só site responsivo | **PWA instalável** com cara de app de iPhone: ícone próprio, telas de abertura por aparelho (claro/escuro), barra de status integrada, áreas seguras do notch, guia "Adicionar à Tela de Início" no iOS e botão Instalar no Android; service worker só guarda arquivos estáticos e mostra `/offline.html` sem internet | Dados de pacientes nunca ficam em cache no aparelho (LGPD). Notificações push ficam para uma próxima etapa (exigem chaves VAPID e consentimento). |
 
 ## Decisões técnicas complementares
 

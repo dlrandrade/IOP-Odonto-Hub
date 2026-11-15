@@ -159,6 +159,17 @@
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E");
   }
   ::selection { background: var(--color-gold); color: #0a0e13; }
+  /* ── Comportamento de app (iPhone/Android instalado) ── */
+  html { -webkit-tap-highlight-color: transparent; }
+  /* paisagem com notch: nada fica embaixo da câmera */
+  body { padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+  /* iOS dá zoom em campos com letra < 16 px; em telas de toque os campos usam 16 px */
+  @media (pointer: coarse) { input, select, textarea { font-size: 16px !important; } }
+  @media (display-mode: standalone) {
+    /* sem "elástico" revelando o fundo e sem menus de cópia ao segurar botões e menus */
+    html, body { overscroll-behavior-y: none; }
+    nav, button, [role="button"], [role="switch"], .bloco, .icone-app, img { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  }
   :focus-visible { outline: 2px solid var(--color-gold); outline-offset: 2px; border-radius: 4px; }
 }
 

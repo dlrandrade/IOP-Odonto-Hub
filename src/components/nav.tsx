@@ -206,6 +206,7 @@ export function ThemeToggle({ className }: { className?: string }) {
     const next = light ? "dark" : "light";
     document.documentElement.dataset.theme = next;
     document.cookie = `tema=${next}; path=/; max-age=31536000; samesite=lax`;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", next === "light" ? "#f5f3ee" : "#0a0e13");
     setLight(!light);
   };
   return (

@@ -14,7 +14,8 @@
     "db:local": "tsx scripts/migrate.ts --local",
     "db:seed": "tsx scripts/migrate.ts --seed",
     "setup:admin": "tsx scripts/create-admin.ts",
-    "eval:agent": "tsx scripts/eval-agent.ts"
+    "eval:agent": "tsx scripts/eval-agent.ts",
+    "pwa:assets": "node scripts/pwa/generate.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
