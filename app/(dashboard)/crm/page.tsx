@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { DragCard, DropColumn } from "@/components/kanban";
 import { Bot, CalendarCheck, CalendarClock, Hand, Info, Plus, UserRound } from "lucide-react";
+import { FocusHere } from "@/components/focus-here";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal } from "@/components/client";
 import { Badge, Button, buttonClass, Field, Input, PageHeader, Select } from "@/components/ui";
@@ -18,9 +19,12 @@ type Opp = {
 };
 const INTENT: Record<string, string> = { curioso: "Curioso", considerando: "Considerando", quer_agendar: "Quer agendar" };
 
-export default async function CrmPage({ searchParams }: { searchParams: Promise<{ fechadas?: string }> }) {
+export default async function CrmPage({ searchParams }: { searchParams: Promise<{ fechadas?: string; o?: string }> }) {
   const ctx = await requireCtx("crm.view");
-  const showClosed = (await searchParams).fechadas === "1";
+  const sp = await searchParams;
+  // ?o=<id>: vindo da agenda ou da ficha, destaca o cartão do paciente no funil.
+  const focus = sp.o && /^[0-9a-f-]{36}$/.test(sp.o) ? sp.o : null;
+  const showClosed = sp.fechadas === "1";
   const canWrite = can(ctx.role, "crm.write");
   const data = await q(ctx, async (tx) => {
     const [own] = ctx.role === "dentista" && ctx.userId ? await tx<{ id: string }[]>`select id from professionals where app_user_id = ${ctx.userId}` : [];
@@ -30,7 +34,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
              (select e.actor from opportunity_events e where e.opportunity_id = o.id order by e.created_at desc limit 1) as last_actor,
              (select c.id from conversations c where c.contact_id = o.contact_id order by c.created_at desc limit 1) as conversation_id
       from opportunities o left join contacts ct on ct.id = o.contact_id left join patients p on p.id = o.patient_id left join app_users u on u.id = o.owner_id
-      where (${showClosed} or o.stage not in ('accepted','lost') or o.updated_at > now() - interval '14 days')
+      where (${showClosed} or o.stage not in ('accepted','lost') or o.updated_at > now() - interval '14 days' or o.id = ${focus})
         ${ctx.role === "dentista" ? tx`and exists (select 1 from appointments a where (a.contact_id = o.contact_id or a.patient_id = o.patient_id) and a.professional_id = ${own?.id ?? null})` : tx``}
       order by o.updated_at desc limit 400`;
     const services = await tx<{ id: string; name: string }[]>`select id, name from services order by name`;
@@ -84,7 +88,8 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
                   {list.map((o) => {
                     const overdue = o.next_step_due && o.next_step_due < new Date() && !["accepted", "lost"].includes(o.stage);
                     return (
-                      <DragCard key={o.id} id={o.id} enabled={canWrite} className="rounded-md border border-line bg-surface/80 p-3.5 shadow-[inset_0_1px_0_var(--glass-shine)] transition-colors hover:border-bone-mute/50">
+                      <DragCard key={o.id} id={o.id} enabled={canWrite} className={cn("rounded-md border border-line bg-surface/80 p-3.5 shadow-[inset_0_1px_0_var(--glass-shine)] transition-colors hover:border-bone-mute/50", focus === o.id && "border-acento ring-2 ring-acento/50")}>
+                        {focus === o.id && <FocusHere />}
                         {o.patient_id ? (
                           <Link href={`/pacientes/${o.patient_id}`} draggable={false} className="t-h3 block truncate text-[14px] underline-offset-2 hover:underline" title="Abrir ficha do paciente">{o.patient ?? "Paciente"}</Link>
                         ) : <p className="t-h3 truncate text-[14px]">{o.wa_profile_name ?? (o.phone_e164 ? formatPhone(o.phone_e164) : "Sem nome")}</p>}

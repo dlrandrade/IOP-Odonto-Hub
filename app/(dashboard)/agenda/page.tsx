@@ -4,7 +4,7 @@ import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal, SubmitOnChange } from "@/components/client";
 import { Badge, Button, buttonClass, Card, Checkbox, Empty, Field, Input, PageHeader, Segmented, Select } from "@/components/ui";
 import { can } from "@/domain/permissions";
-import { APPOINTMENT_STATUSES, APPOINTMENT_STATUS_LABELS, type AppointmentStatus } from "@/domain/states";
+import { APPOINTMENT_STATUSES, APPOINTMENT_STATUS_LABELS, OPPORTUNITY_STAGE_LABELS, type AppointmentStatus, type OpportunityStage } from "@/domain/states";
 import { addDays, formatDay, formatFull, formatShort, localDate, localParts, localTime, WEEKDAY_LABELS, weekdayOf, zonedToUtc } from "@/lib/datetime";
 import { cn } from "@/lib/format";
 import { appointmentStatusAction, createBlockAction, deleteBlockAction } from "./actions";
@@ -15,6 +15,7 @@ export const metadata = { title: "Agenda" };
 type Appt = {
   id: string; starts_at: Date; ends_at: Date; status: AppointmentStatus; professional_id: string; service_id: string; service: string;
   patient: string; patient_id: string; created_by_type: string; notes: string | null; chair: string | null; cancel_reason: string | null;
+  opp_id: string | null; opp_stage: OpportunityStage | null; opp_service: string | null;
 };
 
 /** Status nunca depende só de cor: cada um tem ícone e rótulo. */
@@ -42,6 +43,7 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
   const day = /^\d{4}-\d{2}-\d{2}$/.test(sp.d ?? "") ? sp.d! : today;
   const view = sp.v === "semana" || sp.v === "mes" ? sp.v : "dia";
   const canWrite = can(ctx.role, "agenda.write");
+  const seesCrm = can(ctx.role, "crm.view");
 
   const weekStart = addDays(day, -((weekdayOf(day) + 6) % 7));
   const monthStart = `${day.slice(0, 8)}01`;
@@ -58,8 +60,14 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
     const status = APPOINTMENT_STATUSES.find((s) => s === sp.st);
     const appts = await tx<Appt[]>`
       select a.id, a.starts_at, a.ends_at, a.status, a.professional_id, a.service_id, s.name as service, p.full_name as patient, a.patient_id, a.created_by_type, a.notes, a.cancel_reason,
-             (select r.name from appointment_resources ar join resources r on r.id = ar.resource_id where ar.appointment_id = a.id and r.kind = 'chair' limit 1) as chair
+             (select r.name from appointment_resources ar join resources r on r.id = ar.resource_id where ar.appointment_id = a.id and r.kind = 'chair' limit 1) as chair,
+             o.id as opp_id, o.stage as opp_stage, o.service_interest as opp_service
       from appointments a join services s on s.id = a.service_id join patients p on p.id = a.patient_id
+      -- Oportunidade do paciente no CRM: a do mesmo serviço, senão a mais recente em aberto.
+      left join lateral (
+        select o.id, o.stage, o.service_interest from opportunities o where o.patient_id = a.patient_id
+        order by (o.service_id = a.service_id) desc nulls last, (o.stage <> 'lost') desc, o.updated_at desc limit 1
+      ) o on true
       where a.starts_at >= ${start} and a.starts_at < ${end}
         and a.professional_id = any(${professionals.map((p) => p.id)}::uuid[])
         ${status ? tx`and a.status = ${status}` : tx`and a.status <> 'cancelled'`}
@@ -119,6 +127,14 @@ export default async function AgendaPage({ searchParams }: { searchParams: Promi
               <div key={String(k)} className="bg-surface px-4 py-3"><dt className="eyebrow text-bone-mute">{k}</dt><dd className="mt-1 text-[14px] font-medium">{v}</dd></div>
             ))}
             {a.notes && <div className="col-span-2 bg-surface px-4 py-3"><dt className="eyebrow text-bone-mute">Observação</dt><dd className="mt-1 text-[14px]">{a.notes}</dd></div>}
+            {seesCrm && (
+              <div className="col-span-2 flex flex-wrap items-center justify-between gap-3 bg-surface px-4 py-3">
+                <div><dt className="eyebrow text-bone-mute">Oportunidades (funil)</dt>
+                  <dd className="mt-1 flex flex-wrap items-center gap-2 text-[14px] font-medium">{a.opp_stage ? <><Badge tone={a.opp_stage === "accepted" ? "ok" : a.opp_stage === "lost" ? "danger" : "violet"}>{OPPORTUNITY_STAGE_LABELS[a.opp_stage]}</Badge><span className="t-small font-normal">{a.opp_service}</span></> : <span className="t-small font-normal">Ainda não está no funil.</span>}</dd>
+                </div>
+                {a.opp_id && <Link href={`/crm?o=${a.opp_id}`} className={buttonClass("outline", "sm")}>Ver no funil <ChevronRight aria-hidden /></Link>}
+              </div>
+            )}
           </dl>
           {canWrite && NEXT[a.status].length > 0 && (
             <section>

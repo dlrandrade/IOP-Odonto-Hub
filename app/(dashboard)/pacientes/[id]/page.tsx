@@ -168,10 +168,10 @@ export default async function PatientPage({ params }: { params: Promise<{ id: st
           </Card>
           {can(ctx.role, "crm.view") && (
             <Card>
-              <CardTitle action={<Link href="/crm" className={buttonClass("outline", "sm")}>Abrir CRM</Link>}>Interesses</CardTitle>
+              <CardTitle action={<Link href="/crm" className={buttonClass("outline", "sm")}>Abrir funil</Link>}>Oportunidades</CardTitle>
               {data.opportunities.length === 0 ? <p className="t-small">Nenhum interesse registrado.</p> : (
                 <ul className="divide-y divide-line">{data.opportunities.map((o) => (
-                  <li key={o.id} className="flex h-11 items-center justify-between gap-3"><span className="truncate text-[14px]">{o.service_interest}</span><Badge tone="violet">{OPPORTUNITY_STAGE_LABELS[o.stage]}</Badge></li>
+                  <li key={o.id}><Link href={`/crm?o=${o.id}`} title="Ver no funil" className="-mx-2 flex h-11 items-center justify-between gap-3 rounded-sm px-2 transition-colors hover:bg-bone/[0.04]"><span className="truncate text-[14px]">{o.service_interest}</span><Badge tone={o.stage === "accepted" ? "ok" : o.stage === "lost" ? "danger" : "violet"}>{OPPORTUNITY_STAGE_LABELS[o.stage]}</Badge></Link></li>
                 ))}</ul>
               )}
             </Card>

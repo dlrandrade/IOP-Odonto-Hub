@@ -243,6 +243,10 @@
 dialog::backdrop { background: rgb(0 0 0 / 0.5); -webkit-backdrop-filter: blur(8px) saturate(120%); backdrop-filter: blur(8px) saturate(120%); }
 :root[data-theme="light"] dialog::backdrop { background: rgb(21 25 30 / 0.24); }
 :root[data-theme="light"] body::before { opacity: 0.015; }
+/* Pop-up aberto: a página de trás não rola; só o próprio pop-up, quando o conteúdo dele passa da tela. */
+html:has(dialog[open]) { overflow: hidden; }
+html:has(dialog[open]) body { overflow: hidden; overscroll-behavior: none; }
+dialog[open] { overscroll-behavior: contain; }
 /* em camada base: utilitários como mt-auto (folha do celular) conseguem sobrescrever */
 @layer base { dialog { margin: auto; color: var(--color-bone); } }
 

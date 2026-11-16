@@ -121,7 +121,7 @@ export default async function TodayPage() {
         {seesChats && ctx.role !== "dentista" && (
           <Block title="Esperando você" hint="Conversas que a assistente passou para a equipe responder. Urgentes no topo; clique para abrir." href="/conversas?f=nao-atribuidas" linkLabel="Ver todas">
             {data.waiting.length === 0 ? (
-              <Empty title="Ninguém esperando">Quando a assistente precisar da equipe, a conversa aparece aqui.</Empty>
+              <Empty title="Tudo em dia ✓">Nenhum paciente esperando resposta da equipe agora. Quando a assistente passar uma conversa para vocês, ela aparece aqui.</Empty>
             ) : (
               <ul className="-mx-2 divide-y divide-line">
                 {data.waiting.map((c) => (
