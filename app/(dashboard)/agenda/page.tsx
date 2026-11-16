@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Ban, CalendarCheck, Check, ChevronLeft, ChevronRight, CircleDashed, DoorOpen, Lock, Plus, Stethoscope, UserX, type LucideIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, Lock, Plus, type LucideIcon } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { ActionForm, Modal, SubmitOnChange } from "@/components/client";
 import { Badge, Button, buttonClass, Card, Checkbox, Empty, Field, Input, PageHeader, Segmented, Select } from "@/components/ui";
@@ -9,6 +9,7 @@ import { addDays, formatDay, formatFull, formatShort, localDate, localParts, loc
 import { cn } from "@/lib/format";
 import { appointmentStatusAction, createBlockAction, deleteBlockAction } from "./actions";
 import { BookingForm } from "./booking-form";
+import { APPT_STYLE } from "@/components/appointment-status";
 
 export const metadata = { title: "Agenda" };
 
@@ -19,15 +20,10 @@ type Appt = {
 };
 
 /** Status nunca depende só de cor: cada um tem ícone e rótulo. */
-const STATUS: Record<AppointmentStatus, { icon: LucideIcon; cls: string }> = {
-  scheduled: { icon: CircleDashed, cls: "bg-surface-2 border-bone-mute text-bone" },
-  confirmed: { icon: CalendarCheck, cls: "bg-gold/15 border-gold text-bone" },
-  arrived: { icon: DoorOpen, cls: "bg-info-soft border-info text-bone" },
-  in_service: { icon: Stethoscope, cls: "bg-acento/15 border-acento text-bone" },
-  completed: { icon: Check, cls: "bg-ok-soft border-ok text-ok" },
-  no_show: { icon: UserX, cls: "bg-danger-soft border-danger text-danger" },
-  cancelled: { icon: Ban, cls: "bg-surface-2 border-line text-bone-mute line-through" },
-};
+// Mesmas cores de Hoje (src/components/appointment-status.ts): confirmada verde, chegou azul, em atendimento violeta…
+const STATUS: Record<AppointmentStatus, { icon: LucideIcon; cls: string }> = Object.fromEntries(
+  Object.entries(APPT_STYLE).map(([k, v]) => [k, { icon: v.icon, cls: v.block }]),
+) as Record<AppointmentStatus, { icon: LucideIcon; cls: string }>;
 const NEXT: Record<AppointmentStatus, AppointmentStatus[]> = {
   scheduled: ["confirmed", "arrived", "no_show"], confirmed: ["arrived", "no_show"], arrived: ["in_service", "completed"],
   in_service: ["completed"], completed: [], no_show: [], cancelled: [],

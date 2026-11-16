@@ -1,20 +1,18 @@
 import Link from "next/link";
-import { ArrowRight, Ban, BarChart3, CalendarCheck, CalendarDays, CalendarPlus, Check, CircleDashed, DoorOpen, KanbanSquare, MessageCircle, Send, Stethoscope, UserPlus, Users, UserX, type LucideIcon } from "lucide-react";
+import { ArrowRight, BarChart3, CalendarDays, CalendarPlus, KanbanSquare, MessageCircle, Send, UserPlus, Users, type LucideIcon } from "lucide-react";
 import { requireCtx, q } from "@/auth/session";
 import { Badge, buttonClass, Card, CardTitle, Empty, Tile } from "@/components/ui";
 import { ClickToSend } from "@/components/click-to-send";
-import { temaDaRota } from "@/lib/tema";
+import { APPT_STYLE } from "@/components/appointment-status";
+import { cn } from "@/lib/format";
+import { CORES, temaDaRota } from "@/lib/tema";
 import { can } from "@/domain/permissions";
-import { APPOINTMENT_STATUS_LABELS, type AppointmentStatus } from "@/domain/states";
+import type { AppointmentStatus } from "@/domain/states";
 import { addDays, formatDay, formatShort, localDate, localParts, localTime, zonedToUtc } from "@/lib/datetime";
 import { formatPhone } from "@/lib/format";
 import { loadDashboard } from "@/services/dashboard";
 
 export const metadata = { title: "Hoje" };
-
-const ICON: Record<AppointmentStatus, LucideIcon> = {
-  scheduled: CircleDashed, confirmed: CalendarCheck, arrived: DoorOpen, in_service: Stethoscope, completed: Check, no_show: UserX, cancelled: Ban,
-};
 
 /** Bloco da tela inicial: cartão com título, apoio e um botão de ação no canto. Mesma altura dos vizinhos. */
 function Block({ title, hint, href, linkLabel, children }: { title: string; hint?: string; href?: string; linkLabel?: string; children: React.ReactNode }) {
@@ -75,8 +73,9 @@ export default async function TodayPage() {
   const tiles = ([
     seesChats && ctx.role !== "dentista" && { href: "/conversas?f=nao-atribuidas", icon: MessageCircle, title: "Conversas", text: data.waiting.length ? "Esperando resposta" : "Ninguém esperando", rgb: temaDaRota("/conversas").rgb, badge: urgentBadge },
     seesAgenda && { href: `/agenda?d=${today}`, icon: CalendarDays, title: "Agenda de hoje", text: open ? "Por atender hoje" : "Agenda livre", rgb: temaDaRota("/agenda").rgb, badge: count(open) },
-    can(ctx.role, "agenda.write") && { href: "/agenda?nova=1", icon: CalendarPlus, title: "Nova consulta", text: "Marcar um horário", rgb: temaDaRota("/agenda").rgb },
-    can(ctx.role, "patients.write") && { href: "/pacientes?novo=1", icon: UserPlus, title: "Novo paciente", text: "Cadastro em 1 minuto", rgb: temaDaRota("/pacientes").rgb },
+    // Ações de criar usam a mostarda da marca (cor de ação): não se confundem com as telas Agenda e Pacientes.
+    can(ctx.role, "agenda.write") && { href: "/agenda?nova=1", icon: CalendarPlus, title: "Nova consulta", text: "Marcar um horário", rgb: CORES.hoje.rgb },
+    can(ctx.role, "patients.write") && { href: "/pacientes?novo=1", icon: UserPlus, title: "Novo paciente", text: "Cadastro em 1 minuto", rgb: "214 140 64" },
     can(ctx.role, "patients.view") && { href: "/pacientes", icon: Users, title: "Pacientes", text: "Fichas e histórico", rgb: temaDaRota("/pacientes").rgb },
     can(ctx.role, "crm.view") && { href: "/crm", icon: KanbanSquare, title: "Oportunidades", text: "Tratamentos em decisão", rgb: temaDaRota("/crm").rgb },
     can(ctx.role, "dashboard.view") && { href: "/indicadores", icon: BarChart3, title: "Indicadores", text: "Como a clínica está indo", rgb: temaDaRota("/indicadores").rgb },
@@ -147,20 +146,24 @@ export default async function TodayPage() {
             {data.appts.length === 0 ? (
               <Empty title="Nenhuma consulta hoje" action={can(ctx.role, "agenda.write") ? <Link href="/agenda?nova=1" className={buttonClass("outline", "sm")}>Agendar consulta</Link> : undefined}>A agenda está livre.</Empty>
             ) : (
-              <ol className="-mx-2 divide-y divide-line">
+              <ol className="-mx-2 space-y-1.5">
                 {data.appts.map((a) => {
-                  const Icon = ICON[a.status];
+                  const st = APPT_STYLE[a.status];
                   const isNext = a.id === nextId;
                   return (
                     <li key={a.id}>
-                      <Link href={`/pacientes/${a.patient_id}`} className={`relative flex h-16 items-center gap-4 rounded-sm px-2 transition-colors hover:bg-surface-2/60 ${isNext ? "bg-acento/[0.06]" : ""}`}>
-                        {isNext && <span aria-hidden className="absolute inset-y-2 left-0 w-0.5 rounded-full bg-acento" />}
-                        <span className="w-12 shrink-0 font-mono text-[13px] tabular-nums text-bone-dim">{localTime(a.starts_at, ctx.tz)}</span>
+                      {/* Cor sutil por situação; a próxima consulta ganha o destaque da cor da marca. */}
+                      <Link href={`/pacientes/${a.patient_id}`} className={cn("relative flex h-16 items-center gap-4 rounded-md pl-4 pr-2 transition-colors hover:bg-bone/[0.05]", isNext ? "bg-gold/[0.10] ring-1 ring-gold/40" : st.row)}>
+                        <span aria-hidden className={cn("absolute inset-y-2.5 left-1 w-[3px] rounded-full", isNext ? "bg-gold" : st.bar)} />
+                        <span className={cn("w-12 shrink-0 font-mono text-[13px] tabular-nums", isNext ? "font-semibold text-bone" : "text-bone-dim")}>{localTime(a.starts_at, ctx.tz)}</span>
                         <span className="min-w-0 flex-1">
                           <span className="t-h3 block truncate">{a.patient}</span>
                           <span className="t-small block truncate">{a.service} · {a.professional}</span>
                         </span>
-                        {isNext ? <Badge className="bg-acento/15 text-acento">Próxima</Badge> : <span className="flex shrink-0 items-center gap-1.5 text-[12px] text-bone-dim"><Icon size={14} aria-hidden /><span className="hidden sm:inline">{APPOINTMENT_STATUS_LABELS[a.status]}</span></span>}
+                        <span className="flex shrink-0 items-center gap-1.5">
+                          {isNext && <span className="rounded-full bg-gold px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.06em] text-on">Próxima</span>}
+                          <span className={cn("flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-medium", st.pill)}><st.icon size={13} aria-hidden /><span className="hidden sm:inline">{st.label}</span></span>
+                        </span>
                       </Link>
                     </li>
                   );

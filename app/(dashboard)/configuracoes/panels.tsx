@@ -99,7 +99,12 @@ function WacliSetup({ platformGateway, ownUrl, hasOwnToken, connected, active }:
         <section className="flex h-full flex-col rounded-md border border-line p-6">
           <h3 className="t-h3 mb-1">1. Conectar</h3>
           <p className="t-small mb-5">{platformGateway ? "A plataforma já mantém o servidor que conversa com o WhatsApp. É só gerar o QR Code." : "Informe o servidor (gateway wacli) que a sua equipe instalou."}</p>
-          <ActionForm action={connectWacliAction} resetOnDone={false} className="flex flex-1 flex-col gap-5">
+          {!platformGateway && (
+            <p className="mb-4 rounded-md border border-gold/40 bg-gold/[0.07] px-4 py-3 text-[13.5px] detalhado:hidden">
+              O QR Code direto está sendo ativado pela plataforma. Enquanto isso, as automações e lembretes já funcionam pelo <strong>envio por clique</strong> (botão “Enviar no WhatsApp” em Hoje).
+            </p>
+          )}
+          <ActionForm action={connectWacliAction} resetOnDone={false} className={cn("flex flex-1 flex-col gap-5", !platformGateway && "simples:hidden")}>
             {platformGateway && (
               <label className={cn("flex items-center gap-2.5 text-[13.5px]", !ownGateway && "simples:hidden")}><input type="checkbox" checked={ownGateway} onChange={(e) => setOwnGateway(e.target.checked)} className="size-4 accent-[var(--color-gold)]" /> Usar um gateway próprio</label>
             )}
